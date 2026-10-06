@@ -1,0 +1,20 @@
+{
+  "name": "@boringtalks/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test --project=ui",
+    "test:smoke": "playwright test --project=smoke",
+    "emulators": "firebase emulators:start --only auth --project demo-boringtalks",
+    "typecheck": "tsc --noEmit",
+    "screenshots": "playwright test --project=shots"
+  },
+  "devDependencies": {
+    "@boringtalks/shared": "workspace:*",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.0.0",
+    "firebase-tools": "^15.32.1",
+    "typescript": "^5.9.3"
+  }
+}
