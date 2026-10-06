@@ -6,7 +6,7 @@ a summary, key topics, action items with owners, and decisions; a web dashboard 
 
 - Web app: https://boringtalks.lol (dev: https://dev.boringtalks.lol)
 - API: https://api.boringtalks.lol/health
-- Mac app: Download button on the landing page (`download.boringtalks.lol`)
+- Mac app: https://download.boringtalks.lol/BoringTalks-latest.dmg (always the newest build; also the Download button on the landing page)
 - Write-up for reviewers: [docs/WRITEUP.md](docs/WRITEUP.md)
 
 New accounts get a ready demo meeting, so the dashboard shows the full result before you record

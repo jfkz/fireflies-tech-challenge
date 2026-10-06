@@ -63,6 +63,11 @@ export interface PoseInput {
   asleep?: boolean;
   yawning?: boolean;
   cheering?: boolean;
+  /**
+   * Mouth opening from a voice that is actually playing (0…1). When set it
+   * replaces the synthetic syllables, so the mouth follows the sound.
+   */
+  speech?: number;
 }
 
 /** Deterministic PRNG so tests (and SSR) can pin the blink schedule. */
@@ -122,7 +127,8 @@ export class PoseAnimator {
     const ease = (from: number, to: number, rate: number) => from + (to - from) * Math.min(1, dt * rate);
 
     const speaking = input.talking && !input.asleep;
-    const { syllable, level } = syntheticSyllable(tt);
+    const voiced = input.speech !== undefined;
+    const { syllable, level } = voiced ? { syllable: input.speech!, level: input.speech! > 0.05 ? 0.8 : 0 } : syntheticSyllable(tt);
     this.talk = ease(this.talk, speaking && level > 0.3 ? 1 : 0, 5);
     this.sleep = ease(this.sleep, input.asleep ? 1 : 0, 1.6);
     this.yawn = ease(this.yawn, input.yawning && !input.asleep ? 1 : 0, 4);
@@ -142,7 +148,7 @@ export class PoseAnimator {
     // Mouths open half way at most on ordinary syllables; a slow wobble keeps a run
     // of equal syllables from looking mechanical.
     const flap = 0.5 + 0.5 * Math.sin(tt * 14 + Math.sin(tt * 4.3) * 2.2);
-    const target = speaking ? Math.pow(syllable, 1.2) * (0.3 + 0.1 * flap + 0.2 * level * level) : 0;
+    const target = !speaking ? 0 : voiced ? syllable * 0.55 : Math.pow(syllable, 1.2) * (0.3 + 0.1 * flap + 0.2 * level * level);
     this.mouth = ease(this.mouth, target, target > this.mouth ? 18 : 14);
 
     if (this.nextBlink === 0) this.nextBlink = t + 1 + this.random() * 2;

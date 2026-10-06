@@ -4,6 +4,6 @@ export const alt = SOCIAL_ALT;
 export const size = SOCIAL_SIZE;
 export const contentType = 'image/png';
 
-export default function OpengraphImage() {
+export default function TwitterImage() {
   return socialImage();
 }

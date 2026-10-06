@@ -3,6 +3,8 @@ import { SpeechBubble } from '@/components/avatar/SpeechBubble';
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { TALKER } from '@/lib/avatar/styles';
 
+const PUNCHLINE = 'This meeting could have been a summary.';
+
 /** Last call: one head, one line, one button. */
 export function FinalCta() {
   return (
@@ -27,9 +29,9 @@ export function FinalCta() {
         </div>
         <div className="relative mx-auto w-[min(70vw,300px)] self-end">
           <div className="absolute right-[52%] bottom-[90%] z-10 w-max max-w-[46vw] sm:max-w-none">
-            <SpeechBubble side="right">This meeting could have been a summary.</SpeechBubble>
+            <SpeechBubble side="right">{PUNCHLINE}</SpeechBubble>
           </div>
-          <TalkingHead style={TALKER} talking look="cursor" seed={77} className="aspect-square w-full" />
+          <TalkingHead style={TALKER} talking look="cursor" seed={77} line={PUNCHLINE} repeatEvery={7000} className="aspect-square w-full" />
         </div>
       </div>
     </section>

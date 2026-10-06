@@ -24,22 +24,43 @@ download and sign-up calls to action.
    pins sticky-note captions (“Minute 47. The fourth status meeting this week.”)
    while heads yawn and fall asleep. Punchline: “Meetings are boring. Notes about
    them shouldn’t be your job.”
-2. *How it works*: three scroll-driven steps beside a Mac window: recording both
-   sides (You = microphone, Speaker 1 = system audio), the transcript arriving
-   line by line, the summary card assembling itself with action items being
-   ticked.
-3. *Everybody wakes up*: the heads cheer, confetti at several depths.
-4. *The receipt*: privacy and cost as an itemised receipt for an hour of
-   meeting (recording and transcription $0.00 on your Mac, summary about $0.02),
-   plus three points: no bot joins your call, speech becomes text on the Mac,
-   audio skips our servers.
+2. *How it works*: three scroll-driven steps in customer terms (hit record, every
+   voice gets a name, the boring part writes itself) beside a Mac window: You and
+   Maya taking turns, the transcript arriving line by line, the summary card
+   assembling itself with action items being ticked.
+3. *Everybody wakes up*: the heads cheer one after another, confetti at several depths.
+4. *What you get*: an itemised receipt of what one long meeting turns into (title,
+   summary, names, tasks, decisions, “notes you took ×0”, 58 minutes back) and four
+   points: every task in one list, see where your week went, find anything later,
+   no bot joins your call. No prices or technical details on the landing page.
 5. *Download* (`#download`): fed by `GET /downloads/latest`; version and build,
    “macOS 26 or later”, “Apple silicon & Intel”, DMG size, release date, a button
    linking straight to the DMG, and first-launch steps (drag to Applications,
    Microphone, System Audio Recording, sign in). If the build is not notarized it
    adds the right-click → Open step. A 404 shows “The Mac app is still in the
    oven” with a link to the browser recorder.
-6. Final call to action and footer (“This website could have been an email.”).
+6. *FAQ* (`#faq`): price, which apps, no bot, how names are found, no Mac,
+   languages, privacy, telling people you record. Native `<details>`, and the same
+   entries go out as FAQPage structured data.
+7. Final call to action and footer (“This website could have been an email.”).
+
+**Voices.** Every head that talks also babbles out loud in a gibberish
+“animalese” voice: each letter of its line becomes a short pitched blip (Web
+Audio, no audio files), timed to the bubble's typing speed so the mouth, the
+sound and the text move together; each head has its own pitch and timbre and a
+question rises at the end. Sound is off until the visitor clicks the floating
+**Sound off / Sound on** button (bottom right); the choice is remembered
+(`localStorage bt.sound`) and comes back on at the first click of a later visit,
+as browsers only allow audio after a gesture. At most two heads speak at once,
+only heads on screen speak, and nothing plays with reduced motion.
+`lib/landing/voice.ts`, `components/landing/Sound.tsx`, `TalkingHead`'s `line` prop.
+
+**SEO.** Title, description, keywords, canonical URLs, Open Graph and Twitter
+cards with a generated 1200×630 image (the four heads at the table and the
+tagline; `app/_og/social-image.tsx`, heads drawn by `pnpm icon` into
+`app/og-heads.svg`), `apple-icon`, `manifest.webmanifest`, `robots.txt` (signed-in
+pages disallowed), `sitemap.xml`, and JSON-LD (`Organization`, `WebSite`,
+`SoftwareApplication` with the stable DMG link, `FAQPage`) from `lib/landing/seo.ts`.
 
 **Where.** `app/page.tsx`, `components/landing/*`, `components/avatar/*`,
 `lib/avatar/*` (port of AvatarView.swift / Emotion.swift / OverlayViews.swift /

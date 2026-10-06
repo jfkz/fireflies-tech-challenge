@@ -24,6 +24,8 @@ export default defineConfig({
         'src/components/auth/**/*.tsx',
         'src/components/ui/**/*.tsx',
         'src/components/landing/DownloadSection.tsx',
+        'src/components/landing/Sound.tsx',
+        'src/components/landing/Faq.tsx',
       ],
       exclude: ['src/lib/firebase.ts', '**/*.test.*', 'src/test/**'],
       thresholds: { lines: 70, statements: 70, functions: 65, branches: 60 },

@@ -49,10 +49,10 @@ with every build and macOS asks again. Without that certificate add `BT_SIGN_IDE
 A full release, by hand:
 
 ```sh
-APP=$(SIGN_IDENTITY="Developer ID Application: Mikhail Pershin (YS48X6MG6D)" MARKETING_VERSION=0.1.0 BUILD_NUMBER=1 scripts/build.sh | tail -1)
-scripts/make-dmg.sh "$APP" build/BoringTalks-0.1.0.dmg
-scripts/notarize.sh build/BoringTalks-0.1.0.dmg
-scripts/publish.sh build/BoringTalks-0.1.0.dmg 0.1.0 1 true
+APP=$(SIGN_IDENTITY="Developer ID Application: Mikhail Pershin (YS48X6MG6D)" MARKETING_VERSION=0.2.0 BUILD_NUMBER=17 scripts/build.sh | tail -1)
+scripts/make-dmg.sh "$APP" build/BoringTalks-0.2.0.dmg
+scripts/notarize.sh build/BoringTalks-0.2.0.dmg
+scripts/publish.sh build/BoringTalks-0.2.0.dmg 0.2.0 17 true
 ```
 
 ## Permissions
