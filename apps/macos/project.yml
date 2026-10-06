@@ -1,0 +1,112 @@
+name: BoringTalks
+options:
+  bundleIdPrefix: games.cutthecheese
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: targeted
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: YS48X6MG6D
+packages:
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio
+    exactVersion: 0.17.5
+  # Only for SpeakerKit (pyannote turns inside a phrase); speech itself is Parakeet.
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit
+    exactVersion: 1.1.0
+targets:
+  # Pure logic (API client, PKCE, upload queue, segment assembly…): no audio or
+  # model dependencies, so the unit tests run without the app or a microphone.
+  BoringTalksKit:
+    type: library.static
+    platform: macOS
+    sources: [BoringTalksKit]
+    settings:
+      base:
+        PRODUCT_NAME: BoringTalksKit
+        PRODUCT_MODULE_NAME: BoringTalksKit
+        SKIP_INSTALL: YES
+
+  BoringTalks:
+    type: application
+    platform: macOS
+    sources:
+      - path: BoringTalks
+    dependencies:
+      - target: BoringTalksKit
+      - package: FluidAudio
+      - package: WhisperKit
+        product: SpeakerKit
+    entitlements:
+      path: BoringTalks/BoringTalks.entitlements
+      properties:
+        # Hardened runtime needs this for the microphone. System audio comes through
+        # a Core Audio process tap and its own TCC prompt (NSAudioCaptureUsageDescription).
+        # Not sandboxed: distributed as a Developer ID DMG, not through the App Store.
+        com.apple.security.device.audio-input: true
+    info:
+      path: BoringTalks/Info.plist
+      properties:
+        CFBundleDisplayName: BoringTalks
+        CFBundleName: BoringTalks
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMinimumSystemVersion: "26.0"
+        NSHumanReadableCopyright: "© 2026 Cut The Cheese Games"
+        NSMicrophoneUsageDescription: BoringTalks transcribes what you say in a meeting, on this Mac.
+        NSAudioCaptureUsageDescription: BoringTalks records what the other people in your meeting say (the audio your Mac plays) and transcribes it on this Mac.
+        CFBundleURLTypes:
+          - CFBundleURLName: games.cutthecheese.boringtalks
+            CFBundleURLSchemes: [boringtalks]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: games.cutthecheese.boringtalks
+        PRODUCT_NAME: BoringTalks
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: NO
+        CODE_SIGN_STYLE: Manual
+        # A real certificate keeps the microphone and system audio permissions
+        # across rebuilds (an ad-hoc signature changes every build). CI passes
+        # BT_SIGN_IDENTITY=- for ad-hoc, or "Developer ID Application: …" for a release.
+        CODE_SIGN_IDENTITY: $(BT_SIGN_IDENTITY)
+        BT_SIGN_IDENTITY: "Apple Development: Mikhail Pershin (56V7M7YU28)"
+        PROVISIONING_PROFILE_SPECIFIER: ""
+
+  BoringTalksTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: BoringTalksTests
+    dependencies:
+      - target: BoringTalksKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: games.cutthecheese.boringtalks.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+
+schemes:
+  BoringTalks:
+    build:
+      targets:
+        BoringTalks: all
+    test:
+      targets: [BoringTalksTests]
+      gatherCoverageData: true
+  BoringTalksKit:
+    build:
+      targets:
+        BoringTalksKit: all
+        BoringTalksTests: [test]
+    test:
+      targets: [BoringTalksTests]
