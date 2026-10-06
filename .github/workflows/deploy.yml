@@ -60,7 +60,7 @@ jobs:
   api:
     name: API + worker → Railway (${{ needs.target.outputs.environment }})
     needs: [target, one-open-pr]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && needs.target.result == 'success' }}
     runs-on: ubuntu-latest
     environment: ${{ needs.target.outputs.environment }}
     concurrency:
@@ -94,7 +94,7 @@ jobs:
   web:
     name: Web → Vercel (${{ needs.target.outputs.environment }})
     needs: [target, one-open-pr]
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && needs.target.result == 'success' }}
     runs-on: ubuntu-latest
     environment: ${{ needs.target.outputs.environment }}
     concurrency:
@@ -119,7 +119,7 @@ jobs:
     name: Smoke tests (${{ needs.target.outputs.environment }})
     needs: [target, api, web]
     # one-open-pr is skipped on pushes to main; run whenever both deploys succeeded.
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && needs.target.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
