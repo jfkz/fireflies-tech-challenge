@@ -1,7 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { testConfig } from '../testing/fixtures';
 import { DownloadsController } from './downloads.controller';
-import { DOWNLOADS_CACHE_MS, DownloadsService } from './downloads.service';
+import { DOWNLOADS_CACHE_MS, DOWNLOADS_MISS_CACHE_MS, DownloadsService } from './downloads.service';
 
 const latest = {
   version: '1.2.0',
@@ -37,6 +37,16 @@ describe('DownloadsService', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(impl);
     const s = new DownloadsService(testConfig());
     await expect(s.latest(0)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('retries a missing latest.json after 30 seconds, not five minutes', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({}, 404));
+    const s = new DownloadsService(testConfig());
+    await expect(s.latest(0)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(s.latest(DOWNLOADS_MISS_CACHE_MS - 1)).rejects.toBeInstanceOf(NotFoundException);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    fetch.mockResolvedValue(json(latest));
+    await expect(s.latest(DOWNLOADS_MISS_CACHE_MS + 1)).resolves.toEqual(latest);
   });
 
   it('is exposed by the controller', async () => {

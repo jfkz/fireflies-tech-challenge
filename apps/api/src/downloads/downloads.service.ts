@@ -3,8 +3,10 @@ import { LatestDownload } from '@boringtalks/shared';
 import { AppConfig } from '../config/config.module';
 
 export const DOWNLOADS_CACHE_MS = 5 * 60 * 1000;
+/** A missing or unreadable latest.json is retried sooner, so a fresh release shows up quickly. */
+export const DOWNLOADS_MISS_CACHE_MS = 30 * 1000;
 
-/** Reads `latest.json` from the public downloads bucket, cached in memory for five minutes. */
+/** Reads `latest.json` from the public downloads bucket, cached in memory for five minutes (30 s when missing). */
 @Injectable()
 export class DownloadsService {
   private readonly logger = new Logger(DownloadsService.name);
@@ -14,7 +16,8 @@ export class DownloadsService {
   constructor(private readonly config: AppConfig) {}
 
   async latest(now = Date.now()): Promise<LatestDownload> {
-    if (!this.cache || now - this.cache.at > DOWNLOADS_CACHE_MS) {
+    const ttl = this.cache?.value ? DOWNLOADS_CACHE_MS : DOWNLOADS_MISS_CACHE_MS;
+    if (!this.cache || now - this.cache.at > ttl) {
       this.inflight ??= this.fetchLatest().finally(() => (this.inflight = null));
       this.cache = { at: now, value: await this.inflight };
     }
