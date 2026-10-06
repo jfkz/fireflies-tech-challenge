@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeApi } from '@/test/utils';
-import { useRecorder } from './useRecorder';
+import { micConstraints, useRecorder } from './useRecorder';
 
 class FakeRecorder {
   static instances: FakeRecorder[] = [];
@@ -69,7 +69,8 @@ describe('useRecorder', () => {
 
     await act(() => result.current.start());
     expect(result.current.state.kind).toBe('recording');
-    expect(getUserMedia).toHaveBeenCalledWith({ audio: { echoCancellation: true, noiseSuppression: true } });
+    // Speakers playing a call are what we want recorded, so no echo cancellation for the mic alone.
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true } });
     expect(FakeRecorder.instances[0].mimeType).toBe('audio/webm;codecs=opus');
 
     act(() => result.current.stop());
@@ -91,7 +92,7 @@ describe('useRecorder', () => {
     const { result } = renderHook(() => useRecorder(fakeApi()));
     await act(() => result.current.start(false, 'built-in'));
     expect(getUserMedia).toHaveBeenCalledWith({
-      audio: { echoCancellation: true, noiseSuppression: true, deviceId: { exact: 'built-in' } },
+      audio: { echoCancellation: false, noiseSuppression: true, autoGainControl: true, deviceId: { exact: 'built-in' } },
     });
   });
 
@@ -137,4 +138,10 @@ describe('useRecorder', () => {
     const { result } = renderHook(() => useRecorder(fakeApi()));
     await expect(result.current.submit()).resolves.toBeNull();
   });
+
+  it('cancels echo only when the tab is recorded separately', () => {
+    expect(micConstraints(true)).toMatchObject({ echoCancellation: true });
+    expect(micConstraints(false)).toMatchObject({ echoCancellation: false });
+  });
 });
+

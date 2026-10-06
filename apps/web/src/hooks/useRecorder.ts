@@ -12,6 +12,21 @@ import {
 } from '@/lib/recorder';
 import { normalizeAudioType, submitAudio, type SubmitAudioOptions } from '@/lib/upload';
 
+/**
+ * Echo cancellation removes whatever the speakers play from the microphone. That is
+ * right when the tab's audio is recorded separately (it would be there twice), and
+ * wrong otherwise: a call playing through the speakers is exactly what should be
+ * recorded. Auto gain keeps a quiet room or far-away speakers audible.
+ */
+export function micConstraints(withTab: boolean, micId?: string): MediaTrackConstraints {
+  return {
+    echoCancellation: withTab,
+    noiseSuppression: true,
+    autoGainControl: true,
+    ...(micId ? { deviceId: { exact: micId } } : {}),
+  };
+}
+
 interface Live {
   recorder: MediaRecorder;
   streams: MediaStream[];
@@ -74,9 +89,7 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put']) {
         }
         let mic: MediaStream;
         try {
-          mic = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, ...(micId ? { deviceId: { exact: micId } } : {}) },
-          });
+          mic = await navigator.mediaDevices.getUserMedia({ audio: micConstraints(withTab, micId) });
         } catch (err) {
           throw Object.assign(new Error(mediaErrorMessage(err, 'microphone')), { friendly: true });
         }
