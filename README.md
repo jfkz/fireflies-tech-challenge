@@ -21,7 +21,7 @@ anything. Without a Mac, use **Record in the browser** (or upload an audio file)
 | [`apps/web`](apps/web) | Next.js 16: a parallax landing page with the talking heads, and the dashboard (meetings, transcript synced to audio, action items, browser recorder, Mac sign-in). |
 | [`packages/shared`](packages/shared) | zod schemas = the API contract, shared by API and web, mirrored by the Mac app. |
 | [`e2e`](e2e) | Playwright: UI suite against the Firebase Auth emulator, smoke suite for deployed environments. |
-| [`docs`](docs) | [Architecture](docs/ARCHITECTURE.md) · [Features](docs/FEATURES.md) · [QA flows](docs/QA.md) · [API](docs/API.md) · [Deployment](docs/DEPLOYMENT.md) · [Costs](docs/COSTS.md) |
+| [`docs`](docs) | [Architecture](docs/ARCHITECTURE.md) · [Features](docs/FEATURES.md) · [QA flows](docs/QA.md) · [API](docs/API.md) · [Deployment](docs/DEPLOYMENT.md) · [Costs](docs/COSTS.md) · [Agent options](docs/AGENT.md) |
 
 ## Run it locally
 
