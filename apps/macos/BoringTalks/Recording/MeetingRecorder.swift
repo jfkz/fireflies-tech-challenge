@@ -33,6 +33,8 @@ final class MeetingRecorder {
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var modelWait: Task<Void, Never>?
     @ObservationIgnored private var restarts: [AudioChannel: Task<Void, Never>] = [:]
+    /// System audio still starting (macOS may be waiting for its permission prompt).
+    @ObservationIgnored private var systemStart: Task<Void, Never>?
     /// Channels that have (or are getting) a transcriber.
     @ObservationIgnored private var attached: Set<AudioChannel> = []
     @ObservationIgnored private var attaching: Task<Void, Never>?
@@ -85,9 +87,25 @@ final class MeetingRecorder {
                 channels[kind] = RecordingChannel(kind: kind, clockStart: clockStart, writer: writer)
             }
 
+            // Keep both sides on the clock from the first moment: a side that is slow
+            // to start (or never does) is filled with silence instead of stalling the mix.
+            ticker = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    self?.channels.values.forEach { $0.catchUp() }
+                }
+            }
             let micStarted = await startMic()
-            let systemStarted = await startSystem()
-            guard micStarted || systemStarted else {
+            // Core Audio blocks system-audio capture until the System Audio Recording
+            // prompt is answered. Don't hold the meeting hostage to it: record the mic
+            // now and let the other side join when it can.
+            let system = Task { await self.startSystem() }
+            systemStart = Task { _ = await system.value }
+            let systemStarted = await Self.result(of: system, within: micStarted ? .seconds(3) : .seconds(60))
+            if systemStarted == nil {
+                warnings[.system] = "Waiting for macOS to allow System Audio Recording. Answer its prompt, or allow BoringTalks under System Settings › Privacy & Security › Screen & System Audio Recording."
+            }
+            guard micStarted || systemStarted == true else {
                 throw StartError.nothingToRecord(warnings.values.sorted().joined(separator: " "))
             }
         } catch {
@@ -97,12 +115,6 @@ final class MeetingRecorder {
 
         phase = .recording
         Self.log.notice("recording \(id, privacy: .public)")
-        ticker = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
-                self?.channels.values.forEach { $0.catchUp() }
-            }
-        }
         // Transcribe as soon as the model is there; until then the audio waits.
         waitingForModel = !models.isReady
         modelWait = Task { [weak self] in
@@ -115,6 +127,7 @@ final class MeetingRecorder {
     func stop() async -> PendingMeeting? {
         guard phase == .recording, let meeting, let writer, let startedAt else { return nil }
         phase = .finishing
+        systemStart?.cancel()
         ticker?.cancel()
         modelWait?.cancel()
         restarts.values.forEach { $0.cancel() }
@@ -184,8 +197,23 @@ final class MeetingRecorder {
         }
     }
 
+    /// The task's result, or nil when it isn't done within `limit` (it keeps running).
+    private static func result(of task: Task<Bool, Never>, within limit: Duration) async -> Bool? {
+        await withTaskGroup(of: Bool?.self) { group in
+            group.addTask { await task.value }
+            group.addTask {
+                try? await Task.sleep(for: limit)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+    }
+
     private func startSystem() async -> Bool {
         guard let channel = channels[.system] else { return false }
+        let generation = meeting?.id
         let capture = SystemAudioCapture()
         capture.onDeviceChange = { [weak self] in
             Task { @MainActor in self?.scheduleRestart(.system) }
@@ -194,6 +222,11 @@ final class MeetingRecorder {
             // Core Audio blocks this call until the System Audio Recording prompt
             // is answered, so keep it off the main thread.
             try await Task.detached { try capture.start { buffer in channel.ingest(buffer) } }.value
+            // The meeting may have ended while macOS was asking for permission.
+            guard meeting?.id == generation, phase == .starting || phase == .recording else {
+                capture.stop()
+                return false
+            }
             system = capture
             warnings[.system] = nil
             return true
@@ -281,6 +314,8 @@ final class MeetingRecorder {
     }
 
     private func reset() {
+        systemStart?.cancel()
+        systemStart = nil
         ticker?.cancel()
         modelWait?.cancel()
         channels = [:]
