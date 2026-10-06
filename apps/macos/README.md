@@ -46,14 +46,18 @@ with every build and macOS asks again. Without that certificate add `BT_SIGN_IDE
 | `scripts/notarize.sh <dmg>` | `notarytool submit --wait` with an App Store Connect API key (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH` or `ASC_KEY_P8`), then `stapler staple`. Exit 0 = notarized, 1 = rejected (prints the log), 2 = skipped because the key isn't set. |
 | `scripts/publish.sh <dmg> <version> <build> <true\|false> [dev/]` | uploads `BoringTalks-<version>.dmg`, `BoringTalks-latest.dmg` and `latest.json` (shared `LatestDownload` shape) to R2 with `aws s3 cp --endpoint-url $R2_ENDPOINT`; env `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_DOWNLOADS_BUCKET` (`boringtalks`), `DOWNLOADS_BASE_URL`, optional `R2_DOWNLOADS_KEY_PREFIX` (default `downloads/`) |
 
-A full release, by hand:
+A release, from your Mac (CI only builds and tests):
 
 ```sh
-APP=$(SIGN_IDENTITY="Developer ID Application: Mikhail Pershin (YS48X6MG6D)" MARKETING_VERSION=0.2.0 BUILD_NUMBER=17 scripts/build.sh | tail -1)
-scripts/make-dmg.sh "$APP" build/BoringTalks-0.2.0.dmg
-scripts/notarize.sh build/BoringTalks-0.2.0.dmg
-scripts/publish.sh build/BoringTalks-0.2.0.dmg 0.2.0 17 true
+scripts/release.sh prod          # Developer ID build + DMG, notarization submitted, published to R2
+scripts/release.sh staple prod   # once `notarytool info <id>` says Accepted: staple and republish as notarized
+WAIT=1 scripts/release.sh prod   # or wait for Apple in one go
 ```
+
+`release.sh` imports the Developer ID certificate into a throwaway keychain for the build and
+restores the keychain search list afterwards. Defaults read the certificate, its password and the
+R2 keys from the repo's gitignored `.local/secrets/`, and the App Store Connect key from
+`~/.appstoreconnect/private_keys/`; each can be overridden with env (see the script's header).
 
 ## Permissions
 

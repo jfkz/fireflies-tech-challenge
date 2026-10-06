@@ -49,7 +49,8 @@ export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_A
 s3() { aws s3 cp --endpoint-url "$R2_ENDPOINT" --only-show-errors "$@"; }
 KEY_PREFIX="${R2_DOWNLOADS_KEY_PREFIX-downloads/}"
 BUCKET="s3://$R2_DOWNLOADS_BUCKET/$KEY_PREFIX$PREFIX"
-s3 "$DMG" "$BUCKET$NAME" --content-type application/x-apple-diskimage --cache-control "public, max-age=31536000, immutable"
+# Not immutable: a build published before Apple finished notarizing is replaced by its stapled copy.
+s3 "$DMG" "$BUCKET$NAME" --content-type application/x-apple-diskimage --cache-control "public, max-age=3600"
 s3 "$DMG" "${BUCKET}BoringTalks-latest.dmg" --content-type application/x-apple-diskimage --cache-control "public, max-age=300"
 s3 "$LATEST" "${BUCKET}latest.json" --content-type application/json --cache-control "public, max-age=60"
 

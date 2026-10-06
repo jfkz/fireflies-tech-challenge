@@ -387,7 +387,8 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 
 - **What:** universal build, DMG with an Applications link, notarization with an App Store
   Connect API key, upload of the DMG and `latest.json` to the public R2 bucket.
-- **Where:** `apps/macos/scripts/` (`build.sh`, `make-dmg.sh`, `notarize.sh`, `publish.sh`, `test.sh`).
+- **Where:** `apps/macos/scripts/` (`release.sh` runs `build.sh`, `make-dmg.sh`, notarization and
+  `publish.sh` on a developer's Mac; CI runs `test.sh`).
 - **Limits:** without a Developer ID certificate the DMG is ad-hoc signed and not notarized;
   first launch then needs right-click → Open.
 
