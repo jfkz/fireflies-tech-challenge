@@ -18,6 +18,10 @@ final class MeetingRecorder {
     private(set) var warnings: [AudioChannel: String] = [:]
     /// Recording while the speech model is still loading; audio waits for it.
     private(set) var waitingForModel = false
+    /// The microphone recording "You" (shown in the menu).
+    private(set) var microphoneName: String?
+    /// See `Preferences.avoidBluetoothMic`; read when a meeting starts.
+    @ObservationIgnored var avoidBluetoothMic = true
     let live = LiveTranscript()
 
     @ObservationIgnored private let models: SpeechModels
@@ -186,8 +190,12 @@ final class MeetingRecorder {
         capture.onConfigurationChange = { [weak self] in
             Task { @MainActor in self?.scheduleRestart(.microphone) }
         }
+        let defaultInput = AudioInputs.defaultInput()
+        let chosen = MicChoice.pick(defaultInput: defaultInput, inputs: AudioInputs.all(), avoidBluetooth: avoidBluetoothMic)
         do {
-            try capture.start { buffer in channel.ingest(buffer) }
+            try capture.start(device: chosen.map { AudioDeviceID($0.id) }) { buffer in channel.ingest(buffer) }
+            microphoneName = (chosen ?? defaultInput)?.name
+            if let chosen { Self.log.notice("recording You with \(chosen.name, privacy: .public) instead of a Bluetooth headset") }
             mic = capture
             warnings[.microphone] = nil
             return true
@@ -325,6 +333,7 @@ final class MeetingRecorder {
         meeting = nil
         startedAt = nil
         waitingForModel = false
+        microphoneName = nil
         restarts = [:]
         attached = []
         attaching = nil

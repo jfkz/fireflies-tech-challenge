@@ -202,6 +202,7 @@ final class AppModel {
         recordError = nil
         Task {
             do {
+                recorder.avoidBluetoothMic = preferences.avoidBluetoothMic
                 try await recorder.start(title: titleDraft, language: preferences.languageCode, uploadAudio: preferences.uploadAudio)
             } catch {
                 recordError = error.localizedDescription
