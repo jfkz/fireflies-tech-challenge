@@ -118,6 +118,8 @@ jobs:
   smoke:
     name: Smoke tests (${{ needs.target.outputs.environment }})
     needs: [target, api, web]
+    # one-open-pr is skipped on pushes to main; run whenever both deploys succeeded.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
