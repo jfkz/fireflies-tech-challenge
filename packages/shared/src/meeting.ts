@@ -25,7 +25,8 @@ export const MEETING_TRANSITIONS: Record<MeetingStatus, readonly MeetingStatus[]
   uploaded: ['transcribing', 'summarizing', 'failed'],
   transcribing: ['summarizing', 'failed'],
   summarizing: ['ready', 'failed'],
-  ready: ['summarizing'],
+  // Reprocessing a meeting the server transcribed starts from its audio again.
+  ready: ['transcribing', 'summarizing'],
   failed: ['transcribing', 'summarizing'],
 };
 

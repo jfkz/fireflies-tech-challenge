@@ -50,6 +50,8 @@ export const EnvSchema = z
     AI_GATEWAY_API_KEY: z.string().optional(),
     SUMMARY_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
     TRANSCRIBE_MODEL: z.string().default('openai/whisper-1'),
+    /** Hears server-transcribed recordings to tell voices apart; empty turns it off. */
+    DIARIZE_MODEL: z.string().default('google/gemini-3-flash'),
     AI_FAKE: flag,
     SUMMARIZE_CONCURRENCY: z.coerce.number().int().positive().default(4),
     TRANSCRIBE_CONCURRENCY: z.coerce.number().int().positive().default(2),

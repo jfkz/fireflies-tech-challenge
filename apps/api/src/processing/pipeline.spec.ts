@@ -26,6 +26,7 @@ function setup() {
   const jobs = { summarize: vi.fn(), email: vi.fn() };
   const transcriber = { transcribe: vi.fn() };
   const summarizer = { summarize: vi.fn().mockResolvedValue(result) };
+  const diarizer = { diarize: vi.fn(async ({ segments }: { segments: unknown[] }) => segments) };
   const pipeline = new PipelineService(
     meetings as never,
     transcripts as never,
@@ -34,8 +35,9 @@ function setup() {
     jobs as never,
     transcriber as never,
     summarizer as never,
+    diarizer as never,
   );
-  return { meetings, transcripts, storage, users, jobs, transcriber, summarizer, pipeline };
+  return { meetings, transcripts, storage, users, jobs, transcriber, summarizer, diarizer, pipeline };
 }
 
 describe('PipelineService.transcribe', () => {
@@ -49,7 +51,18 @@ describe('PipelineService.transcribe', () => {
     expect(t.transcriber.transcribe).toHaveBeenCalledWith({ audio: new Uint8Array(3), mediaType: 'audio/webm', language: null });
     expect(t.transcripts.store).toHaveBeenCalledWith(m, expect.objectContaining({ language: 'en' }));
     expect(t.meetings.transition).toHaveBeenCalledWith(m.id, 'transcribing', { status: 'summarizing' });
+    expect(t.diarizer.diarize).toHaveBeenCalledWith({ audio: new Uint8Array(3), segments: [seg('Speaker 1', 0, 1, 'hi')] });
     expect(t.jobs.summarize).toHaveBeenCalledWith(m.id, 2);
+  });
+
+  it('stores the transcript with the voices told apart', async () => {
+    const t = setup();
+    const m = meeting({ status: 'transcribing', attempts: 1, audioKey: 'a.webm' });
+    t.meetings.findById.mockResolvedValue(m);
+    t.transcriber.transcribe.mockResolvedValue({ segments: [seg('Speaker 1', 0, 1, 'hi'), seg('Speaker 1', 1, 2, 'hello')], language: 'en', durationSec: 2 });
+    t.diarizer.diarize.mockResolvedValueOnce([seg('Speaker 1', 0, 1, 'hi'), seg('Speaker 2', 1, 2, 'hello')]);
+    await t.pipeline.transcribe({ meetingId: m.id, run: 1 });
+    expect(t.transcripts.store.mock.calls[0][1].segments.map((s: { speaker: string }) => s.speaker)).toEqual(['Speaker 1', 'Speaker 2']);
   });
 
   it('skips stale or deleted meetings', async () => {

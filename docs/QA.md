@@ -63,6 +63,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 3.4 | Start a browser recording (section 5) and return to the list. | Its chip animates (Transcribing/Summarizing) and changes to Ready by itself. |
 | 3.6 | Click a topic pill on a row, then a person in the filter bar, then the active pill again, then **Clear filters**. | The list narrows to that topic, then that topic and person; the URL shows `?topic=…&speaker=…`; clicking an active pill removes it; Clear brings everything back. Back button walks through the filters. |
 | 3.7 | Filter to a combination with no meetings. | “No meetings with X about Y.” and a **Clear filters** button. |
+| 3.8 | Upload a recording with three people (e.g. a synthetic one made with `say`), wait for Ready. | Transcript has Speaker 1–3 per voice, then their names from the conversation; deadlines like “today or tomorrow” show the later day. A 26 MB+ or 2 h+ file transcribes too. **Reprocess** on an older upload separates its voices. |
 | 3.5 | New account with the demo deleted. | Empty state with a head (“Your calendar must be suspiciously free.”) and links to record or get the Mac app. |
 
 ### 4. Meeting page
