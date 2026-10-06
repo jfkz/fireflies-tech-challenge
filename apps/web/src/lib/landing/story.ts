@@ -102,11 +102,11 @@ export function howStepAt(progress: number): HowStep {
 
 /** Transcript lines the Mac turns the call into (how-it-works step 2). */
 export const DEMO_TRANSCRIPT = [
-  { at: '0:04', speaker: 'You', text: 'Okay, pricing. Pro goes to $29.' },
-  { at: '0:09', speaker: 'Speaker 1', text: 'From $24? Customers will riot.' },
+  { at: '0:04', speaker: 'You', text: 'Okay Maya, pricing. Pro goes to $29.' },
+  { at: '0:09', speaker: 'Maya', text: 'From $24? Customers will riot.' },
   { at: '0:15', speaker: 'You', text: 'Annual stays at $240, so they won’t.' },
-  { at: '0:22', speaker: 'Speaker 1', text: 'Fine. We launch November 3rd?' },
-  { at: '0:27', speaker: 'You', text: 'November 3rd. Maya writes the email.' },
+  { at: '0:22', speaker: 'Maya', text: 'Fine. We launch November 3rd?' },
+  { at: '0:27', speaker: 'You', text: 'November 3rd. Can you write the email?' },
 ] as const;
 
 /** The summary the server writes from it (step 3). */

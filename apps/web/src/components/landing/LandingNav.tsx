@@ -14,6 +14,9 @@ export function LandingNav() {
           <a href="#download" className="hidden rounded-full px-3 py-2 font-extrabold text-white/90 hover:text-white md:inline-block">
             Download
           </a>
+          <a href="#faq" className="hidden rounded-full px-3 py-2 font-extrabold text-white/90 hover:text-white lg:inline-block">
+            FAQ
+          </a>
           <Link href="/signin" className="rounded-full px-3 py-2 font-extrabold text-white hover:text-white max-sm:hidden">
             Sign in
           </Link>

@@ -22,7 +22,8 @@ Each deploy run:
 3. **Smoke tests.** Playwright `smoke` suite against the deployed web + API.
 4. **DMG** (`macos.yml`, only when `apps/macos/**` changed): build on a `macos-26` runner, sign
    (Developer ID when the secrets exist, ad-hoc otherwise), notarize, publish to R2 with
-   `latest.json`. The landing page's Download button reads it via `GET /downloads/latest`.
+   `latest.json`. The landing page's Download button reads it via `GET /downloads/latest`; links
+   elsewhere (README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg.
 
 ## Infrastructure
 

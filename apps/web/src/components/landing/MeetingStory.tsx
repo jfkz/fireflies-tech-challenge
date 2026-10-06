@@ -71,7 +71,7 @@ export function MeetingStory() {
   const headsY = useTransform(p, [0, 1], ['0%', '-3%']);
   const heroOpacity = useTransform(p, [0.07, 0.15], [1, 0]);
   const heroY = useTransform(p, [0, 0.15], [0, -90]);
-  const mugY1 = useTransform(p, [0, 1], ['70vh', '-140vh']);
+  const mugY1 = useTransform(p, [0, 1], ['96vh', '-140vh']);
   const mugY2 = useTransform(p, [0, 1], ['110vh', '-200vh']);
   const mugY3 = useTransform(p, [0.2, 1], ['120vh', '-90vh']);
   const mugR = useTransform(p, [0, 1], [-20, 50]);
@@ -106,12 +106,13 @@ export function MeetingStory() {
                 BoringTalks records the call on your Mac, writes it all down, and hands you a title, a summary and who promised what. You can keep
                 nodding.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3">
+              {/* One column, so nothing reaches across to the heads on the right. */}
+              <div className="mt-6 flex flex-col items-start gap-2.5">
                 <a href="#download" className="btn btn-primary btn-lg">
                   <DownloadGlyph /> Download for Mac
                 </a>
-                <Link href="/signup" className="btn btn-secondary btn-lg">
-                  Try it in the browser
+                <Link href="/signup" className="pl-1 text-base font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white">
+                  or try it in the browser →
                 </Link>
               </div>
             </div>
@@ -176,7 +177,7 @@ export function MeetingStory() {
                     animate={{ y: 0 }}
                     transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.25 + i * 0.09 }}
                   >
-                    <TalkingHead style={style} seed={i + 3} {...headProps(mood, i, speaker)} className="aspect-square w-full" />
+                    <TalkingHead style={style} seed={i + 3} {...headProps(mood, i, speaker)} line={isCurrent ? current.text : undefined} className="aspect-square w-full" />
                     {(isCurrent || isPrevious) && current && (
                       <div
                         className={`absolute bottom-[92%] z-30 w-max max-w-[min(62vw,280px)] text-[0.92rem] sm:text-base ${

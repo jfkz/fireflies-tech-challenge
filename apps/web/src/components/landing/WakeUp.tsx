@@ -1,7 +1,7 @@
 'use client';
 
 import { m, useInView, useScroll, useTransform } from 'motion/react';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { SpeechBubble } from '@/components/avatar/SpeechBubble';
 import { SEATS } from './MeetingStory';
@@ -17,11 +17,37 @@ const CONFETTI = [
   { x: '94%', y: 8, c: '#2db3a3', r: -60, d: 2, s: 'M11 0a11 11 0 1 0 .1 0z' },
 ] as const;
 
+const WOKEN = 'Wait, it wrote down who’s doing what?';
+
+/** What each head shouts when it wakes up, in the order they speak. */
+const CHEERS: readonly (readonly [number, string])[] = [
+  [1, WOKEN],
+  [3, 'Woo hoo!'],
+  [0, 'Finally!'],
+  [2, 'Best meeting ever.'],
+];
+
+/** Index into CHEERS of the head speaking now, -1 before the section shows up. */
+function useCheers(active: boolean): number {
+  const [turn, setTurn] = useState(-1);
+  useEffect(() => {
+    if (!active) return;
+    let k = 0;
+    const next = () => setTurn(k < CHEERS.length ? k++ : -1);
+    next();
+    const id = setInterval(next, 1500);
+    return () => clearInterval(id);
+  }, [active]);
+  return active ? turn : -1;
+}
+
 /** The heads wake up and cheer when the summary arrives. Confetti falls at different depths. */
 export function WakeUp() {
   const ref = useRef<HTMLElement>(null);
   const inView = useInView(ref, { amount: 0.35, once: true });
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
+  const turn = useCheers(inView);
+  const cheer = turn >= 0 ? CHEERS[turn] : null;
 
   return (
     <section ref={ref} aria-labelledby="wake-title" className="relative overflow-hidden bg-sun pt-24 sm:pt-32">
@@ -48,10 +74,17 @@ export function WakeUp() {
           >
             {i === 1 && (
               <div className="absolute bottom-[94%] left-[40%] z-20 w-max max-w-[60vw] text-sm sm:text-base">
-                <SpeechBubble>Wait, it wrote down who’s doing what?</SpeechBubble>
+                <SpeechBubble>{WOKEN}</SpeechBubble>
               </div>
             )}
-            <TalkingHead style={style} cheering={inView} asleep={!inView} seed={40 + i} className="aspect-square w-full" />
+            <TalkingHead
+              style={style}
+              cheering={inView}
+              asleep={!inView}
+              seed={40 + i}
+              line={cheer?.[0] === i ? cheer[1] : undefined}
+              className="aspect-square w-full"
+            />
           </m.div>
         ))}
       </div>

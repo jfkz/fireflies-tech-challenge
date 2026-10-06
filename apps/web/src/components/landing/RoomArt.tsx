@@ -5,6 +5,8 @@ import { INK } from '@/lib/avatar/styles';
 
 const line = { stroke: INK, strokeWidth: 3, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 
+const DIAL_CENTRE = { originX: '60px', originY: '60px', transformBox: 'view-box' } as const;
+
 /** The "quick sync" wall clock. The minute hand follows `minutes` (5 → 58). */
 export function WallClock({ minutes, className }: { minutes: MotionValue<number>; className?: string }) {
   const minuteAngle = useTransform(minutes, (v) => v * 6);
@@ -26,9 +28,9 @@ export function WallClock({ minutes, className }: { minutes: MotionValue<number>
             transform={`rotate(${i * 30} 60 60)`}
           />
         ))}
-        {/* The meeting so far, shaded on the dial. */}
-        <m.line x1={60} y1={60} x2={60} y2={34} {...line} strokeWidth={6} style={{ rotate: hourAngle, originX: '60px', originY: '60px' }} />
-        <m.line x1={60} y1={60} x2={60} y2={20} {...line} strokeWidth={4} stroke="#e0323f" style={{ rotate: minuteAngle, originX: '60px', originY: '60px' }} />
+        {/* Both hands turn around the dial's centre: `view-box` makes the origin a point in the viewBox, not in each line's own box. */}
+        <m.line x1={60} y1={60} x2={60} y2={34} {...line} strokeWidth={6} style={{ rotate: hourAngle, ...DIAL_CENTRE }} />
+        <m.line x1={60} y1={66} x2={60} y2={20} {...line} strokeWidth={4} stroke="#e0323f" style={{ rotate: minuteAngle, ...DIAL_CENTRE }} />
         <circle cx={60} cy={60} r={5} fill={INK} />
       </svg>
       <p className="mt-1 text-center text-[0.8rem] leading-tight font-extrabold text-white/90">
@@ -110,7 +112,7 @@ function Leaf({ base, len, droop }: { base: number; len: number; droop: MotionVa
       fill="#2db3a3"
       {...line}
       strokeWidth={3}
-      style={{ rotate, originX: '70px', originY: '118px' }}
+      style={{ rotate, originX: '70px', originY: '118px', transformBox: 'view-box' }}
     />
   );
 }

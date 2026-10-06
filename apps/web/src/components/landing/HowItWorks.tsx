@@ -2,36 +2,36 @@
 
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { m, useMotionValue, useMotionValueEvent, useScroll, useTransform, type MotionValue } from 'motion/react';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { LISTENER, TALKER } from '@/lib/avatar/styles';
 import { DEMO_SUMMARY, DEMO_TRANSCRIPT, howStepAt, type HowStep } from '@/lib/landing/story';
 
 const STEPS: readonly { title: string; body: ReactNode }[] = [
   {
-    title: 'Your Mac records both sides',
+    title: 'Hit record. Talk like normal.',
     body: (
       <>
-        Start a meeting from the menu bar. Your microphone becomes “You”, whatever the call plays becomes Speaker 1, 2, 3. Zoom, Meet, Teams, a
-        podcast you pretend is work: it doesn’t care which app.
+        Click the menu bar icon when the call starts. Zoom, Meet, Teams, Slack, a phone call on speaker: if your Mac can hear it, BoringTalks can
+        write it down. Nobody new joins the call.
       </>
     ),
   },
   {
-    title: 'It’s transcribed on your Mac',
+    title: 'Every voice gets a name',
     body: (
       <>
-        A speech model runs on the Mac’s own chip, so turning an hour of talk into text costs nothing and nobody is billed per minute. Voices are told
-        apart on the device too.
+        You see who said what, by name, worked out from the conversation itself: “Thanks, Maya” is enough. Wrong guess? Rename a speaker once and
+        the whole meeting follows.
       </>
     ),
   },
   {
-    title: 'The server writes the boring part',
+    title: 'The boring part writes itself',
     body: (
       <>
-        Only the text goes up. One small AI call turns it into a title that actually says something, a summary, key topics, action items with owners,
-        and the decisions everyone will later claim they never agreed to.
+        A minute after you hang up: a title you’d actually search for, the gist in three lines, who owes what by when, and the decisions everyone will
+        later claim they never agreed to.
       </>
     ),
   },
@@ -148,19 +148,37 @@ function Meter({ delay = 0, color }: { delay?: number; color: string }) {
   );
 }
 
+/** Who is talking in the recording panel: walks through the demo transcript, one line at a time. */
+function useDemoTurn(intervalMs = 2600): number {
+  const [turn, setTurn] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTurn((t) => (t + 1) % DEMO_TRANSCRIPT.length), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return turn;
+}
+
 export function RecordingPanel() {
+  const now = DEMO_TRANSCRIPT[useDemoTurn()];
   return (
     <div className="flex h-full flex-col">
       <p className="flex items-center gap-2 text-sm font-extrabold text-danger">
-        <span className="animate-pulse-dot h-3 w-3 rounded-full bg-danger" /> Recording both channels
+        <span className="animate-pulse-dot h-3 w-3 rounded-full bg-danger" /> Recording the call
       </p>
       <div className="grid flex-1 grid-cols-2 items-end gap-4">
         {[
-          { style: TALKER, who: 'You', how: 'Microphone', color: TALKER.shirt, look: 1 },
-          { style: LISTENER, who: 'Speaker 1', how: 'System audio', color: LISTENER.shirt, look: -1 },
+          { style: TALKER, who: 'You', how: 'Your side', color: TALKER.shirt, look: 1 },
+          { style: LISTENER, who: 'Maya', how: 'Their side', color: LISTENER.shirt, look: -1 },
         ].map((h, i) => (
           <div key={h.who} className="text-center">
-            <TalkingHead style={h.style} talking look={h.look} seed={20 + i} className="mx-auto aspect-square w-[min(100%,190px)]" />
+            <TalkingHead
+              style={h.style}
+              talking={now.speaker === h.who}
+              line={now.speaker === h.who ? now.text : undefined}
+              look={h.look}
+              seed={20 + i}
+              className="mx-auto aspect-square w-[min(100%,190px)]"
+            />
             <Meter color={h.color} delay={i * 0.3} />
             <p className="mt-1 text-base font-extrabold text-ink">{h.who}</p>
             <p className="text-sm font-bold text-ink-soft">{h.how}</p>
@@ -181,7 +199,7 @@ export function TranscriptPanel({ p, from, to }: { p: MotionValue<number>; from:
         ))}
       </ul>
       <p className="mt-3 self-start rounded-full border-2 border-ink bg-mint-soft px-3 py-1 text-xs font-extrabold text-ink sm:text-sm">
-        Transcribed on this Mac: $0.00 a minute
+        Names picked up from the conversation
       </p>
     </div>
   );

@@ -23,13 +23,17 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 1.1 | Open `/` on desktop. | Headline “Your meeting, minus the meeting.”, four heads behind a table. Bubbles type out one cliché at a time; heads blink, glance around; the talking head’s eyes follow the cursor. No console errors. |
 | 1.2 | Scroll slowly through the first scene. | Wall clock runs 5 → 58 min. Sticky notes appear in order: Minute 12, 31, 47. Room and window sky darken, plant droops, mugs float past faster than the background. Heads yawn, then fall asleep with Zzz. Ends on “Meetings are boring. Notes about them shouldn’t be your job.” Scrolling back reverses everything. |
 | 1.3 | Keep scrolling through “How it works”. | Step 1 (two heads recording, level meters), step 2 (transcript lines drop in), step 3 (summary card assembles, action items get ticked). The active step is highlighted on the left. |
-| 1.4 | Continue to the yellow section, receipt, download, final CTA. | Heads pop up cheering, confetti moves at different speeds; receipt drifts; footer reads “This website could have been an email.” |
+| 1.4 | Continue to the yellow section, “What you get”, download, FAQ, final CTA. | Heads pop up cheering, confetti moves at different speeds; the receipt lists what a meeting turns into and drifts; no prices or technical terms anywhere; FAQ answers open and close; footer reads “This website could have been an email.” |
+| 1.4a | Watch the wall clock while scrolling the first scene. | Both hands turn around the centre of the dial (5 min ≈ 10:05, 58 min ≈ 10:58); nothing sticks out of the clock face. |
+| 1.4b | Hero at 1280×720, 1440×900, 1024×768 and phone width. | **Download for Mac**, then “or try it in the browser →” under it; neither covers a face. |
+| 1.4c | Click **Sound off** (bottom right). | It turns into **Sound on**; the talking head babbles in a gibberish voice in time with its bubble and mouth; every head that talks (hero, How it works, the wake-up cheers, final CTA) has its own voice. Click again: silence. Reload: the button says Sound off until your first click, then the voices come back. |
 | 1.5 | Click **Download for Mac** in the hero. | Page scrolls to the download card. |
 | 1.6 | Download card, with a build published. | Version and build, “macOS 26 or later”, “Apple silicon & Intel”, size, date. The button downloads the `.dmg` from `download.boringtalks.lol`. If the build isn’t notarized, a step explains right-click → Open. |
 | 1.7 | Download card, before any build exists. | “The Mac app is still in the oven.” and a **Record in the browser** button; no broken link. |
 | 1.8 | Phone width (375 px): repeat 1.1–1.4. | No horizontal scrolling, nothing cut off; bubbles fit; headline readable above the heads. |
 | 1.9 | Turn on Reduce Motion (macOS: Accessibility → Display) and reload. | Nothing animates or sticks; the story captions and “Meetings are boring.” are shown as plain text; “How it works” is a static list with finished pictures. |
-| 1.10 | Paste the URL into Slack/iMessage or an OG debugger. | Card with title, description and the generated image (two heads, the headline). Favicon is the two-heads app icon. |
+| 1.10 | Paste the URL into Slack/iMessage or an OG debugger. | Card with title, description and the generated image (four heads at the table, the headline). Favicon is the two-heads app icon. |
+| 1.11 | Open `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`, and run the page through a rich-results test. | Signed-in pages disallowed; sitemap lists `/`, `/signup`, `/signin`; JSON-LD has SoftwareApplication (download link `BoringTalks-latest.dmg`) and FAQPage with every question. |
 
 ### 2. Sign up, sign in, reset
 
@@ -140,7 +144,7 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 
 | Step | Expected |
 |---|---|
-| Download `BoringTalks-latest.dmg` from the landing page, open it | A window with BoringTalks.app and an Applications shortcut; volume name "BoringTalks" |
+| Download https://download.boringtalks.lol/BoringTalks-latest.dmg (or the landing page button), open it | A window with BoringTalks.app and an Applications shortcut; volume name "BoringTalks" |
 | Drag the app to Applications, eject, open it from Applications | **Notarized build:** opens after the usual "downloaded from the Internet" confirmation. **Ad-hoc build:** "cannot be opened" — right-click → Open → Open works |
 | `spctl -a -vv /Applications/BoringTalks.app` | Notarized: `accepted, source=Notarized Developer ID` |
 | Look at the menu bar | The BoringTalks icon (two speech bubbles); no Dock icon |
