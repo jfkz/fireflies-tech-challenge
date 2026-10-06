@@ -3,6 +3,8 @@ import type { Me, UpdateSettingsRequest } from '@boringtalks/shared';
 import type { FirebaseIdentity } from '../auth/firebase-verifier';
 import type { UserRow } from '../db/schema';
 import { DemoService } from '../meetings/demo.service';
+import { MeetingsRepository } from '../meetings/meetings.repository';
+import { firstName } from '../processing/speaker-names';
 import { JobsService } from '../queues/jobs.service';
 import { UsersRepository } from './users.repository';
 
@@ -14,6 +16,7 @@ export class UsersService {
     private readonly repo: UsersRepository,
     private readonly demo: DemoService,
     private readonly jobs: JobsService,
+    private readonly meetings: MeetingsRepository,
   ) {}
 
   /**
@@ -23,12 +26,11 @@ export class UsersService {
   async ensureUser(identity: FirebaseIdentity): Promise<UserRow> {
     const existing = await this.repo.findByFirebaseUid(identity.uid);
     if (existing) {
-      const changed = (identity.email && identity.email !== existing.email) || (identity.name && identity.name !== existing.name);
+      // A name the user typed in settings wins over the sign-in provider's.
+      const name = existing.nameLocked ? existing.name : (identity.name ?? existing.name);
+      const changed = (identity.email && identity.email !== existing.email) || name !== existing.name;
       if (!changed) return existing;
-      return this.repo.updateProfile(existing.id, {
-        email: identity.email ?? existing.email,
-        name: identity.name ?? existing.name,
-      });
+      return this.repo.updateProfile(existing.id, { email: identity.email ?? existing.email, name });
     }
 
     const created = await this.repo.insertIfAbsent({ firebaseUid: identity.uid, email: identity.email, name: identity.name });
@@ -39,7 +41,7 @@ export class UsersService {
       return winner;
     }
     this.logger.log({ userId: created.id }, 'new user');
-    await this.demo.seed(created.id);
+    await this.demo.seed(created.id, new Date(), created.name);
     await this.jobs.email({ type: 'welcome', userId: created.id });
     return created;
   }
@@ -49,7 +51,15 @@ export class UsersService {
   }
 
   async updateSettings(user: UserRow, body: UpdateSettingsRequest): Promise<Me> {
-    return toMe(await this.repo.updateSettings(user.id, { emailOnReady: body.emailOnReady }));
+    const updated = await this.repo.updateSettings(user.id, {
+      emailOnReady: body.emailOnReady,
+      ...(body.name !== undefined ? { name: body.name, nameLocked: true } : {}),
+    });
+    // Past meetings follow: "You" becomes the new first name everywhere it wasn't set by hand.
+    const before = firstName(user.name);
+    const after = firstName(updated.name);
+    if (after && after !== before) await this.meetings.renameOwner(user.id, after);
+    return toMe(updated);
   }
 }
 

@@ -100,9 +100,26 @@ describe('Mac flow: transcript + audio → summary', () => {
     const ready = await waitForStatus(token, created.id, 'ready');
     expect(ready.title).toBe('Fake summary: Kickoff for the Zanzibar integration.');
     expect(ready.description).toBeTruthy();
-    expect(ready.speakers).toEqual(['You', 'Speaker 1']);
+    // The summarizer named "Speaker 1" from the conversation; segments show the name.
+    expect(ready.speakers).toEqual(['You', 'Maya']);
+    expect(ready.topics).toEqual(['Testing']);
     expect(ready.summary?.actionItems).toEqual([expect.objectContaining({ text: 'Check the fake summary', owner: 'You', done: false })]);
-    expect(ready.segments).toEqual(segments);
+    expect(ready.segments).toEqual([segments[0], { ...segments[1], speaker: 'Maya' }]);
+
+    // Filter by the speaker and the topic, and see them offered as filters.
+    const bySpeaker = (await h.http.get('/meetings').query({ speaker: 'Maya' }).set(bearer(token)).expect(200)).body as MeetingPage;
+    expect(bySpeaker.items.map((m) => m.id)).toEqual([created.id]);
+    const byTopic = (await h.http.get('/meetings').query({ topic: 'Testing' }).set(bearer(token)).expect(200)).body as MeetingPage;
+    expect(byTopic.items.map((m) => m.id)).toEqual([created.id]);
+    expect(((await h.http.get('/meetings').query({ topic: 'Hiring' }).set(bearer(token)).expect(200)).body as MeetingPage).items).toHaveLength(0);
+    const facets = (await h.http.get('/meetings/facets').set(bearer(token)).expect(200)).body;
+    expect(facets.topics).toEqual(expect.arrayContaining([{ value: 'Testing', count: 1 }]));
+    expect(facets.speakers).toEqual(expect.arrayContaining([{ value: 'Maya', count: 1 }]));
+
+    // Rename a speaker by hand: it sticks, even through a reprocess.
+    const renamed = await h.http.patch(`/meetings/${created.id}`).set(bearer(token)).send({ speakers: { Maya: 'Mia' } }).expect(200);
+    expect(renamed.body.speakers).toEqual(['You', 'Mia']);
+    await h.http.patch(`/meetings/${created.id}`).set(bearer(token)).send({ speakers: { Nobody: 'X' } }).expect(404);
 
     // The presigned GET serves what was uploaded.
     const played = await fetch(ready.audioUrl!);
@@ -123,6 +140,11 @@ describe('Mac flow: transcript + audio → summary', () => {
     await h.http.post(`/meetings/${created.id}/reprocess`).set(bearer(token)).expect(200);
     const again = await waitForStatus(token, created.id, 'ready');
     expect(again.title).toBe('Zanzibar kickoff');
+    expect(again.speakers).toEqual(['You', 'Mia']);
+
+    // Setting your name renames "You" in past meetings.
+    await h.http.patch('/me/settings').set(bearer(token)).send({ name: 'Mac Person' }).expect(200);
+    expect(((await h.http.get(`/meetings/${created.id}`).set(bearer(token))).body as MeetingDetail).speakers).toEqual(['Mac', 'Mia']);
 
     // Delete removes the stored objects too.
     const storage = h.app.get(StorageService);

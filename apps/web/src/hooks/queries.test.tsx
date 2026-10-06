@@ -15,6 +15,7 @@ const item = (m: MeetingDetail) => ({
   startedAt: m.startedAt,
   durationSec: m.durationSec,
   speakers: m.speakers,
+  topics: m.topics,
   actionItemCount: 2,
   hasAudio: m.hasAudio,
 });
@@ -57,7 +58,7 @@ describe('useMeetings', () => {
     const a = meeting({ id: '00000000-0000-4000-8000-000000000001' });
     const b = meeting({ id: '00000000-0000-4000-8000-000000000002' });
     const listMeetings = vi.fn(async ({ cursor }: { cursor?: string }): Promise<MeetingPage> => (cursor ? { items: [item(b)], nextCursor: null } : { items: [item(a)], nextCursor: 'c2' }));
-    const { result } = renderHookWithProviders(() => useMeetings('pricing'), { auth: authValue({ api: fakeApi({ listMeetings: listMeetings as never }) }) });
+    const { result } = renderHookWithProviders(() => useMeetings({ q: 'pricing' }), { auth: authValue({ api: fakeApi({ listMeetings: listMeetings as never }) }) });
     await waitFor(() => expect(result.current.data?.pages).toHaveLength(1));
     expect(listMeetings).toHaveBeenCalledWith({ cursor: undefined, q: 'pricing', limit: 20 }, expect.any(AbortSignal));
     expect(result.current.hasNextPage).toBe(true);
@@ -69,14 +70,14 @@ describe('useMeetings', () => {
 
   it('does not list until GET /me is done', () => {
     const listMeetings = vi.fn();
-    renderHookWithProviders(() => useMeetings('', false), { auth: authValue({ api: fakeApi({ listMeetings }) }) });
+    renderHookWithProviders(() => useMeetings({}, false), { auth: authValue({ api: fakeApi({ listMeetings }) }) });
     expect(listMeetings).not.toHaveBeenCalled();
   });
 
   it('refreshes the list while something is processing', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const listMeetings = vi.fn(async () => ({ items: [item(meeting({ status: 'summarizing' }))], nextCursor: null }));
-    const { result } = renderHookWithProviders(() => useMeetings(''), { auth: authValue({ api: fakeApi({ listMeetings }) }) });
+    const { result } = renderHookWithProviders(() => useMeetings({ q: '' }), { auth: authValue({ api: fakeApi({ listMeetings }) }) });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     await act(() => vi.advanceTimersByTimeAsync(5000));
     await waitFor(() => expect(listMeetings.mock.calls.length).toBeGreaterThan(1));
@@ -118,9 +119,11 @@ describe('mutations', () => {
     const m = meeting();
     const deleteMeeting = vi.fn(async () => undefined);
     const { result, client } = renderHookWithProviders(() => useDeleteMeeting(), { auth: authValue({ api: fakeApi({ deleteMeeting }) }) });
-    client.setQueryData(keys.meetings('u1', ''), { pages: [{ items: [item(m)], nextCursor: null }], pageParams: [undefined] });
+    client.setQueryData(keys.meetings('u1', {}), { pages: [{ items: [item(m)], nextCursor: null }], pageParams: [undefined] });
+    // The facets live under the same prefix and must survive the list update.
+    client.setQueryData(keys.facets('u1'), { speakers: [], topics: [] });
     await act(() => result.current.mutateAsync(m.id));
-    expect(client.getQueryData<{ pages: MeetingPage[] }>(keys.meetings('u1', ''))!.pages[0].items).toEqual([]);
+    expect(client.getQueryData<{ pages: MeetingPage[] }>(keys.meetings('u1', {}))!.pages[0].items).toEqual([]);
   });
 
   it('me, settings, devices and revoke', async () => {

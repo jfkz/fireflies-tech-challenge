@@ -28,7 +28,7 @@ export class UsersRepository {
     return row;
   }
 
-  async updateSettings(id: string, values: { emailOnReady: boolean }): Promise<UserRow> {
+  async updateSettings(id: string, values: { emailOnReady?: boolean; name?: string; nameLocked?: boolean }): Promise<UserRow> {
     const [row] = await this.db.update(users).set(values).where(eq(users.id, id)).returning();
     return row;
   }

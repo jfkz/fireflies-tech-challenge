@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { speakersOf, type Segment } from '@boringtalks/shared';
+import { speakerName, speakersOf, type Segment } from '@boringtalks/shared';
+import { displayNames } from '../processing/speaker-names';
 import type { MeetingRow } from '../db/schema';
 import { transcriptKey } from '../storage/keys';
 import { StorageService } from '../storage/storage.service';
@@ -27,9 +28,10 @@ export class TranscriptService {
     const key = transcriptKey(meeting.userId, meeting.id);
     await this.storage.putJson(key, { meetingId: meeting.id, ...input });
     const lastEndSec = Math.ceil(Math.max(0, ...input.segments.map((s) => s.endMs)) / 1000);
+    const names = displayNames(meeting.speakerNames);
     return this.repo.replaceTranscript(meeting.id, input.segments, {
       transcriptKey: key,
-      speakers: speakersOf(input.segments),
+      speakers: speakersOf(input.segments).map((label) => speakerName(label, names)),
       language: input.language ?? meeting.language,
       durationSec: input.durationSec ?? meeting.durationSec ?? lastEndSec,
     });

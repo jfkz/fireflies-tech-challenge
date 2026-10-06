@@ -8,8 +8,12 @@ import { isProcessing, meetingPollInterval } from '@/lib/status';
 /** Query keys, scoped by user so two accounts never share a cache entry. */
 export const keys = {
   me: (uid: string | undefined) => ['me', uid] as const,
-  meetings: (uid: string | undefined, q: string) => ['meetings', uid, q] as const,
-  meetingLists: (uid: string | undefined) => ['meetings', uid] as const,
+  meetings: (uid: string | undefined, filters: MeetingFilters) => ['meetings', uid, 'list', filters] as const,
+  /** Every filtered list (the infinite queries). */
+  meetingLists: (uid: string | undefined) => ['meetings', uid, 'list'] as const,
+  facets: (uid: string | undefined) => ['meetings', uid, 'facets'] as const,
+  /** Lists and facets together: what changes when a meeting does. */
+  allMeetings: (uid: string | undefined) => ['meetings', uid] as const,
   meeting: (uid: string | undefined, id: string) => ['meeting', uid, id] as const,
   devices: (uid: string | undefined) => ['devices', uid] as const,
   latestDownload: ['latest-download'] as const,
@@ -25,16 +29,33 @@ export function useUpdateSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.updateSettings,
-    onSuccess: (me) => qc.setQueryData(keys.me(user?.uid), me),
+    onSuccess: (me, body) => {
+      qc.setQueryData(keys.me(user?.uid), me);
+      // A new name renames "You" in past meetings on the server.
+      if (body.name !== undefined) {
+        void qc.invalidateQueries({ queryKey: keys.allMeetings(user?.uid) });
+        void qc.invalidateQueries({ queryKey: ['meeting', user?.uid] });
+      }
+    },
   });
 }
 
+/** What the meeting list is narrowed to: search text, a person, a topic, a time range (ISO). */
+export interface MeetingFilters {
+  q?: string;
+  speaker?: string;
+  topic?: string;
+  from?: string;
+  to?: string;
+}
+
 /** Cursor-paginated meeting list. `ready` lets the caller wait for GET /me (which creates the account). */
-export function useMeetings(q: string, ready = true) {
+export function useMeetings(filters: MeetingFilters, ready = true) {
   const { api, user } = useAuth();
+  const clean = Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) as MeetingFilters;
   return useInfiniteQuery({
-    queryKey: keys.meetings(user?.uid, q),
-    queryFn: ({ pageParam, signal }) => api.listMeetings({ cursor: pageParam, q: q || undefined, limit: 20 }, signal),
+    queryKey: keys.meetings(user?.uid, clean),
+    queryFn: ({ pageParam, signal }) => api.listMeetings({ cursor: pageParam, limit: 20, ...clean }, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last: MeetingPage) => last.nextCursor ?? undefined,
     enabled: !!user && ready,
@@ -42,6 +63,12 @@ export function useMeetings(q: string, ready = true) {
     refetchInterval: (query) =>
       query.state.data?.pages.some((p) => p.items.some((m) => isProcessing(m.status))) ? 5000 : false,
   });
+}
+
+/** The speakers and topics to offer as filters. */
+export function useMeetingFacets(ready = true) {
+  const { api, user } = useAuth();
+  return useQuery({ queryKey: keys.facets(user?.uid), queryFn: ({ signal }) => api.meetingFacets(signal), enabled: !!user && ready });
 }
 
 export function useMeeting(id: string) {
@@ -59,7 +86,7 @@ function useSetMeeting() {
   const qc = useQueryClient();
   return (m: MeetingDetail) => {
     qc.setQueryData(keys.meeting(user?.uid, m.id), m);
-    void qc.invalidateQueries({ queryKey: keys.meetingLists(user?.uid) });
+    void qc.invalidateQueries({ queryKey: keys.allMeetings(user?.uid) });
   };
 }
 
@@ -88,6 +115,16 @@ export function useUpdateMeeting(id: string) {
 export function applyUpdate(m: MeetingDetail, body: UpdateMeetingRequest): MeetingDetail {
   let next = m;
   if (body.title !== undefined) next = { ...next, title: body.title };
+  const renames = body.speakers;
+  if (renames) {
+    const rename = (s: string) => (Object.hasOwn(renames, s) ? renames[s] : s);
+    next = {
+      ...next,
+      speakers: [...new Set(next.speakers.map(rename))],
+      segments: next.segments.map((s) => ({ ...s, speaker: rename(s.speaker) })),
+      summary: next.summary && { ...next.summary, actionItems: next.summary.actionItems.map((a) => ({ ...a, owner: a.owner && rename(a.owner) })) },
+    };
+  }
   const item = body.actionItem;
   if (item && next.summary) {
     next = {
@@ -114,6 +151,7 @@ export function useDeleteMeeting() {
       qc.setQueriesData<InfiniteData<MeetingPage>>({ queryKey: keys.meetingLists(user?.uid) }, (data) =>
         data ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.filter((m) => m.id !== id) })) } : data,
       );
+      void qc.invalidateQueries({ queryKey: keys.facets(user?.uid) });
     },
   });
 }

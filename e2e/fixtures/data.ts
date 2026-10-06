@@ -39,6 +39,7 @@ export function demoMeeting(overrides: Partial<MeetingDetail> = {}): MeetingDeta
     startedAt: new Date(Date.now() - 2 * 3600_000).toISOString(),
     durationSec: 46,
     speakers: ['You', 'Speaker 1', 'Speaker 2'],
+    topics: ['Pricing', 'Launch Planning'],
     actionItemCount: 2,
     hasAudio: true,
     language: 'en',
@@ -70,6 +71,7 @@ export function processingMeeting(source: 'browser' | 'upload', title: string | 
     startedAt: new Date().toISOString(),
     durationSec: null,
     speakers: [],
+    topics: [],
     actionItemCount: 0,
     hasAudio: false,
     language: null,
@@ -90,6 +92,7 @@ export function toListItem(m: MeetingDetail): MeetingListItem {
     startedAt: m.startedAt,
     durationSec: m.durationSec,
     speakers: m.speakers,
+    topics: m.topics,
     actionItemCount: m.summary?.actionItems.length ?? m.actionItemCount,
     hasAudio: m.hasAudio,
   });

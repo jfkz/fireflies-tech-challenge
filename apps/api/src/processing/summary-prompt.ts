@@ -21,6 +21,16 @@ export const SummarySchema = z.object({
   description: z.string().describe(`One sentence (max ${DESCRIPTION_MAX} chars) saying what happened`),
   summary: z.string().describe('3 to 6 sentences covering the substance of the meeting'),
   keyTopics: z.array(z.string()).describe('3 to 8 short topic labels'),
+  topics: z.array(z.string()).describe('1 to 4 broad tags (1 to 3 words, Title Case) to group this meeting with others, e.g. "Pricing", "Hiring"'),
+  speakers: z
+    .array(
+      z.object({
+        label: z.string().describe('Speaker label exactly as in the transcript'),
+        name: z.string().nullable().describe("The person's name, only if the conversation reveals it; else null"),
+        role: z.string().nullable().describe('A short role if obvious from the conversation (e.g. "Recruiter", "Customer"); else null'),
+      }),
+    )
+    .describe('One entry per speaker label in the transcript'),
   actionItems: z
     .array(
       z.object({
@@ -43,10 +53,27 @@ Rules:
 - Key topics: 3 to 8 short labels.
 - Action items: only tasks someone actually took on or was asked to do. Owner is the speaker label exactly as it appears in the transcript (for example "You" or "Speaker 2"), or the person's name if one is mentioned; null if unclear. Due is the deadline as said, or null.
 - Decisions: only things that were agreed, not proposals. Empty if none.
-- Speaker "You" is the person who recorded the meeting.`;
+- Speaker "You" is the person who recorded the meeting.
+- Speakers: one entry per speaker label. Give a name only when the conversation shows whose it is: the person introduces themselves, is greeted or addressed by name ("Thanks, Maya", "Leo, can you…") and answers, or signs off with it. A name that is only talked about ("ask Sam") belongs to nobody here. Never guess or invent a name; use null. If there is no name but the person's role is obvious, give it in a word or two, else null.
+- Topics: 1 to 4 broad tags of 1 to 3 words in Title Case that would group this meeting with similar ones (a subject, project, client or team, e.g. "Pricing", "Hiring", "Acme Onboarding"). Not sentences.`;
 
-export function summaryPrompt(body: string, language: string | null, fromNotes: boolean): string {
-  const lang = language ? `The transcript language code is "${language}".\n` : '';
+/** Context about the person recording, added to the prompt. */
+export interface PromptContext {
+  /** Account name of the person recording (speaker "You"), when known. */
+  ownerName?: string | null;
+  /** Tags the user's other meetings already have, most used first. */
+  knownTopics?: readonly string[];
+}
+
+function contextLines({ ownerName, knownTopics }: PromptContext): string {
+  const lines: string[] = [];
+  if (ownerName) lines.push(`Speaker "You" is ${ownerName}; do not give that name to anyone else.`);
+  if (knownTopics?.length) lines.push(`Reuse one of these existing topic tags when it fits: ${knownTopics.map((t) => JSON.stringify(t)).join(', ')}.`);
+  return lines.length ? `${lines.join('\n')}\n` : '';
+}
+
+export function summaryPrompt(body: string, language: string | null, fromNotes: boolean, context: PromptContext = {}): string {
+  const lang = `${language ? `The transcript language code is "${language}".\n` : ''}${contextLines(context)}`;
   const what = fromNotes
     ? 'Below are notes on consecutive parts of one long meeting, in order. Summarize the whole meeting.'
     : 'Below is the transcript, one line per turn: [time] speaker: text.';
@@ -55,7 +82,7 @@ export function summaryPrompt(body: string, language: string | null, fromNotes: 
 
 export function chunkNotesPrompt(body: string, part: number, total: number): string {
   return `This is part ${part} of ${total} of a long meeting transcript, one line per turn: [time] speaker: text.
-Write dense notes in the transcript's language: what was discussed, numbers, names, every decision and every action item with its owner (speaker label) and due date. No preamble.
+Write dense notes in the transcript's language: what was discussed, numbers, names, every decision and every action item with its owner (speaker label) and due date. Keep speaker labels exactly as they are, and note any evidence of who a label is (a name they introduce themselves with or are addressed by). No preamble.
 
 <transcript>
 ${body}

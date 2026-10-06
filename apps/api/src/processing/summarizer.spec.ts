@@ -14,6 +14,8 @@ const draft = {
   description: 'The team raised the Pro price and moved the launch.',
   summary: 'Pro goes to $29. Launch moves to Nov 3. Free tier stays.',
   keyTopics: ['Pricing', 'Launch date', 'Free tier'],
+  topics: ['pricing', 'Launch'],
+  speakers: [{ label: 'Speaker 1', name: 'Dana', role: null }],
   actionItems: [{ text: 'Update the pricing page', owner: 'Dana', due: 'Oct 30' }],
   decisions: ['Pro is $29'],
 };
@@ -65,6 +67,31 @@ describe('GatewaySummarizer', () => {
       actionItems: [{ text: 'Update the pricing page', owner: 'Dana', due: 'Oct 30', done: false }],
     });
     expect(result.actionItems[0].id).toMatch(/^[\w-]{10}$/);
+  });
+
+  it('tells the model who is recording and which topic tags exist, and returns its speaker guesses', async () => {
+    const { model, calls } = mockModel();
+    const result = await new GatewaySummarizer(model).summarize({
+      segments: [seg('You', 0, 1000, 'Thanks, Dana.'), seg('Speaker 1', 2000, 3000, 'Sure.')],
+      language: null,
+      ownerName: 'Ann',
+      knownTopics: ['Pricing', 'Hiring'],
+    });
+    const text = promptText(calls[0]);
+    expect(text).toContain('Speaker \\"You\\" is Ann');
+    expect(text).toContain('existing topic tags');
+    expect(text).toContain('\\"Hiring\\"');
+    expect(text).toContain('Never guess or invent a name');
+    // "pricing" is spelled like the existing tag.
+    expect(result.topics).toEqual(['Pricing', 'Launch']);
+    expect(result.speakers).toEqual([{ label: 'Speaker 1', name: 'Dana', role: null }]);
+  });
+
+  it('falls back to key topics when the model gives no tags', async () => {
+    const { model } = mockModel({ ...draft, topics: [], speakers: [] });
+    const result = await new GatewaySummarizer(model).summarize({ segments: [seg('You', 0, 1, 'x')], language: null });
+    expect(result.topics).toEqual(['Pricing', 'Launch date', 'Free tier']);
+    expect(result.speakers).toEqual([]);
   });
 
   it('map-reduces long transcripts in ~20 minute parts', async () => {

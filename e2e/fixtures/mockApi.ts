@@ -4,6 +4,7 @@ import {
   CreateMeetingRequest,
   MeetingDetail,
   UpdateMeetingRequest,
+  UpdateSettingsRequest,
   UploadUrlRequest,
   type Device,
   type LatestDownload,
@@ -106,23 +107,33 @@ export async function mockApi(
       return json(route, 200, state.me);
     }
     if (path === '/me/settings' && method === 'PATCH') {
-      const b = body as { emailOnReady?: unknown };
-      if (typeof b?.emailOnReady !== 'boolean') return error(route, 400, 'emailOnReady must be a boolean');
-      state.me = { ...state.me, emailOnReady: b.emailOnReady };
+      const parsed = UpdateSettingsRequest.safeParse(body);
+      if (!parsed.success) return error(route, 400, parsed.error.issues[0].message);
+      state.me = { ...state.me, ...parsed.data };
       return json(route, 200, state.me);
     }
 
     // ---- meetings
     if (path === '/meetings' && method === 'GET') {
       const q = (url.searchParams.get('q') ?? '').toLowerCase();
+      const speaker = url.searchParams.get('speaker');
+      const topic = url.searchParams.get('topic');
       const limit = Number(url.searchParams.get('limit') ?? 20);
       const start = Number(url.searchParams.get('cursor') ?? 0);
       const all = state.meetings
         .filter((m) => !q || [m.title, m.description ?? '', ...m.segments.map((s) => s.text)].join(' ').toLowerCase().includes(q))
+        .filter((m) => (!speaker || m.speakers.includes(speaker)) && (!topic || m.topics.includes(topic)))
         .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
       const items = all.slice(start, start + limit).map(toListItem);
       const next = start + limit < all.length ? String(start + limit) : null;
       return json(route, 200, { items, nextCursor: next });
+    }
+    if (path === '/meetings/facets' && method === 'GET') {
+      const count = (values: string[]) =>
+        [...values.reduce((m, v) => m.set(v, (m.get(v) ?? 0) + 1), new Map<string, number>())]
+          .map(([value, n]) => ({ value, count: n }))
+          .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+      return json(route, 200, { speakers: count(state.meetings.flatMap((m) => m.speakers)), topics: count(state.meetings.flatMap((m) => m.topics)) });
     }
     if (path === '/meetings' && method === 'POST') {
       const parsed = CreateMeetingRequest.safeParse(body);
@@ -157,6 +168,12 @@ export async function mockApi(
         if (!parsed.success) return error(route, 400, parsed.error.issues[0].message);
         let next = m;
         if (parsed.data.title) next = { ...next, title: parsed.data.title };
+        const renames = parsed.data.speakers;
+        if (renames) {
+          if (Object.keys(renames).some((from) => !next.speakers.includes(from))) return error(route, 404, 'Speaker not found');
+          const rename = (s: string) => renames[s] ?? s;
+          next = { ...next, speakers: [...new Set(next.speakers.map(rename))], segments: next.segments.map((s) => ({ ...s, speaker: rename(s.speaker) })) };
+        }
         const ai = parsed.data.actionItem;
         if (ai && next.summary) {
           next = { ...next, summary: { ...next.summary, actionItems: next.summary.actionItems.map((a) => (a.id === ai.id ? { ...a, done: ai.done } : a)) } };

@@ -16,6 +16,8 @@ export class FakeSummarizer extends Summarizer {
       description: `${merged.length} turns between ${speakers.join(', ')}.`,
       summary: `The meeting opened with "${first}". ${speakers.length} people spoke.`,
       keyTopics: ['Testing', 'Fake summaries', 'Pipelines'],
+      topics: ['Testing'],
+      speakers: speakers.map((label, i) => ({ label, name: i === 1 ? 'Maya' : null, role: null })),
       actionItems: [{ text: 'Check the fake summary', owner: speakers[0] ?? null, due: null }],
       decisions: ['Use fakes in tests'],
     };

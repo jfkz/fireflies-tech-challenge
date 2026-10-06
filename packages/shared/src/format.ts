@@ -67,3 +67,16 @@ export function segmentAt(segments: readonly Segment[], ms: number): number {
   }
   return found;
 }
+
+/** Label → display name, e.g. { "Speaker 1": "Maya", "You": "Mike" }. Labels without an entry keep their label. */
+export type SpeakerNames = Readonly<Record<string, string>>;
+
+/** The display name for a raw speaker label. */
+export function speakerName(label: string, names: SpeakerNames): string {
+  return Object.hasOwn(names, label) ? names[label] : label;
+}
+
+/** Segments with their raw labels replaced by display names. */
+export function applySpeakerNames(segments: readonly Segment[], names: SpeakerNames): Segment[] {
+  return segments.map((s) => ({ ...s, speaker: speakerName(s.speaker, names) }));
+}

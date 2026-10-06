@@ -92,18 +92,31 @@ Latest Mac build (`LatestDownload`), read from `<DOWNLOADS_BASE_URL>/latest.json
 ```
 
 ### `PATCH /me/settings` (`UpdateSettingsRequest`) → `Me`
+At least one of:
 ```json
-{ "emailOnReady": false }
+{ "emailOnReady": false, "name": "Maya Chen" }
+```
+`name` is how transcripts call the person recording (speaker "You", by first name). Setting it
+also renames "You" in all past meetings, except where the user named that speaker by hand, and
+stops sign-ins from overwriting it with the provider's name.
+
+### `GET /meetings/facets` → `MeetingFacets`
+The speakers and topics of the user's meetings, most frequent first (24 of each), for the filter bar:
+```json
+{ "speakers": [{ "value": "Dana", "count": 7 }], "topics": [{ "value": "Pricing", "count": 4 }] }
 ```
 
 ## Meetings
 
-### `GET /meetings?cursor=&limit=&q=` → `MeetingPage`
+### `GET /meetings?cursor=&limit=&q=&speaker=&topic=&from=&to=` → `MeetingPage`
 Newest first (`started_at desc, id desc`), keyset pagination. `limit` 1–100 (default 20). Pass the
 returned `nextCursor` (opaque) to get the next page; it is `null` on the last page.
 
 `q` is a full-text search (Postgres `websearch_to_tsquery('simple', q)`) over titles, descriptions
 and transcript text: `pricing launch`, `"exact phrase"`, `pricing -draft`, `budget or pricing`.
+
+Filters (all optional, combined with AND): `speaker` (a display name, exact), `topic` (a tag,
+exact), `from` / `to` (ISO date-times with offset; `from` inclusive, `to` exclusive).
 
 ```json
 {
@@ -111,7 +124,8 @@ and transcript text: `pricing launch`, `"exact phrase"`, `pricing -draft`, `budg
     "id": "41fc…", "title": "Pricing review: Pro tier to $29, launch moved to Nov 3",
     "description": "Dana, Leo and you agreed to raise Pro to $29/month…",
     "status": "ready", "source": "demo", "startedAt": "2026-10-05T11:00:00.000Z",
-    "durationSec": 212, "speakers": ["You", "Dana", "Leo"], "actionItemCount": 4, "hasAudio": false
+    "durationSec": 212, "speakers": ["Ann", "Dana", "Leo"], "topics": ["Pricing", "Launch Planning"],
+    "actionItemCount": 4, "hasAudio": false
   }],
   "nextCursor": null
 }
@@ -156,11 +170,20 @@ the full `segments` and `audioUrl` — a presigned GET valid for 1 hour, or `nul
 ```
 
 ### `PATCH /meetings/:id` (`UpdateMeetingRequest`) → `MeetingDetail`
-Rename and/or tick an action item (at least one of them):
+Rename, tick an action item and/or rename speakers (at least one of them):
 ```json
-{ "title": "Beta go/no-go", "actionItem": { "id": "zmRnapn6Bn", "done": true } }
+{ "title": "Beta go/no-go", "actionItem": { "id": "zmRnapn6Bn", "done": true }, "speakers": { "Speaker 2": "Leo" } }
 ```
-`404` if the action item does not exist.
+`speakers` maps a current display name to a new one (1–20 at a time). The new names are marked as
+typed by hand, so reprocessing never overwrites them; action item owners follow. Giving two speakers
+the same name merges them into one person in lists and filters. `404` if the action item or a
+speaker does not exist.
+
+**Speaker names.** Segments are stored with the recorder's labels ("You", "Speaker 1"); responses
+show display names. After each summary the worker names the labels: "You" becomes the account
+holder's first name, the others get a name only when the conversation shows it (an introduction,
+being addressed by name and answering, a sign-off), else a clear role ("Recruiter"), else they keep
+their label. `speakers` in list and detail, segments and action item owners all use display names.
 
 ### `DELETE /meetings/:id` → `204`
 Deletes the meeting, its transcript and summary, and every stored object (audio, transcript JSON,
