@@ -11,6 +11,9 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
+    // CI runners with coverage are several times slower than a laptop; the first test of a big
+    // component file pays for its imports.
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       reporter: ['text-summary', 'text', 'html', 'json-summary'],
