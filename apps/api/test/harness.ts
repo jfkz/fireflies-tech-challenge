@@ -21,7 +21,7 @@ export interface Harness {
 
 /** Boots the real HTTP app and the real worker (BullMQ processors) in this process. */
 export async function startHarness(): Promise<Harness> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false, logger: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false, rawBody: true, logger: false });
   configureApp(app);
   await app.init();
   await app.get<Database>(DB).execute(sql`truncate users cascade`);

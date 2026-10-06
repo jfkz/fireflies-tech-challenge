@@ -62,6 +62,16 @@ the public domain can only ever reach the `downloads/` folder, never meeting aud
 `SUMMARIZE_CONCURRENCY`. CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
 [apps/api/README.md](../apps/api/README.md#environment).
 
+**Meeting bots (Recall.ai), optional:** set `RECALL_API_KEY`, `RECALL_BASE_URL` (the account's region,
+e.g. `https://us-west-2.recall.ai`) and `RECALL_WEBHOOK_SECRET` on both services. Without a key the
+feature is off: `GET /me` says `meetingBot: false` and the dashboard hides it. In Recall's dashboard:
+- create an API key and a workspace verification secret (Developers → API keys & secrets);
+- add a webhook endpoint `https://api.boringtalks.lol/integrations/recall/webhook` (and
+  `https://api.dev.boringtalks.lol/…` for dev) subscribed to the bot status events.
+
+Prod and dev may share one Recall workspace: each environment ignores webhooks for bots it didn't
+create.
+
 **Vercel**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL` (per environment), `NEXT_PUBLIC_FIREBASE_*`.
 
 **GitHub** environments `production` and `dev`:

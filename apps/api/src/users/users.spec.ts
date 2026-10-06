@@ -58,8 +58,8 @@ describe('MeController', () => {
     const { repo, service } = setup();
     repo.updateSettings.mockResolvedValue(user({ emailOnReady: false }));
     repo.findById.mockResolvedValue(user());
-    const controller = new MeController(service);
-    expect(controller.me(user())).toEqual(toMe(user()));
+    const controller = new MeController(service, { enabled: true } as never);
+    expect(controller.me(user())).toEqual({ ...toMe(user()), meetingBot: true });
     expect(toMe(user()).createdAt).toBe('2026-10-01T10:00:00.000Z');
     await expect(controller.updateSettings(user(), { emailOnReady: false })).resolves.toMatchObject({ emailOnReady: false });
     await expect(service.findById(user().id)).resolves.toEqual(user());

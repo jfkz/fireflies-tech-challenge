@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /** Where a meeting came from. */
-export const MeetingSource = z.enum(['macos', 'browser', 'upload', 'demo']);
+export const MeetingSource = z.enum(['macos', 'browser', 'upload', 'demo', 'bot']);
 export type MeetingSource = z.infer<typeof MeetingSource>;
 
 /**
@@ -103,7 +103,36 @@ export const MeetingListItem = z.object({
 });
 export type MeetingListItem = z.infer<typeof MeetingListItem>;
 
+/** Where a meeting bot (Recall.ai) is in the call. */
+export const BotStatus = z.enum(['scheduled', 'joining', 'waiting_room', 'in_call', 'recording', 'left', 'done', 'failed']);
+export type BotStatus = z.infer<typeof BotStatus>;
+
+export const MeetingBot = z.object({
+  status: BotStatus,
+  meetingUrl: z.string(),
+  joinAt: z.string().datetime().nullable(),
+});
+export type MeetingBot = z.infer<typeof MeetingBot>;
+
+/** Zoom, Google Meet, Microsoft Teams and Webex links a bot can join. */
+export const BOT_MEETING_URL = /^https:\/\/([a-z0-9-]+\.)*(zoom\.us|zoom\.com|meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|webex\.com)\//i;
+
+export const SendBotRequest = z.object({
+  meetingUrl: z
+    .string()
+    .trim()
+    .url()
+    .max(2000)
+    .regex(BOT_MEETING_URL, 'Paste a Zoom, Google Meet, Microsoft Teams or Webex meeting link'),
+  title: z.string().trim().min(1).max(120).optional(),
+  /** When to join; now if absent. */
+  joinAt: z.string().datetime().optional(),
+});
+export type SendBotRequest = z.infer<typeof SendBotRequest>;
+
 export const MeetingDetail = MeetingListItem.extend({
+  /** Set for meetings recorded by a bot that joined the call. */
+  bot: MeetingBot.nullable().optional(),
   language: z.string().nullable(),
   error: z.string().nullable(),
   summary: MeetingSummary.omit({ title: true, description: true }).nullable(),

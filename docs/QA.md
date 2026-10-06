@@ -93,6 +93,16 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 4b.4 | Click the meeting link of a task. | The meeting opens scrolled to that action item, which flashes yellow. |
 | 4b.5 | Record a meeting where someone says “I'll send it by Friday”. | Its task shows “Due Fri, …” for the Friday after the meeting, and sorts by that date. |
 
+### 4d. Meeting bots (Recall.ai, when configured)
+
+| # | Steps | Expected |
+|---|---|---|
+| 4d.1 | **New recording** → **Send a notetaker to a call**, paste a non-meeting link. | “Paste a Zoom, Google Meet, Microsoft Teams or Webex link.”; the button stays disabled. |
+| 4d.2 | Paste a Google Meet link of a call you're in, **Send the notetaker**. | The meeting page opens: “The notetaker is joining the call…”. “BoringTalks Notetaker” asks to join the call; let it in. The banner goes through waiting room → recording. |
+| 4d.3 | Talk for a minute with a second person, then **Make it leave** (or end the call). | The bot leaves; “The transcript arrives in a few minutes”. Within ~10 minutes the meeting is summarized; speakers carry the names shown in the call; audio plays. |
+| 4d.4 | Send a bot to a meeting nobody admits it to. | After the waiting-room timeout the meeting fails with “Nobody let the bot in from the waiting room.” |
+| 4d.5 | Schedule a bot (Join at, 15 minutes from now), then **Cancel the notetaker**. | Banner shows the time; cancelling stops it from joining. |
+
 ### 4c. Calendar `/calendar`
 
 | # | Steps | Expected |

@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { MeetingSource, MeetingStatus } from '@boringtalks/shared';
+import type { BotStatus, MeetingSource, MeetingStatus } from '@boringtalks/shared';
 
 /** Who named a speaker: the summarizer from the conversation, or the user by hand (never overwritten). */
 export interface SpeakerNameEntry {
@@ -95,6 +95,11 @@ export const meetings = pgTable(
     error: text('error'),
     /** Processing runs started; part of the job id so a reprocess is a new job. */
     attempts: integer('attempts').notNull().default(0),
+    /** Recall.ai bot recording this meeting, if one was sent. */
+    botId: text('bot_id'),
+    botStatus: text('bot_status').$type<BotStatus>(),
+    botMeetingUrl: text('bot_meeting_url'),
+    botJoinAt: timestamp('bot_join_at', { withTimezone: true, mode: 'date' }),
     /** The client's Idempotency-Key from POST /meetings, so a retried create returns the same meeting. */
     clientKey: text('client_key'),
     search: tsvector('search').generatedAlwaysAs(
@@ -112,6 +117,7 @@ export const meetings = pgTable(
     index('meetings_speakers_idx').using('gin', t.speakers),
     index('meetings_topics_idx').using('gin', t.topics),
     uniqueIndex('meetings_user_client_key_idx').on(t.userId, t.clientKey),
+    uniqueIndex('meetings_bot_id_idx').on(t.botId),
   ],
 );
 

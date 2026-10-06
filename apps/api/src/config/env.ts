@@ -58,6 +58,14 @@ export const EnvSchema = z
     EMAIL_FROM: z.string().default('BoringTalks <hello@send.boringtalks.lol>'),
     EMAIL_ALLOWLIST: csv,
 
+    /** Recall.ai meeting bots; without a key the feature is off. */
+    RECALL_API_KEY: z.string().optional(),
+    /** The region the Recall.ai account lives in. */
+    RECALL_BASE_URL: z.string().url().default('https://us-west-2.recall.ai'),
+    /** "whsec_…" from Recall's dashboard (Developers → API keys & secrets); webhooks are refused without it. */
+    RECALL_WEBHOOK_SECRET: z.string().optional(),
+    RECALL_BOT_NAME: z.string().default('BoringTalks Notetaker'),
+
     THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
   })
   .superRefine((env, ctx) => {

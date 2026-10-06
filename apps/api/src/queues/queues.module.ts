@@ -3,7 +3,7 @@ import { Global, Module } from '@nestjs/common';
 import { AppConfig } from '../config/config.module';
 import { redisOptions } from '../redis/redis.module';
 import { JobsService } from './jobs.service';
-import { DEFAULT_JOB_OPTIONS, EMAIL_QUEUE, SUMMARIZE_QUEUE, TRANSCRIBE_QUEUE } from './queues';
+import { BOT_IMPORT_QUEUE, DEFAULT_JOB_OPTIONS, EMAIL_QUEUE, SUMMARIZE_QUEUE, TRANSCRIBE_QUEUE } from './queues';
 
 @Global()
 @Module({
@@ -16,7 +16,7 @@ import { DEFAULT_JOB_OPTIONS, EMAIL_QUEUE, SUMMARIZE_QUEUE, TRANSCRIBE_QUEUE } f
         defaultJobOptions: DEFAULT_JOB_OPTIONS,
       }),
     }),
-    BullModule.registerQueue({ name: TRANSCRIBE_QUEUE }, { name: SUMMARIZE_QUEUE }, { name: EMAIL_QUEUE }),
+    BullModule.registerQueue({ name: TRANSCRIBE_QUEUE }, { name: SUMMARIZE_QUEUE }, { name: EMAIL_QUEUE }, { name: BOT_IMPORT_QUEUE }),
   ],
   providers: [JobsService],
   exports: [JobsService, BullModule],

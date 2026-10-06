@@ -65,6 +65,11 @@ export function MeetingsList() {
     <div>
       <div className="flex flex-wrap items-end gap-4">
         <h1 className="font-display mr-auto text-4xl leading-none sm:text-5xl">Meetings</h1>
+        {me.data?.meetingBot && (
+          <Link href="/record#bot" className="btn btn-secondary">
+            Send a notetaker
+          </Link>
+        )}
         <form role="search" onSubmit={(e) => e.preventDefault()} className="w-full sm:w-80">
           <label htmlFor="meeting-search" className="sr-only">
             Search meetings

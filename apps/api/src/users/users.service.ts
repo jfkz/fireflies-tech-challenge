@@ -63,8 +63,9 @@ export class UsersService {
   }
 }
 
-export function toMe(user: UserRow): Me {
+export function toMe(user: UserRow, features: { meetingBot?: boolean } = {}): Me {
   return {
+    ...(features.meetingBot !== undefined ? { meetingBot: features.meetingBot } : {}),
     id: user.id,
     email: user.email,
     name: user.name,
