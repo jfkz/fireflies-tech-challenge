@@ -11,10 +11,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     if (!firebaseProject || firebaseProject.startsWith('demo-')) return [];
     const origin = `https://${firebaseProject}.firebaseapp.com`;
-    return [
-      { source: '/__/auth/:path*', destination: `${origin}/__/auth/:path*` },
-      { source: '/__/firebase/:path*', destination: `${origin}/__/firebase/:path*` },
-    ];
+    return [{ source: '/__/auth/:path*', destination: `${origin}/__/auth/:path*` }];
   },
 };
 

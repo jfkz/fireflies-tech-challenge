@@ -38,7 +38,7 @@ Each deploy run:
 | Auth | Firebase project `boringtalks-fe45f` (Email/Password, Google) | shared | shared |
 
 Google sign-in uses the site's own domain as Firebase's auth domain: `next.config.ts` proxies
-`/__/auth/*` and `/__/firebase/*` to `boringtalks-fe45f.firebaseapp.com`, and the OAuth client
+`/__/auth/*` to `boringtalks-fe45f.firebaseapp.com`, and the OAuth client
 "Web client (auto created by Google Service)" in Google Cloud lists
 `https://boringtalks.lol/__/auth/handler` and `https://dev.boringtalks.lol/__/auth/handler` as
 authorized redirect URIs. A new domain needs its handler added there first, or Google answers
