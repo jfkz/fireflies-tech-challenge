@@ -64,7 +64,7 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put']) {
   }, [state]);
 
   const start = useCallback(
-    async (withTab = false) => {
+    async (withTab = false, micId?: string) => {
       dispatch({ type: 'request', withTab });
       setElapsed(0);
       const streams: MediaStream[] = [];
@@ -74,7 +74,9 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put']) {
         }
         let mic: MediaStream;
         try {
-          mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+          mic = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, ...(micId ? { deviceId: { exact: micId } } : {}) },
+          });
         } catch (err) {
           throw Object.assign(new Error(mediaErrorMessage(err, 'microphone')), { friendly: true });
         }

@@ -87,6 +87,14 @@ describe('useRecorder', () => {
     expect(api.uploadUrl).toHaveBeenCalledWith('m1', { contentType: 'audio/webm', sizeBytes: 3 });
   });
 
+  it('records from the chosen microphone', async () => {
+    const { result } = renderHook(() => useRecorder(fakeApi()));
+    await act(() => result.current.start(false, 'built-in'));
+    expect(getUserMedia).toHaveBeenCalledWith({
+      audio: { echoCancellation: true, noiseSuppression: true, deviceId: { exact: 'built-in' } },
+    });
+  });
+
   it('keeps the take when the upload fails, and retry brings it back', async () => {
     const api = fakeApi({ createMeeting: vi.fn(async () => Promise.reject(new Error('API down'))) });
     const { result } = renderHook(() => useRecorder(api));
