@@ -221,7 +221,6 @@ function UploadPanel() {
     }
     setProblem(null);
     setFile(f);
-    if (!title) setTitle(f.name.replace(/\.[^.]+$/, '').slice(0, 120));
   }
 
   async function upload() {
@@ -293,7 +292,7 @@ function UploadPanel() {
         <label htmlFor={titleId} className="label">
           Title (optional)
         </label>
-        <input id={titleId} className="field" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} disabled={busy} />
+        <input id={titleId} className="field" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} disabled={busy} placeholder="Leave empty and we’ll name it from what was said" />
       </div>
       <div className="mt-5 space-y-4">
         {state.kind === 'submitting' ? (

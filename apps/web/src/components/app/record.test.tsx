@@ -49,10 +49,12 @@ describe('RecordView: upload', () => {
     const file = new File(['id3-and-audio'], 'Weekly sync.mp3', { type: 'audio/mpeg' });
     fireEvent.change(screen.getByTestId('upload-input'), { target: { files: [file] } });
     expect(screen.getByText('Weekly sync.mp3')).toBeInTheDocument();
-    expect(screen.getByLabelText('Title (optional)')).toHaveValue('Weekly sync');
+    // A title set here is kept as is, so the file name is not used: the summarizer names the meeting.
+    expect(screen.getByLabelText('Title (optional)')).toHaveValue('');
     fireEvent.click(screen.getByRole('button', { name: 'Upload and summarize' }));
     await waitFor(() => expect(nav.router.push).toHaveBeenCalledWith('/meetings/m42'));
-    expect(api.createMeeting).toHaveBeenCalledWith(expect.objectContaining({ source: 'upload', title: 'Weekly sync' }));
+    expect(api.createMeeting).toHaveBeenCalledWith(expect.objectContaining({ source: 'upload' }));
+    expect((api.createMeeting as ReturnType<typeof vi.fn>).mock.calls[0][0].title).toBeUndefined();
     expect(api.uploadUrl).toHaveBeenCalledWith('m42', { contentType: 'audio/mpeg', sizeBytes: file.size });
     expect(AutoXHR.sent[0]).toMatchObject({ url: 'https://r2.test/put', headers: { 'Content-Type': 'audio/mpeg' }, body: file });
   });

@@ -9,12 +9,13 @@ test('upload an audio file: create → upload-url → PUT to storage → complet
 
   const wav = silentWav(2);
   await page.getByTestId('upload-input').setInputFiles({ name: 'standup.wav', mimeType: 'audio/wav', buffer: wav });
-  await expect(page.getByLabel('Title (optional)')).toHaveValue('standup');
+  // The file name is not used as the title: a title set at upload is kept, so the summarizer could not name it.
+  await expect(page.getByLabel('Title (optional)')).toHaveValue('');
   await page.getByRole('button', { name: 'Upload and summarize' }).click();
 
   await expect(page).toHaveURL(/\/meetings\/[0-9a-f-]{36}$/);
   const create = api.callsTo('POST', /^\/meetings$/)[0];
-  expect(create.body).toMatchObject({ source: 'upload', title: 'standup' });
+  expect(create.body).toEqual({ source: 'upload' });
   const uploadUrl = api.callsTo('POST', /\/upload-url$/)[0];
   expect(uploadUrl.body).toEqual({ contentType: 'audio/wav', sizeBytes: wav.length });
   expect(api.uploads).toHaveLength(1);
