@@ -1,0 +1,298 @@
+import AVFoundation
+import BoringTalksKit
+import Observation
+
+/// Records one meeting: the microphone is "You", what the Mac plays is everyone
+/// else. Both channels run on one clock (seconds since Start), go to their own
+/// transcriber, and are mixed into one AAC file. Stop hands back a
+/// `PendingMeeting` for the upload queue.
+@MainActor @Observable
+final class MeetingRecorder {
+    enum Phase: Equatable {
+        case idle, starting, recording, finishing
+    }
+
+    private(set) var phase: Phase = .idle
+    private(set) var startedAt: Date?
+    /// Problems with one side ("System audio permission is off…").
+    private(set) var warnings: [AudioChannel: String] = [:]
+    /// Recording while the speech model is still loading; audio waits for it.
+    private(set) var waitingForModel = false
+    let live = LiveTranscript()
+
+    @ObservationIgnored private let models: SpeechModels
+    @ObservationIgnored private let folders: AppFolders
+    @ObservationIgnored private var channels: [AudioChannel: RecordingChannel] = [:]
+    @ObservationIgnored private var mic: MicCapture?
+    @ObservationIgnored private var system: SystemAudioCapture?
+    @ObservationIgnored private var writer: RecordingWriter?
+    @ObservationIgnored private var registry = VoiceRegistry()
+    @ObservationIgnored private var records: [PhraseRecord] = []
+    @ObservationIgnored private var meeting: (id: UUID, title: String?, language: String?, uploadAudio: Bool)?
+    @ObservationIgnored private var clockStart: TimeInterval = 0
+    @ObservationIgnored private var ticker: Task<Void, Never>?
+    @ObservationIgnored private var modelWait: Task<Void, Never>?
+    @ObservationIgnored private var restarts: [AudioChannel: Task<Void, Never>] = [:]
+    /// Channels that have (or are getting) a transcriber.
+    @ObservationIgnored private var attached: Set<AudioChannel> = []
+    @ObservationIgnored private var attaching: Task<Void, Never>?
+    /// Meters for the menu while nothing records.
+    @ObservationIgnored private let idleMeters: [AudioChannel: LevelMeter] = [.microphone: LevelMeter(), .system: LevelMeter()]
+    private static let log = Log.logger("recorder")
+
+    init(models: SpeechModels, folders: AppFolders) {
+        self.models = models
+        self.folders = folders
+    }
+
+    func meter(_ channel: AudioChannel) -> LevelMeter {
+        channels[channel]?.meter ?? idleMeters[channel] ?? LevelMeter()
+    }
+
+    var isRecording: Bool { phase == .recording }
+
+    /// The file being recorded now, which the janitor must leave alone.
+    var currentFileName: String? { meeting.map { "\($0.id.uuidString).m4a" } }
+
+    enum StartError: LocalizedError {
+        case nothingToRecord(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .nothingToRecord(let reason): "Couldn't record: \(reason)"
+            }
+        }
+    }
+
+    func start(title: String?, language: String?, uploadAudio: Bool) async throws {
+        guard phase == .idle else { return }
+        phase = .starting
+        warnings = [:]
+        records = []
+        live.reset()
+        registry = VoiceRegistry()
+        let id = UUID()
+        let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        meeting = (id, trimmedTitle?.isEmpty == false ? trimmedTitle : nil, language, uploadAudio)
+
+        do {
+            try folders.create()
+            let writer = try RecordingWriter(url: folders.recordings.appendingPathComponent("\(id.uuidString).m4a"))
+            self.writer = writer
+            clockStart = ProcessInfo.processInfo.systemUptime
+            startedAt = Date()
+            for kind in AudioChannel.allCases {
+                channels[kind] = RecordingChannel(kind: kind, clockStart: clockStart, writer: writer)
+            }
+
+            let micStarted = await startMic()
+            let systemStarted = await startSystem()
+            guard micStarted || systemStarted else {
+                throw StartError.nothingToRecord(warnings.values.sorted().joined(separator: " "))
+            }
+        } catch {
+            await abandon()
+            throw error
+        }
+
+        phase = .recording
+        Self.log.notice("recording \(id, privacy: .public)")
+        ticker = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                self?.channels.values.forEach { $0.catchUp() }
+            }
+        }
+        // Transcribe as soon as the model is there; until then the audio waits.
+        waitingForModel = !models.isReady
+        modelWait = Task { [weak self] in
+            guard let self, await self.models.prepare(), !Task.isCancelled, self.phase == .recording else { return }
+            await self.attachTranscribers(to: Array(self.channels.keys))
+        }
+    }
+
+    /// Stops and returns the meeting to upload (nil if nothing was recorded).
+    func stop() async -> PendingMeeting? {
+        guard phase == .recording, let meeting, let writer, let startedAt else { return nil }
+        phase = .finishing
+        ticker?.cancel()
+        modelWait?.cancel()
+        restarts.values.forEach { $0.cancel() }
+        mic?.stop()
+        system?.stop()
+        mic = nil
+        system = nil
+        let elapsed = ProcessInfo.processInfo.systemUptime - clockStart
+        // A model that has just arrived may be attaching right now.
+        await attaching?.value
+
+        var endings: [AudioChannel: RecordingChannel.Ending] = [:]
+        for (kind, channel) in channels {
+            endings[kind] = await channel.end(at: elapsed)
+        }
+        // The model may have finished loading just now.
+        let missing = endings.keys.filter { !attached.contains($0) }
+        if models.isReady, !missing.isEmpty {
+            await attachTranscribers(to: missing)
+            for kind in missing {
+                if let channel = channels[kind] { endings[kind] = await channel.end(at: elapsed) }
+            }
+        }
+        for ending in endings.values {
+            await ending.transcriber?.finish()
+        }
+        let seconds = await writer.finish()
+
+        // Sides that couldn't start count as heard (there is nothing to transcribe).
+        let transcribed = endings.allSatisfy { kind, ending in ending.transcribed || warnings[kind] != nil }
+        let segments = transcribed ? SegmentAssembler.assemble(records) : []
+        if !transcribed {
+            Self.log.notice("no local transcript; the server will transcribe the audio")
+        }
+        let language = meeting.language ?? LanguageGuess.detect(segments.map(\.text).joined(separator: " "))
+        let fileName = seconds > 0.5 ? writer.url.lastPathComponent : nil
+        if fileName == nil { try? FileManager.default.removeItem(at: writer.url) }
+
+        let pending = PendingMeeting(id: meeting.id, title: meeting.title, startedAt: startedAt,
+                                     durationSec: Int(elapsed.rounded()), language: language, segments: segments,
+                                     audioFileName: fileName, uploadAudio: meeting.uploadAudio)
+        reset()
+        Self.log.notice("stopped: \(segments.count, privacy: .public) segments, \(Int(elapsed), privacy: .public) s")
+        return pending.hasContent(audioExists: fileName != nil) ? pending : nil
+    }
+
+    // MARK: - Capture
+
+    private func startMic() async -> Bool {
+        guard await MicCapture.requestAccess() else {
+            fail(.microphone, CaptureError.microphoneDenied.localizedDescription)
+            return false
+        }
+        guard let channel = channels[.microphone] else { return false }
+        let capture = MicCapture()
+        capture.onConfigurationChange = { [weak self] in
+            Task { @MainActor in self?.scheduleRestart(.microphone) }
+        }
+        do {
+            try capture.start { buffer in channel.ingest(buffer) }
+            mic = capture
+            warnings[.microphone] = nil
+            return true
+        } catch {
+            fail(.microphone, error.localizedDescription)
+            return false
+        }
+    }
+
+    private func startSystem() async -> Bool {
+        guard let channel = channels[.system] else { return false }
+        let capture = SystemAudioCapture()
+        capture.onDeviceChange = { [weak self] in
+            Task { @MainActor in self?.scheduleRestart(.system) }
+        }
+        do {
+            // Core Audio blocks this call until the System Audio Recording prompt
+            // is answered, so keep it off the main thread.
+            try await Task.detached { try capture.start { buffer in channel.ingest(buffer) } }.value
+            system = capture
+            warnings[.system] = nil
+            return true
+        } catch {
+            fail(.system, "System audio: \(error.localizedDescription). Allow BoringTalks under System Settings › Privacy & Security › Screen & System Audio Recording.")
+            return false
+        }
+    }
+
+    private func fail(_ channel: AudioChannel, _ message: String) {
+        warnings[channel] = message
+        writer?.remove(channel)
+        // A side that never started has nothing to transcribe. (One that fails on a
+        // device change keeps its channel, so what it heard is still transcribed.)
+        if phase == .starting { channels[channel] = nil }
+        Self.log.error("\(channel.rawValue, privacy: .public): \(message, privacy: .public)")
+    }
+
+    /// Device changes arrive in bursts; restart that capture once they settle.
+    /// The timeline fills the gap with silence.
+    private func scheduleRestart(_ kind: AudioChannel) {
+        guard phase == .recording else { return }
+        restarts[kind]?.cancel()
+        restarts[kind] = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard let self, !Task.isCancelled, self.phase == .recording else { return }
+            Self.log.notice("audio device changed; restarting \(kind.rawValue, privacy: .public)")
+            switch kind {
+            case .microphone:
+                self.mic?.stop()
+                self.mic = nil
+                _ = await self.startMic()
+            case .system:
+                self.system?.stop()
+                self.system = nil
+                _ = await self.startSystem()
+            }
+        }
+    }
+
+    // MARK: - Transcription
+
+    /// Gives each channel in `kinds` that has none yet its transcriber (fed its
+    /// backlog first). Marked before any suspension, so Stop pressed while the model
+    /// arrives can never attach a second one.
+    private func attachTranscribers(to kinds: [AudioChannel]) async {
+        waitingForModel = false
+        let pending = kinds.filter { !attached.contains($0) }
+        attached.formUnion(pending)
+        let language = meeting?.language
+        let previous = attaching
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            for kind in pending {
+                guard let self, let channel = self.channels[kind] else { continue }
+                let voices = kind == .system && self.models.voicesReady ? self.registry : nil
+                let transcriber = PhraseTranscriber(recognizer: ParakeetRecognizer(), language: language, voices: voices) { [weak self] event in
+                    self?.receive(event, from: kind)
+                }
+                await channel.attach(transcriber)
+            }
+        }
+        attaching = task
+        await task.value
+    }
+
+    private func receive(_ event: PhraseEvent, from channel: AudioChannel) {
+        let startMs = event.start * 1000 / SpeechFormat.rate
+        let endMs = event.end * 1000 / SpeechFormat.rate
+        live.receive(text: event.text, isFinal: event.isFinal, channel: channel, voice: event.speaker?.voice, startMs: startMs)
+        guard event.isFinal, !event.text.isEmpty else { return }
+        records.append(PhraseRecord(channel: channel, voice: event.speaker?.voice, startMs: startMs, endMs: endMs, text: event.text))
+    }
+
+    // MARK: - Teardown
+
+    private func abandon() async {
+        mic?.stop()
+        system?.stop()
+        if let writer {
+            _ = await writer.finish()
+            try? FileManager.default.removeItem(at: writer.url)
+        }
+        reset()
+    }
+
+    private func reset() {
+        ticker?.cancel()
+        modelWait?.cancel()
+        channels = [:]
+        mic = nil
+        system = nil
+        writer = nil
+        meeting = nil
+        startedAt = nil
+        waitingForModel = false
+        restarts = [:]
+        attached = []
+        attaching = nil
+        phase = .idle
+    }
+}

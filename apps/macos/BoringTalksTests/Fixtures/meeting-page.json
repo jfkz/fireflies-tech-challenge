@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "id": "0b9a1e8e-2f4c-4d3a-9b8e-1c2d3e4f5a6b",
+      "title": "Pricing review: Pro to $29, launch Nov 3",
+      "description": "Agreed the new Pro price and the launch date.",
+      "status": "ready",
+      "source": "macos",
+      "startedAt": "2026-10-06T09:30:00.000Z",
+      "durationSec": 1820,
+      "speakers": ["You", "Speaker 1", "Speaker 2"],
+      "actionItemCount": 3,
+      "hasAudio": true
+    },
+    {
+      "id": "6f1e2d3c-4b5a-4968-8776-5a4b3c2d1e0f",
+      "title": "Untitled meeting",
+      "description": null,
+      "status": "summarizing",
+      "source": "browser",
+      "startedAt": "2026-10-05T16:00:00Z",
+      "durationSec": null,
+      "speakers": [],
+      "actionItemCount": 0,
+      "hasAudio": false
+    }
+  ],
+  "nextCursor": "eyJzdGFydGVkQXQiOiIyMDI2LTEwLTA1In0"
+}

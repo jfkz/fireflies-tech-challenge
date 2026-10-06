@@ -1,0 +1,213 @@
+@import 'tailwindcss';
+
+/*
+ * BoringTalks design tokens.
+ * call  — the periwinkle of the Talking Heads app icon: the colour of every video call.
+ * dusk  — the same room twenty minutes into the status meeting.
+ * sun   — highlighter yellow (the listener head's headphones): the useful bits.
+ * ink   — the heads' outline colour, used for every border and hard shadow.
+ */
+@theme {
+  --color-ink: #292133;
+  --color-ink-soft: #5b5470;
+  --color-call: #5b67f5;
+  --color-call-deep: #3845db;
+  --color-call-light: #c9cdff;
+  --color-dusk: #241f57;
+  --color-dusk-deep: #17133a;
+  --color-paper: #eef0ff;
+  --color-sun: #ffd140;
+  --color-sun-soft: #fff1bf;
+  --color-tomato: #ff6a3d;
+  --color-mint: #2db3a3;
+  --color-mint-soft: #c8f1ea;
+  --color-rose: #ff8ca0;
+  --color-danger: #e0323f;
+  --color-danger-soft: #ffe0e2;
+
+  --font-display: var(--font-bagel), 'Arial Rounded MT Bold', system-ui, sans-serif;
+  --font-sans: var(--font-nunito), ui-rounded, system-ui, sans-serif;
+
+  --shadow-hard: 4px 5px 0 0 var(--color-ink);
+  --shadow-hard-sm: 2px 3px 0 0 var(--color-ink);
+  --shadow-hard-lg: 7px 8px 0 0 var(--color-ink);
+
+  --animate-pulse-dot: pulse-dot 1.2s ease-in-out infinite;
+  --animate-spin-slow: spin 2.4s linear infinite;
+  --animate-meter: meter 0.9s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes meter {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+  /* Decorative layers (confetti, mugs, tilted receipts) may poke past the edge;
+     clip, unlike hidden, doesn't create a scroll container, so sticky still works. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+    font-feature-settings: 'tnum' 0;
+  }
+  ::selection {
+    background: var(--color-sun);
+    color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-sun);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--color-ink);
+    border-radius: 6px;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-[2.5px] border-ink px-5 py-2.5 font-extrabold text-ink transition-[transform,box-shadow] duration-100 select-none disabled:cursor-not-allowed disabled:opacity-55;
+    box-shadow: var(--shadow-hard-sm);
+  }
+  .btn:not(:disabled):hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 4px 0 0 var(--color-ink);
+  }
+  .btn:not(:disabled):active {
+    transform: translate(2px, 3px);
+    box-shadow: 0 0 0 0 var(--color-ink);
+  }
+  .btn-primary {
+    @apply bg-sun;
+  }
+  .btn-secondary {
+    @apply bg-white;
+  }
+  .btn-danger {
+    @apply bg-danger text-white;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent shadow-none;
+  }
+  .btn-ghost:not(:disabled):hover {
+    @apply bg-ink/5;
+    transform: none;
+    box-shadow: none;
+  }
+  .btn-lg {
+    @apply px-7 py-3.5 text-lg;
+  }
+  .btn-sm {
+    @apply px-3.5 py-1.5 text-sm;
+  }
+
+  /* A sticker: white card, ink outline, hard offset shadow. */
+  .sticker {
+    @apply rounded-[22px] border-[2.5px] border-ink bg-white;
+    box-shadow: var(--shadow-hard);
+  }
+
+  .field {
+    @apply w-full rounded-2xl border-[2.5px] border-ink bg-white px-4 py-3 text-base font-semibold text-ink placeholder:text-ink-soft/70 placeholder:font-medium;
+  }
+  .field:focus-visible {
+    outline: 3px solid var(--color-sun);
+    outline-offset: 0;
+    box-shadow: var(--shadow-hard-sm);
+  }
+
+  .check {
+    @apply h-5 w-5 shrink-0 cursor-pointer appearance-none rounded-md border-[2.5px] border-ink bg-white bg-center bg-no-repeat;
+  }
+  .check:checked {
+    @apply bg-mint;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3 8.5L6.5 12L13 4' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-extrabold text-ink;
+  }
+}
+
+/* Torn receipt edge at the bottom. */
+.receipt {
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 18px 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 18px 100%;
+}
+
+/*
+ * Scroll stories: a tall track with a sticky stage. Without motion they become
+ * ordinary blocks, so everything is still readable top to bottom.
+ */
+.scrolly {
+  position: relative;
+  height: var(--scrolly-height, 300vh);
+}
+.scrolly-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .scrolly {
+    height: auto;
+  }
+  .scrolly-stage {
+    position: relative;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .motion-only {
+    display: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .still-only {
+    display: none !important;
+  }
+}

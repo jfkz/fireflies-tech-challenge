@@ -1,0 +1,18 @@
+# Build context is the repo root (apps/api/Dockerfile). Keep it small and secret-free.
+**/node_modules
+**/dist
+**/coverage
+**/.turbo
+**/.env
+**/.env.*
+.git
+.github
+.local
+.data
+docs
+apps/macos
+# Only the manifests of other workspace packages, so the lockfile still matches.
+apps/web/*
+!apps/web/package.json
+e2e/*
+!e2e/package.json

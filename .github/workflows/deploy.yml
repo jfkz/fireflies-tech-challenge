@@ -1,0 +1,135 @@
+name: Deploy
+
+# Ready (non-draft) pull requests deploy to the dev environment
+# (dev.boringtalks.lol + api.dev.boringtalks.lol); pushes to main deploy to
+# production (boringtalks.lol + api.boringtalks.lol). Only one PR may be open at
+# a time, because they all share the dev environment.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  VERCEL_ORG_ID: team_TJykx4eeUkyWauU37QVrKeXv
+  VERCEL_PROJECT_ID: prj_ATgeD7CTNAKQK5WKcWCdRoDDynVl
+  RAILWAY_PROJECT_ID: f8e3f977-3e80-4db4-a859-8bec833e7da9
+
+jobs:
+  target:
+    name: Pick environment
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      web_url: ${{ steps.pick.outputs.web_url }}
+      api_url: ${{ steps.pick.outputs.api_url }}
+    steps:
+      - id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+            echo "web_url=https://boringtalks.lol" >> "$GITHUB_OUTPUT"
+            echo "api_url=https://api.boringtalks.lol" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+            echo "web_url=https://dev.boringtalks.lol" >> "$GITHUB_OUTPUT"
+            echo "api_url=https://api.dev.boringtalks.lol" >> "$GITHUB_OUTPUT"
+          fi
+
+  one-open-pr:
+    name: One open PR
+    needs: target
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,author \
+            --jq '[.[] | select(.author.login != "dependabot[bot]" and .author.login != "app/dependabot")] | length')
+          if [ "$open" -gt 1 ]; then
+            echo "::error::$open PRs are open. Only one PR at a time deploys to dev; merge or close the others first."
+            exit 1
+          fi
+
+  api:
+    name: API + worker → Railway (${{ needs.target.outputs.environment }})
+    needs: [target, one-open-pr]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+    environment: ${{ needs.target.outputs.environment }}
+    concurrency:
+      group: deploy-api-${{ needs.target.outputs.environment }}
+      cancel-in-progress: false
+    env:
+      # Project token scoped to this GitHub environment's Railway environment.
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm install -g @railway/cli
+      - name: Tag the build
+        run: |
+          railway variable set "GIT_SHA=${GITHUB_SHA}" "APP_VERSION=$(node -p "require('./apps/api/package.json').version")" \
+            --service api --environment "${{ needs.target.outputs.environment }}" --skip-deploys
+          railway variable set "GIT_SHA=${GITHUB_SHA}" \
+            --service worker --environment "${{ needs.target.outputs.environment }}" --skip-deploys
+      - name: Deploy api
+        run: railway up --ci --service api --environment "${{ needs.target.outputs.environment }}" --message "${GITHUB_SHA::7}"
+      - name: Deploy worker
+        run: railway up --ci --service worker --environment "${{ needs.target.outputs.environment }}" --message "${GITHUB_SHA::7}"
+      - name: Health check
+        run: |
+          for i in $(seq 1 30); do
+            body=$(curl -fsS "${{ needs.target.outputs.api_url }}/health" || true)
+            if echo "$body" | grep -q "${GITHUB_SHA}"; then echo "$body"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::${{ needs.target.outputs.api_url }}/health never reported ${GITHUB_SHA}"; exit 1
+
+  web:
+    name: Web → Vercel (${{ needs.target.outputs.environment }})
+    needs: [target, one-open-pr]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+    environment: ${{ needs.target.outputs.environment }}
+    concurrency:
+      group: deploy-web-${{ needs.target.outputs.environment }}
+      cancel-in-progress: false
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm install -g vercel@latest
+      - name: Deploy
+        run: |
+          if [ "${{ needs.target.outputs.environment }}" = "production" ]; then
+            vercel deploy --prod --yes --token "$VERCEL_TOKEN" --build-env "GITHUB_SHA=${GITHUB_SHA}"
+          else
+            url=$(vercel deploy --yes --token "$VERCEL_TOKEN" --build-env "GITHUB_SHA=${GITHUB_SHA}")
+            echo "Preview: $url"
+            vercel alias set "$url" dev.boringtalks.lol --token "$VERCEL_TOKEN" --scope jfkz0
+          fi
+
+  smoke:
+    name: Smoke tests (${{ needs.target.outputs.environment }})
+    needs: [target, api, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @boringtalks/e2e...
+      - run: pnpm --filter @boringtalks/shared build
+      - run: pnpm --filter @boringtalks/e2e exec playwright install --with-deps chromium
+      - run: pnpm --filter @boringtalks/e2e test:smoke
+        env:
+          BASE_URL: ${{ needs.target.outputs.web_url }}
+          API_URL: ${{ needs.target.outputs.api_url }}
