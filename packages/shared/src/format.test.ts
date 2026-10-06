@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDuration, formatTimestamp, mergeSegments, segmentAt, speakersOf, transcriptText } from './format';
+import { applySpeakerNames, formatDuration, formatTimestamp, mergeSegments, segmentAt, speakerName, speakersOf, transcriptText } from './format';
 
 const seg = (speaker: string, startMs: number, endMs: number, text: string) => ({ speaker, startMs, endMs, text });
 
@@ -59,5 +59,19 @@ describe('transcript helpers', () => {
     expect(segmentAt(segments, 70_000)).toBe(2);
     expect(segmentAt([], 10)).toBe(-1);
     expect(segmentAt([seg('A', 100, 200, 'x')], 50)).toBe(-1);
+  });
+});
+
+describe('speaker names', () => {
+  const segs = [
+    { speaker: 'You', startMs: 0, endMs: 1, text: 'a' },
+    { speaker: 'Speaker 1', startMs: 1, endMs: 2, text: 'b' },
+    { speaker: 'Speaker 2', startMs: 2, endMs: 3, text: 'c' },
+  ];
+  it('replaces labels that have a name and keeps the rest', () => {
+    expect(applySpeakerNames(segs, { You: 'Mike', 'Speaker 1': 'Maya' }).map((s) => s.speaker)).toEqual(['Mike', 'Maya', 'Speaker 2']);
+  });
+  it('does not treat object prototype keys as names', () => {
+    expect(speakerName('constructor', {})).toBe('constructor');
   });
 });

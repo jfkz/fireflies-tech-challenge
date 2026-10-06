@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { speakerName, speakersOf } from '@boringtalks/shared';
 import { UnrecoverableError } from 'bullmq';
 import type { MeetingRow } from '../db/schema';
 import { MeetingsRepository } from '../meetings/meetings.repository';
@@ -8,8 +9,12 @@ import type { MeetingJob } from '../queues/queues';
 import { summaryKey } from '../storage/keys';
 import { StorageService } from '../storage/storage.service';
 import { UsersRepository } from '../users/users.repository';
+import { displayNames, resolveSpeakerNames } from './speaker-names';
 import { Summarizer } from './summarizer';
 import { Transcriber } from './transcriber';
+
+/** How many of the user's existing topic tags the summarizer is shown, to reuse them. */
+const KNOWN_TOPICS = 30;
 
 /** Meeting processing steps run by the worker. Each step is safe to retry and ignores stale runs. */
 @Injectable()
@@ -49,18 +54,33 @@ export class PipelineService {
     const segments = await this.meetings.getSegments(meeting.id);
     if (segments.length === 0) throw new UnrecoverableError('The meeting has no transcript');
 
-    const result = await this.summarizer.summarize({ segments, language: meeting.language });
+    const user = await this.users.findById(meeting.userId);
+    const ownerName = user?.name ?? null;
+    const knownTopics = await this.meetings.topTopics(meeting.userId, KNOWN_TOPICS);
+    const result = await this.summarizer.summarize({ segments, language: meeting.language, ownerName, knownTopics });
     const at = new Date();
     await this.storage.putJson(summaryKey(meeting.userId, meeting.id, at), { meetingId: meeting.id, createdAt: at, ...result });
-    const { title, description, model, inputTokens, outputTokens, ...rest } = result;
+
+    // Put names to the voices (keeping any the user typed), then use them for owners too.
+    const labels = speakersOf(segments);
+    const speakerNames = resolveSpeakerNames(labels, result.speakers, ownerName, meeting.speakerNames);
+    const names = displayNames(speakerNames);
+    const { title, description, model, inputTokens, outputTokens, topics, speakers: _guesses, actionItems, ...rest } = result;
     await this.meetings.saveSummary(
       meeting.id,
-      { ...rest, model, inputTokens, outputTokens },
-      { status: 'ready', error: null, description, ...(meeting.titleLocked ? {} : { title }) },
+      { ...rest, actionItems: actionItems.map((a) => ({ ...a, owner: a.owner && speakerName(a.owner, names) })), model, inputTokens, outputTokens },
+      {
+        status: 'ready',
+        error: null,
+        description,
+        topics,
+        speakerNames,
+        speakers: [...new Set(labels.map((l) => speakerName(l, names)))],
+        ...(meeting.titleLocked ? {} : { title }),
+      },
     );
-    this.logger.log({ meetingId: meeting.id, model, inputTokens, outputTokens }, 'meeting summarized');
+    this.logger.log({ meetingId: meeting.id, model, inputTokens, outputTokens, named: Object.keys(speakerNames).length }, 'meeting summarized');
 
-    const user = await this.users.findById(meeting.userId);
     if (user?.emailOnReady) {
       await this.jobs.email({ type: 'meeting-ready', userId: user.id, meetingId: meeting.id, run: job.run });
     }

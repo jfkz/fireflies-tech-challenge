@@ -35,6 +35,9 @@ function setup() {
     getSegments: vi.fn().mockResolvedValue([]),
     setActionItemDone: vi.fn(),
     replaceTranscript: vi.fn(),
+    facets: vi.fn(),
+    speakerLabels: vi.fn(),
+    saveSpeakerNames: vi.fn(),
   };
   const storage = {
     presignPut: vi.fn().mockResolvedValue('https://r2/put'),
@@ -133,10 +136,30 @@ describe('MeetingsService', () => {
       expect(page.items.map((i) => i.actionItemCount)).toEqual([1, 2]);
       expect(page.nextCursor).toBe(encodeCursor({ startedAt: rows[1].startedAt, id: rows[1].id }));
       expect(repo.list).toHaveBeenCalledWith(user().id, { cursor: null, limit: 3, q: undefined });
+      expect(page.items[0].topics).toEqual([]);
 
       repo.list.mockResolvedValue(rows.slice(0, 1));
       expect((await service.list(user(), { limit: 2, q: 'x', cursor: page.nextCursor! })).nextCursor).toBeNull();
       expect(repo.list.mock.calls[1][1]).toMatchObject({ q: 'x', cursor: { id: rows[1].id } });
+    });
+
+    it('passes speaker, topic and date filters through', async () => {
+      const { repo, service } = setup();
+      repo.list.mockResolvedValue([]);
+      await service.list(user(), { limit: 5, speaker: 'Maya', topic: 'Pricing', from: '2026-10-01T00:00:00+02:00', to: '2026-10-02T00:00:00Z' });
+      expect(repo.list.mock.calls[0][1]).toMatchObject({
+        speaker: 'Maya',
+        topic: 'Pricing',
+        from: new Date('2026-09-30T22:00:00Z'),
+        to: new Date('2026-10-02T00:00:00Z'),
+      });
+    });
+
+    it('offers the most frequent speakers and topics as filters', async () => {
+      const { repo, service } = setup();
+      repo.facets.mockResolvedValue({ speakers: [{ value: 'Maya', count: 2 }], topics: [] });
+      await expect(service.facets(user())).resolves.toEqual({ speakers: [{ value: 'Maya', count: 2 }], topics: [] });
+      expect(repo.facets).toHaveBeenCalledWith(user().id, 24);
     });
 
     it('rejects a forged cursor', async () => {
@@ -156,6 +179,28 @@ describe('MeetingsService', () => {
     expect(repo.setActionItemDone).toHaveBeenCalledWith(meeting().id, 'a1', true);
     repo.setActionItemDone.mockResolvedValue(false);
     await expect(service.update(user(), meeting().id, { actionItem: { id: 'zz', done: true } })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('renames speakers by their display name, and 404s for an unknown one', async () => {
+    const { repo, service } = setup();
+    const m = meeting({ speakerNames: { 'Speaker 1': { name: 'Maya', by: 'ai' } }, speakers: ['You', 'Maya'] });
+    repo.findOwned.mockResolvedValue(m);
+    repo.speakerLabels.mockResolvedValue(['You', 'Speaker 1']);
+    repo.saveSpeakerNames.mockImplementation(async (_id, map, speakers) => ({ ...m, speakerNames: map, speakers }));
+    repo.getSegments.mockResolvedValue([seg('Speaker 1', 0, 1, 'hi')]);
+    const d = await service.update(user(), m.id, { speakers: { Maya: 'Mia', You: 'Mia' } });
+    expect(repo.saveSpeakerNames).toHaveBeenCalledWith(
+      m.id,
+      { 'Speaker 1': { name: 'Mia', by: 'user' }, You: { name: 'Mia', by: 'user' } },
+      ['Mia'],
+      [
+        ['Maya', 'Mia'],
+        ['You', 'Mia'],
+      ],
+    );
+    expect(d.speakers).toEqual(['Mia']);
+    expect(d.segments[0].speaker).toBe('Mia');
+    await expect(service.update(user(), m.id, { speakers: { Nobody: 'X' } })).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('deletes storage objects with the meeting', async () => {
@@ -271,11 +316,13 @@ describe('MeetingsController', () => {
       putTranscript: vi.fn(),
       complete: vi.fn(() => 'complete'),
       reprocess: vi.fn(() => 'reprocess'),
+      facets: vi.fn(() => 'facets'),
     };
     const c = new MeetingsController(s as never);
     const u = user();
     const id = meeting().id;
     expect(await c.list(u, { limit: 20 })).toBe('list');
+    expect(await c.facets(u)).toBe('facets');
     s.create.mockReturnValueOnce({ meeting: 'new', created: true } as never).mockReturnValueOnce({ meeting: 'old', created: false } as never);
     const res = { status: vi.fn() };
     expect(await c.create(u, { source: 'macos' }, undefined, res as never)).toBe('new');

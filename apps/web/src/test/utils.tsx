@@ -24,6 +24,7 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     listDevices: notMocked('listDevices'),
     revokeDevice: notMocked('revokeDevice'),
     latestDownload: notMocked('latestDownload'),
+    meetingFacets: vi.fn(() => Promise.resolve({ speakers: [], topics: [] })),
     ...overrides,
   } as ApiClient;
 }
@@ -76,6 +77,7 @@ export function meeting(overrides: Partial<MeetingDetail> = {}): MeetingDetail {
     startedAt: '2026-10-01T10:00:00.000Z',
     durationSec: 1830,
     speakers: ['You', 'Speaker 1'],
+    topics: ['Pricing'],
     actionItemCount: 2,
     hasAudio: true,
     language: 'en',

@@ -9,6 +9,8 @@ const result: SummaryResult = {
   description: 'One sentence.',
   summary: 'Summary.',
   keyTopics: ['a'],
+  topics: ['A'],
+  speakers: [],
   actionItems: [],
   decisions: [],
   model: 'm',
@@ -17,7 +19,7 @@ const result: SummaryResult = {
 };
 
 function setup() {
-  const meetings = { findById: vi.fn(), transition: vi.fn(), getSegments: vi.fn(), saveSummary: vi.fn() };
+  const meetings = { findById: vi.fn(), transition: vi.fn(), getSegments: vi.fn(), saveSummary: vi.fn(), topTopics: vi.fn().mockResolvedValue([]) };
   const transcripts = { store: vi.fn() };
   const storage = { getBytes: vi.fn().mockResolvedValue(new Uint8Array(3)), putJson: vi.fn() };
   const users = { findById: vi.fn().mockResolvedValue(user()) };
@@ -76,14 +78,44 @@ describe('PipelineService.summarize', () => {
     t.meetings.findById.mockResolvedValue(m);
     t.meetings.getSegments.mockResolvedValue([seg('You', 0, 1, 'hallo')]);
     await expect(t.pipeline.summarize({ meetingId: m.id, run: 1 })).resolves.toBe('done');
-    expect(t.summarizer.summarize).toHaveBeenCalledWith({ segments: [seg('You', 0, 1, 'hallo')], language: 'de' });
+    expect(t.summarizer.summarize).toHaveBeenCalledWith({ segments: [seg('You', 0, 1, 'hallo')], language: 'de', ownerName: 'Ann', knownTopics: [] });
     expect(t.storage.putJson).toHaveBeenCalledWith(expect.stringMatching(/summary-.*\.json$/), expect.objectContaining({ title: 'Specific title' }));
     expect(t.meetings.saveSummary).toHaveBeenCalledWith(
       m.id,
       { summary: 'Summary.', keyTopics: ['a'], actionItems: [], decisions: [], model: 'm', inputTokens: 5, outputTokens: 2 },
-      { status: 'ready', error: null, description: 'One sentence.', title: 'Specific title' },
+      {
+        status: 'ready',
+        error: null,
+        description: 'One sentence.',
+        title: 'Specific title',
+        topics: ['A'],
+        speakerNames: { You: { name: 'Ann', by: 'ai' } },
+        speakers: ['Ann'],
+      },
     );
     expect(t.jobs.email).toHaveBeenCalledWith({ type: 'meeting-ready', userId: user().id, meetingId: m.id, run: 1 });
+  });
+
+  it('names the voices, keeps names typed by hand, and moves action item owners to the names', async () => {
+    const t = setup();
+    const m = meeting({ status: 'summarizing', attempts: 1, speakerNames: { 'Speaker 2': { name: 'Boss', by: 'user' } } });
+    t.meetings.findById.mockResolvedValue(m);
+    t.meetings.topTopics.mockResolvedValue(['Pricing']);
+    t.meetings.getSegments.mockResolvedValue([seg('You', 0, 1, 'Thanks Maya'), seg('Speaker 1', 1, 2, 'Sure'), seg('Speaker 2', 2, 3, 'Go')]);
+    t.summarizer.summarize.mockResolvedValue({
+      ...result,
+      speakers: [
+        { label: 'Speaker 1', name: 'Maya', role: null },
+        { label: 'Speaker 2', name: 'Leo', role: null },
+      ],
+      actionItems: [{ id: 'a1', text: 'Send it', owner: 'Speaker 1', due: null, done: false }],
+    });
+    await t.pipeline.summarize({ meetingId: m.id, run: 1 });
+    expect(t.summarizer.summarize.mock.calls[0][0].knownTopics).toEqual(['Pricing']);
+    const [, values, patch] = t.meetings.saveSummary.mock.calls[0];
+    expect(patch.speakers).toEqual(['Ann', 'Maya', 'Boss']);
+    expect(patch.speakerNames['Speaker 2']).toEqual({ name: 'Boss', by: 'user' });
+    expect(values.actionItems[0].owner).toBe('Maya');
   });
 
   it('keeps a title the user chose and respects the email setting', async () => {

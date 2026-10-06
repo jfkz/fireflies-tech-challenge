@@ -5,11 +5,11 @@ import { styleForSpeaker } from '@/lib/avatar/styles';
 const pose = stillPose();
 
 /** A speaker's name with their little head, in their shirt colour. */
-export function SpeakerChip({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' }) {
+export function SpeakerChip({ name, size = 'sm', active = false }: { name: string; size?: 'sm' | 'md'; active?: boolean }) {
   const style = styleForSpeaker(name);
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border-2 border-ink bg-white pr-2.5 font-extrabold text-ink ${
+      className={`inline-flex items-center gap-1 rounded-full border-2 border-ink pr-2.5 font-extrabold text-ink ${active ? 'bg-sun' : 'bg-white'} ${
         size === 'md' ? 'py-0.5 pl-0.5 text-sm' : 'pl-0.5 text-xs'
       }`}
     >

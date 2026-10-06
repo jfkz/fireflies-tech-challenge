@@ -102,7 +102,16 @@ over titles, summaries and transcripts via `q`, cursor pagination with “Load m
 an empty state and a “nothing matches” state. Statuses refresh every 5 s while
 anything is still processing.
 
-**Where.** `components/app/MeetingsList.tsx`, `hooks/queries.ts` (`useMeetings`).
+*Filters.* Every row shows its speakers and topic tags as pills; clicking one filters
+the list to that person or topic, clicking it again removes the filter. Above the
+list, a filter bar offers the most frequent people and topics (`GET /meetings/facets`),
+highlights the active ones, and has **Clear filters**. Filters and the search text
+live in the URL (`/meetings?speaker=Maya&topic=Pricing&q=…`), so a filtered view can
+be bookmarked or shared; typing replaces the URL, clicking a pill adds a history entry.
+The empty result says what was filtered (“No meetings with Maya about Pricing.”).
+
+**Where.** `components/app/MeetingsList.tsx` (`FilterBar`, `MeetingRow`), `lib/filters.ts`,
+`components/ui/TopicPill.tsx`, `hooks/queries.ts` (`useMeetings`, `useMeetingFacets`).
 
 **Limits.** 20 meetings per page. The list waits for `GET /me`, which creates the
 account and its demo meeting on first visit.
@@ -111,7 +120,10 @@ account and its demo meeting on first visit.
 
 **What.**
 - Header: title (rename inline: pencil, Enter saves, Escape cancels), date,
-  duration, status, speakers, description.
+  duration, status, description, speakers by name and topic tags. Each chip opens
+  the meeting list filtered by that person or topic. **Rename speakers** opens one
+  field per speaker; only changed names are saved, and they stick through reprocessing.
+  Giving two voices the same name makes them one person.
 - While processing: a banner with a waiting head, a status-specific line and the
   pipeline steps; the page polls every 3 s and stops at ready or failed.
 - Failed: the error from the server and a **Reprocess** button.
@@ -177,7 +189,8 @@ characters. Only `boringtalks://callback` URLs are ever navigated to.
 
 ### Settings `/settings`
 
-**What.** Account email and sign-in method, **Sign out**; “Email me when a meeting
+**What.** Account email and sign-in method, **Sign out**; **Your name** (what
+meetings call you instead of “You”; saving it renames you in past meetings too); “Email me when a meeting
 is ready” switch (`PATCH /me/settings`); connected Macs with connected/last-seen
 dates and **Disconnect** (confirmation dialog, `DELETE /devices/:id`); Mac app
 version and download link.
@@ -359,9 +372,17 @@ duplicate.
 - **Transcribe** (browser recordings and uploads only): Whisper through the AI Gateway, with
   segment timestamps.
 - **Summarize:** Claude Haiku 4.5 through the AI Gateway with structured output: a specific title,
-  one-line description, summary, key topics, action items (owner, due date), decisions, in the
-  meeting's language. Long meetings are map-reduced. Generic titles are rejected. Each result is
-  also snapshotted to R2.
+  one-line description, summary, key topics, 1–4 reusable topic tags, action items (owner, due date),
+  decisions, in the meeting's language, plus who each speaker label is. Long meetings are
+  map-reduced. Generic titles are rejected. Each result is also snapshotted to R2.
+- **Speaker names** (`processing/speaker-names.ts`): "You" becomes the account holder's first
+  name; "Speaker N" gets the name the conversation reveals (introductions, being addressed by name
+  and answering, sign-offs; never a person who is only talked about), else a clear role, else keeps
+  its label. Guessed names are unique per meeting; names typed by a person are never overwritten.
+  Segments keep their raw labels (`meetings.speaker_names` maps them), so renames lose nothing.
+- **Topic tags** (`processing/topics.ts`): the prompt lists the user's 30 most used tags so
+  meetings reuse them; tags are trimmed, capped at four and spelled like an existing tag when they
+  match case-insensitively. They power the topic filter (`meetings.topics`, GIN index).
 - **Email** (Resend): welcome, "your meeting is ready" (summary + action items, per-user toggle),
   "new Mac connected". Idempotent, allow-listed in dev, logged instead of sent without a key.
 - Jobs retry 5 times with backoff, collapse duplicates, and a final failure marks the meeting

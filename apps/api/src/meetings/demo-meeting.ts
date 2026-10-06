@@ -8,6 +8,7 @@ export const DEMO_MEETING = {
   durationSec: 212,
   summary:
     'The team reviewed pricing ahead of the launch. Usage data shows Pro users run three times as many meetings as expected, so Pro goes from $19 to $29 a month while the free tier stays at five meetings. Existing subscribers keep $19 for twelve months. Billing migration needs another week of QA, so the public launch moves from October 27 to November 3. Leo will prepare the announcement email and Dana will update the pricing page.',
+  topics: ['Pricing', 'Launch Planning', 'Billing'],
   keyTopics: ['Pro tier pricing', 'Free tier limits', 'Grandfathering existing subscribers', 'Billing migration QA', 'Launch date'],
   decisions: [
     'Pro tier price goes from $19 to $29 per month.',

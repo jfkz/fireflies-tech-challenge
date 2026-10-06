@@ -58,6 +58,8 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 3.2 | Type “pricing” in search. | One request after you stop typing; matching meetings only. Type nonsense: “Nothing matches …”. Clear: full list. |
 | 3.3 | With more than 20 meetings, scroll to the bottom. | **Load more** appends the next page; disappears at the end. |
 | 3.4 | Start a browser recording (section 5) and return to the list. | Its chip animates (Transcribing/Summarizing) and changes to Ready by itself. |
+| 3.6 | Click a topic pill on a row, then a person in the filter bar, then the active pill again, then **Clear filters**. | The list narrows to that topic, then that topic and person; the URL shows `?topic=…&speaker=…`; clicking an active pill removes it; Clear brings everything back. Back button walks through the filters. |
+| 3.7 | Filter to a combination with no meetings. | “No meetings with X about Y.” and a **Clear filters** button. |
 | 3.5 | New account with the demo deleted. | Empty state with a head (“Your calendar must be suspiciously free.”) and links to record or get the Mac app. |
 
 ### 4. Meeting page
@@ -74,6 +76,8 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 4.8 | Open a meeting that is processing. | Yellow banner with a head and a line for the current stage, pipeline steps; updates every few seconds without reloading, then shows the summary. |
 | 4.9 | A failed meeting (e.g. upload a file of silence or ask the API team to force a failure). | Red “Processing failed” with the server’s message; **Reprocess** starts it again and the processing banner returns. |
 | 4.10 | Open `/meetings/00000000-0000-4000-8000-000000000000`. | “This meeting isn’t here” with a link back. |
+| 4.12 | Record a call where people use each other's names (“Thanks, Priya”, “Tom, can you…”). | Speakers show as Priya and Tom, not Speaker 1/2; someone only mentioned (“ask Sam”) is not given to anyone; your side shows your first name (Settings → Your name). Action item owners use the names. |
+| 4.13 | **Rename speakers** → change one name → **Save names**; then Reprocess. | Chips, transcript and action item owners update at once; the name you typed survives the reprocess. Clicking a speaker or topic chip opens the filtered list. |
 | 4.11 | Phone width. | Sections stack; transcript below the summary; no overflow. |
 
 ### 5. Browser recorder and upload `/record`
@@ -109,6 +113,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 7.1 | Open Settings. | Email and sign-in method; email switch reflects the account; connected Macs list; Mac app version with **Download**. |
 | 7.2 | Toggle “Email me when a meeting is ready” off and record a meeting; toggle on and record another. | No email for the first, a “Your meeting is ready” email for the second. Switch state persists after reload. |
 | 7.3 | **Disconnect** a Mac → confirm. | Dialog names the Mac; after confirming it disappears from the list and the Mac app can no longer upload (it asks to sign in again). |
+| 7.5 | Type a name in **Your name** and Save. | Button says Saved; in the demo and other past meetings “You” becomes your first name (unless you renamed that speaker by hand); new meetings use it too. |
 | 7.4 | **Sign out**. | Lands on `/`; dashboard URLs now redirect to sign in. |
 
 ### 8. Errors

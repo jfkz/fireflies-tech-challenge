@@ -153,8 +153,42 @@ describe('MeetingsList', () => {
     renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), listMeetings }) }) });
     expect(await screen.findByRole('heading', { name: 'No meetings yet' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Search meetings'), { target: { value: 'zebra' } });
-    expect(await screen.findByText('Nothing matches “zebra”.')).toBeInTheDocument();
+    expect(await screen.findByText('No meetings matching “zebra”.')).toBeInTheDocument();
     expect(listMeetings).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'zebra' }), expect.anything());
+    // The search goes into the URL without adding history entries.
+    await waitFor(() => expect(nav.router.replace).toHaveBeenCalledWith('/meetings?q=zebra', { scroll: false }));
+  });
+
+  it('filters by a speaker or topic from the URL and the pills', async () => {
+    nav.search = new URLSearchParams('topic=Pricing');
+    const a = meeting({ id: '00000000-0000-4000-8000-000000000001', speakers: ['You', 'Maya'], topics: ['Pricing', 'Launch'] });
+    const listMeetings = vi.fn(async () => page([a]));
+    const meetingFacets = vi.fn(async () => ({ speakers: [{ value: 'Maya', count: 3 }], topics: [{ value: 'Hiring', count: 2 }] }));
+    renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), listMeetings: listMeetings as never, meetingFacets }) }) });
+    await screen.findByRole('link', { name: /Pricing review/ });
+    expect(listMeetings).toHaveBeenCalledWith(expect.objectContaining({ topic: 'Pricing' }), expect.anything());
+
+    // The filter bar offers frequent people and topics, and keeps the active one visible.
+    const filters = screen.getByRole('group', { name: 'Filters' });
+    expect(within(within(filters).getByRole('list', { name: 'Topics' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['#Pricing', '#Hiring']);
+
+    // A pill in a row narrows the list further; the active one toggles off.
+    const row = screen.getByRole('list', { name: 'Speakers and topics' });
+    fireEvent.click(within(row).getByRole('button', { name: /Maya/ }));
+    expect(nav.router.push).toHaveBeenLastCalledWith('/meetings?speaker=Maya&topic=Pricing', { scroll: false });
+    const active = within(row).getByRole('button', { name: /Pricing/ });
+    expect(active).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(active);
+    expect(nav.router.push).toHaveBeenLastCalledWith('/meetings', { scroll: false });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(nav.router.push).toHaveBeenLastCalledWith('/meetings', { scroll: false });
+  });
+
+  it('says what was filtered when nothing matches', async () => {
+    nav.search = new URLSearchParams('speaker=Maya&topic=Hiring');
+    renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), listMeetings: vi.fn(async () => page([])) }) }) });
+    expect(await screen.findByText('No meetings with Maya about Hiring.')).toBeInTheDocument();
   });
 
   it('shows errors with a retry', async () => {
@@ -197,6 +231,28 @@ describe('MeetingView', () => {
     const audio = screen.getByTestId('meeting-audio') as HTMLAudioElement;
     expect(audio.currentTime).toBe(7);
     await waitFor(() => expect(btn.closest('li')).toHaveAttribute('data-active', 'true'));
+  });
+
+  it('links speakers and topics to the filtered list, and renames speakers', async () => {
+    const m = meeting({ speakers: ['You', 'Speaker 1'], topics: ['Pricing'] });
+    const api = setup(m, { updateMeeting: vi.fn(async () => ({ ...m, speakers: ['You', 'Maya'] })) });
+    const chips = await screen.findByRole('list', { name: 'Speakers and topics' });
+    expect(within(chips).getByRole('link', { name: /Speaker 1/ })).toHaveAttribute('href', '/meetings?speaker=Speaker+1');
+    expect(within(chips).getByRole('link', { name: /Pricing/ })).toHaveAttribute('href', '/meetings?topic=Pricing');
+
+    fireEvent.click(within(chips).getByRole('button', { name: 'Rename speakers' }));
+    const form = screen.getByRole('form', { name: 'Rename speakers' });
+    fireEvent.change(within(form).getByLabelText('Speaker 1'), { target: { value: ' Maya ' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Save names' }));
+    // Only the changed name is sent, trimmed.
+    await waitFor(() => expect(api.updateMeeting).toHaveBeenCalledWith(m.id, { speakers: { 'Speaker 1': 'Maya' } }));
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Rename speakers' })).toBeNull());
+
+    // Nothing changed: just closes.
+    fireEvent.click(screen.getByRole('button', { name: 'Rename speakers' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save names' }));
+    expect(screen.queryByRole('form', { name: 'Rename speakers' })).toBeNull();
+    expect(api.updateMeeting).toHaveBeenCalledTimes(1);
   });
 
   it('renames inline', async () => {
@@ -282,6 +338,13 @@ describe('SettingsView', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
     await waitFor(() => expect(api.revokeDevice).toHaveBeenCalledWith('00000000-0000-4000-8000-0000000000d1'));
     expect(await screen.findByText(/No Macs connected yet/)).toBeInTheDocument();
+
+    // Your name: saved trimmed, and the button settles on "Saved".
+    const name = screen.getByLabelText(/What should meetings call you/);
+    fireEvent.change(name, { target: { value: ' Maya Chen ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ name: 'Maya Chen' }, expect.anything()));
+    expect(await screen.findByRole('button', { name: 'Saved' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() => expect(auth.signOut).toHaveBeenCalled());

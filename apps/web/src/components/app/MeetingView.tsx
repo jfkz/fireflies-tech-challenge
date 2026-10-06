@@ -11,11 +11,13 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { SpeakerChip, speakerColor } from '@/components/ui/SpeakerChip';
 import { StatusChip } from '@/components/ui/StatusChip';
+import { TopicPill } from '@/components/ui/TopicPill';
 import { useDeleteMeeting, useMeeting, useReprocessMeeting, useUpdateMeeting } from '@/hooks/queries';
 import { useAudioSync } from '@/hooks/useAudioSync';
 import { ApiRequestError } from '@/lib/api';
 import { stillPose } from '@/lib/avatar/pose';
 import { LISTENER, MEN } from '@/lib/avatar/styles';
+import { meetingsHref } from '@/lib/filters';
 import { formatMeetingDate } from '@/lib/format';
 import { summaryToMarkdown } from '@/lib/markdown';
 import { isProcessing, STATUS_QUIP } from '@/lib/status';
@@ -139,15 +141,7 @@ function Header({ meeting: m }: { meeting: MeetingDetail }) {
         {m.source === 'demo' && <span className="rounded-full bg-call-light px-2 py-0.5 text-xs font-extrabold text-ink">Demo meeting</span>}
       </div>
       {m.description && <p className="mt-3 max-w-[70ch] text-lg leading-relaxed font-semibold text-ink-soft">{m.description}</p>}
-      {m.speakers.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Speakers">
-          {m.speakers.map((s) => (
-            <li key={s}>
-              <SpeakerChip name={s} size="md" />
-            </li>
-          ))}
-        </ul>
-      )}
+      <SpeakersAndTopics meeting={m} />
       <div className="mt-5 flex flex-wrap gap-2.5">
         {m.summary && (
           <button type="button" className="btn btn-secondary btn-sm" onClick={copy} aria-live="polite">
@@ -187,6 +181,84 @@ function Header({ meeting: m }: { meeting: MeetingDetail }) {
         “{m.title}”, its transcript, summary and audio will be gone for good.
       </ConfirmDialog>
     </header>
+  );
+}
+
+/** Speaker chips and topic pills that open the meeting list filtered by them, plus renaming speakers. */
+function SpeakersAndTopics({ meeting: m }: { meeting: MeetingDetail }) {
+  const [renaming, setRenaming] = useState(false);
+  if (m.speakers.length === 0 && m.topics.length === 0) return null;
+  return (
+    <div className="mt-3">
+      <ul className="flex flex-wrap items-center gap-1.5" aria-label="Speakers and topics">
+        {m.speakers.map((s) => (
+          <li key={`s:${s}`}>
+            <Link href={meetingsHref({ speaker: s })} className="rounded-full" title={`All meetings with ${s}`}>
+              <SpeakerChip name={s} size="md" />
+            </Link>
+          </li>
+        ))}
+        {m.topics.map((t) => (
+          <li key={`t:${t}`}>
+            <Link href={meetingsHref({ topic: t })} className="rounded-full" title={`All meetings about ${t}`}>
+              <TopicPill topic={t} />
+            </Link>
+          </li>
+        ))}
+        {m.speakers.length > 0 && !renaming && (
+          <li>
+            <button type="button" className="ml-1 text-sm font-extrabold text-call-deep underline underline-offset-2" onClick={() => setRenaming(true)}>
+              Rename speakers
+            </button>
+          </li>
+        )}
+      </ul>
+      {renaming && <SpeakerEditor meeting={m} onDone={() => setRenaming(false)} />}
+    </div>
+  );
+}
+
+/** One field per speaker; saves only the names that changed. Two speakers given one name become one person. */
+export function SpeakerEditor({ meeting: m, onDone }: { meeting: MeetingDetail; onDone: () => void }) {
+  const update = useUpdateMeeting(m.id);
+  const [names, setNames] = useState<Record<string, string>>(() => Object.fromEntries(m.speakers.map((s) => [s, s])));
+  const changes = Object.fromEntries(Object.entries(names).filter(([from, to]) => to.trim() && to.trim() !== from).map(([from, to]) => [from, to.trim()]));
+
+  return (
+    <form
+      className="sticker mt-3 max-w-xl space-y-3 p-4"
+      aria-label="Rename speakers"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (Object.keys(changes).length === 0) return onDone();
+        update.mutate({ speakers: changes }, { onSuccess: onDone });
+      }}
+    >
+      <p className="text-sm font-semibold text-ink-soft">Names were picked up from the conversation. Fix any that are wrong; your names are kept even if the meeting is processed again.</p>
+      {m.speakers.map((s, i) => (
+        <div key={s} className="flex items-center gap-3">
+          <label htmlFor={`speaker-${i}`} className="w-32 shrink-0 truncate text-sm font-extrabold" title={s}>
+            {s}
+          </label>
+          <input
+            id={`speaker-${i}`}
+            className="field py-1.5"
+            value={names[s] ?? s}
+            maxLength={80}
+            onChange={(e) => setNames((n) => ({ ...n, [s]: e.target.value }))}
+          />
+        </div>
+      ))}
+      {update.isError && <ErrorNote>{update.error.message}</ErrorNote>}
+      <div className="flex gap-2">
+        <button type="submit" className="btn btn-primary btn-sm" disabled={update.isPending}>
+          {update.isPending ? 'Saving…' : 'Save names'}
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

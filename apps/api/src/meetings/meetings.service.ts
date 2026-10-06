@@ -4,7 +4,9 @@ import {
   type CompleteMeetingRequest,
   type CreateMeetingRequest,
   type ListMeetingsQuery,
+  speakerName,
   type MeetingDetail,
+  type MeetingFacets,
   type MeetingPage,
   type MeetingStatus,
   type TranscriptUpload,
@@ -18,9 +20,13 @@ import type { MeetingRow, UserRow } from '../db/schema';
 import { JobsService } from '../queues/jobs.service';
 import { audioKey, meetingPrefix } from '../storage/keys';
 import { StorageService, UPLOAD_URL_TTL_SEC } from '../storage/storage.service';
+import { displayNames, renameSpeakers } from '../processing/speaker-names';
 import { defaultTitle, toDetail, toListItem } from './meeting.mapper';
 import { MeetingsRepository } from './meetings.repository';
 import { TranscriptService } from './transcript.service';
+
+/** How many speakers and topics the filter bar offers. */
+const FACETS_LIMIT = 24;
 
 /** Statuses from which a recording may be completed; anything else was completed already. */
 const COMPLETABLE: readonly MeetingStatus[] = ['recording', 'uploaded', 'failed'];
@@ -45,7 +51,15 @@ export class MeetingsService {
   async list(user: UserRow, query: ListMeetingsQuery): Promise<MeetingPage> {
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
     if (query.cursor && !cursor) throw validationError([{ path: 'cursor', message: 'Invalid cursor' }]);
-    const rows = await this.repo.list(user.id, { cursor, limit: query.limit + 1, q: query.q || undefined });
+    const rows = await this.repo.list(user.id, {
+      cursor,
+      limit: query.limit + 1,
+      q: query.q || undefined,
+      speaker: query.speaker,
+      topic: query.topic,
+      from: query.from ? new Date(query.from) : undefined,
+      to: query.to ? new Date(query.to) : undefined,
+    });
     const page = rows.slice(0, query.limit);
     const last = page[page.length - 1];
     return {
@@ -81,6 +95,11 @@ export class MeetingsService {
     return { meeting: await this.detail(winner), created: false };
   }
 
+  /** The speakers and topics a user's meetings have, most frequent first, for the filter bar. */
+  facets(user: UserRow): Promise<MeetingFacets> {
+    return this.repo.facets(user.id, FACETS_LIMIT);
+  }
+
   async get(user: UserRow, id: string): Promise<MeetingDetail> {
     return this.detail(await this.owned(user, id));
   }
@@ -90,6 +109,19 @@ export class MeetingsService {
     if (body.actionItem) {
       const found = await this.repo.setActionItemDone(meeting.id, body.actionItem.id, body.actionItem.done);
       if (!found) throw new NotFoundException('Action item not found');
+    }
+    if (body.speakers) {
+      const labels = await this.repo.speakerLabels(meeting.id);
+      const renamed = renameSpeakers(labels, meeting.speakerNames, body.speakers);
+      if (!renamed) throw new NotFoundException('Speaker not found');
+      const names = displayNames(renamed.map);
+      meeting = await this.repo.saveSpeakerNames(
+        meeting.id,
+        renamed.map,
+        // The same person named twice (one voice split in two) shows up once.
+        [...new Set(labels.map((l) => speakerName(l, names)))],
+        renamed.changes,
+      );
     }
     if (body.title !== undefined) {
       meeting = (await this.repo.update(meeting.id, { title: body.title, titleLocked: true })) ?? meeting;

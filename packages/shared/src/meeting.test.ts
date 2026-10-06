@@ -72,3 +72,19 @@ describe('requests', () => {
     expect(DeviceTokenRequest.safeParse({ code: 'c', codeVerifier: 'has space'.padEnd(50, 'x') }).success).toBe(false);
   });
 });
+
+describe('filters and renames', () => {
+  it('accepts speaker, topic and a date range', () => {
+    const q = ListMeetingsQuery.parse({ speaker: ' Maya ', topic: 'Pricing', from: '2026-10-01T00:00:00+02:00', to: '2026-10-02T00:00:00Z' });
+    expect(q).toMatchObject({ speaker: 'Maya', topic: 'Pricing' });
+  });
+  it('rejects a range that ends before it starts', () => {
+    expect(ListMeetingsQuery.safeParse({ from: '2026-10-02T00:00:00Z', to: '2026-10-01T00:00:00Z' }).success).toBe(false);
+    expect(ListMeetingsQuery.safeParse({ from: 'yesterday' }).success).toBe(false);
+  });
+  it('renames 1 to 20 speakers with non-empty names', () => {
+    expect(UpdateMeetingRequest.safeParse({ speakers: { 'Speaker 1': 'Maya' } }).success).toBe(true);
+    expect(UpdateMeetingRequest.safeParse({ speakers: {} }).success).toBe(false);
+    expect(UpdateMeetingRequest.safeParse({ speakers: { 'Speaker 1': '  ' } }).success).toBe(false);
+  });
+});

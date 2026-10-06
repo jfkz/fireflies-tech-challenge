@@ -74,7 +74,10 @@ export const MeetingListItem = z.object({
   source: MeetingSource,
   startedAt: z.string().datetime(),
   durationSec: z.number().int().nonnegative().nullable(),
+  /** Display names in order of appearance: names found in the conversation, else "Speaker 1"… */
   speakers: z.array(z.string()),
+  /** Short reusable tags ("Pricing", "Hiring") for filtering across meetings. */
+  topics: z.array(z.string()),
   actionItemCount: z.number().int().nonnegative(),
   hasAudio: z.boolean(),
 });
@@ -138,17 +141,44 @@ export const CompleteMeetingRequest = z.object({
 });
 export type CompleteMeetingRequest = z.infer<typeof CompleteMeetingRequest>;
 
+export const SpeakerName = z.string().trim().min(1).max(80);
+
 export const UpdateMeetingRequest = z
   .object({
     title: z.string().trim().min(1).max(120).optional(),
     actionItem: z.object({ id: z.string(), done: z.boolean() }).optional(),
+    /** Renames speakers: current display name → new name. */
+    speakers: z
+      .record(SpeakerName, SpeakerName)
+      .refine((r) => Object.keys(r).length > 0 && Object.keys(r).length <= 20, { message: 'Rename 1 to 20 speakers at a time' })
+      .optional(),
   })
-  .refine((v) => v.title !== undefined || v.actionItem !== undefined, { message: 'Nothing to update' });
+  .refine((v) => v.title !== undefined || v.actionItem !== undefined || v.speakers !== undefined, { message: 'Nothing to update' });
 export type UpdateMeetingRequest = z.infer<typeof UpdateMeetingRequest>;
 
-export const ListMeetingsQuery = z.object({
-  cursor: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  q: z.string().trim().max(200).optional(),
-});
+export const ListMeetingsQuery = z
+  .object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    q: z.string().trim().max(200).optional(),
+    /** Only meetings this person spoke in (display name, exact). */
+    speaker: z.string().trim().min(1).max(80).optional(),
+    /** Only meetings with this topic (case-insensitive). */
+    topic: z.string().trim().min(1).max(60).optional(),
+    /** Started at or after (inclusive) / before (exclusive). */
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+  })
+  .refine((v) => !v.from || !v.to || Date.parse(v.from) < Date.parse(v.to), { message: '`from` must be before `to`', path: ['to'] });
 export type ListMeetingsQuery = z.infer<typeof ListMeetingsQuery>;
+
+/** A speaker or topic with how many meetings it appears in, for the filter bar. */
+export const FacetCount = z.object({ value: z.string(), count: z.number().int().positive() });
+export type FacetCount = z.infer<typeof FacetCount>;
+
+/** The most frequent speakers and topics across a user's meetings. */
+export const MeetingFacets = z.object({
+  speakers: z.array(FacetCount),
+  topics: z.array(FacetCount),
+});
+export type MeetingFacets = z.infer<typeof MeetingFacets>;

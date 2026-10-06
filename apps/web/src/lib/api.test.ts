@@ -115,6 +115,7 @@ describe('api client', () => {
       startedAt: '2026-10-01T10:00:00.000Z',
       durationSec: 1,
       speakers: [],
+      topics: [],
       actionItemCount: 0,
       hasAudio: false,
       language: null,
@@ -131,6 +132,8 @@ describe('api client', () => {
       'POST /meetings/1/reprocess': m,
       'POST /devices/authorize': { code: 'c', expiresInSec: 60, redirectUrl: 'boringtalks://callback?code=c' },
       'GET /devices': [],
+      'GET /meetings/facets': { speakers: [{ value: 'Maya', count: 2 }], topics: [] },
+      'GET /meetings': { items: [], nextCursor: null },
     };
     const fetch = vi.fn((url: string, init: RequestInit) => {
       const key = `${init.method} ${new URL(url).pathname}`;
@@ -144,6 +147,10 @@ describe('api client', () => {
     await api.reprocessMeeting('1');
     await api.authorizeDevice({ codeChallenge: 'a'.repeat(43), deviceName: 'Mac' });
     await expect(api.listDevices()).resolves.toEqual([]);
-    expect(fetch).toHaveBeenCalledTimes(7);
+    await expect(api.meetingFacets()).resolves.toMatchObject({ speakers: [{ value: 'Maya' }] });
+    await api.listMeetings({ speaker: 'Maya', topic: 'Pricing', from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' });
+    const listed = new URL(fetch.mock.calls.at(-1)![0]);
+    expect(Object.fromEntries(listed.searchParams)).toEqual({ speaker: 'Maya', topic: 'Pricing', from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' });
+    expect(fetch).toHaveBeenCalledTimes(9);
   });
 });

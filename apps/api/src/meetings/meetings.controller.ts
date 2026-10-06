@@ -8,6 +8,7 @@ import {
   UpdateMeetingRequest,
   UploadUrlRequest,
   type MeetingDetail,
+  type MeetingFacets,
   type MeetingPage,
   type UploadUrlResponse,
 } from '@boringtalks/shared';
@@ -27,6 +28,12 @@ export class MeetingsController {
   @Get()
   list(@CurrentUser() user: UserRow, @Query(new ZodPipe(ListMeetingsQuery)) query: ListMeetingsQuery): Promise<MeetingPage> {
     return this.meetings.list(user, query);
+  }
+
+  /** Speakers and topics to filter by. Declared before `:id` so "facets" isn't taken for an id. */
+  @Get('facets')
+  facets(@CurrentUser() user: UserRow): Promise<MeetingFacets> {
+    return this.meetings.facets(user);
   }
 
   /** 201 for a new meeting; 200 with the existing one when the Idempotency-Key was used before. */

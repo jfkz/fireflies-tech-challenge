@@ -5,6 +5,7 @@ import {
   LatestDownload,
   Me,
   MeetingDetail,
+  MeetingFacets,
   MeetingPage,
   UploadUrlResponse,
   type AuthorizeDeviceRequest,
@@ -98,7 +99,12 @@ export function createApiClient({ baseUrl, getToken, fetch: fetchImpl }: ApiClie
     updateSettings: (body: UpdateSettingsRequest) => request('PATCH', '/me/settings', { schema: Me, body }),
 
     listMeetings: (q: Partial<ListMeetingsQuery> = {}, signal?: AbortSignal) =>
-      request('GET', '/meetings', { schema: MeetingPage, query: { cursor: q.cursor, limit: q.limit, q: q.q }, signal }),
+      request('GET', '/meetings', {
+        schema: MeetingPage,
+        query: { cursor: q.cursor, limit: q.limit, q: q.q, speaker: q.speaker, topic: q.topic, from: q.from, to: q.to },
+        signal,
+      }),
+    meetingFacets: (signal?: AbortSignal) => request('GET', '/meetings/facets', { schema: MeetingFacets, signal }),
     createMeeting: (body: CreateMeetingRequest) => request('POST', '/meetings', { schema: MeetingDetail, body }),
     getMeeting: (id: string, signal?: AbortSignal) => request('GET', `/meetings/${encodeURIComponent(id)}`, { schema: MeetingDetail, signal }),
     updateMeeting: (id: string, body: UpdateMeetingRequest) =>

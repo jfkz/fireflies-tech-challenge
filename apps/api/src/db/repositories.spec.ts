@@ -146,10 +146,72 @@ describe('MeetingsRepository', () => {
   it('seeds the demo meeting', async () => {
     const id = await new DemoService(meetings).seed(userId, new Date('2026-10-06T12:34:56Z'));
     const m = await meetings.findById(id);
-    expect(m).toMatchObject({ title: DEMO_MEETING.title, status: 'ready', source: 'demo', speakers: ['You', 'Dana', 'Leo'] });
+    expect(m).toMatchObject({ title: DEMO_MEETING.title, status: 'ready', source: 'demo', speakers: ['You', 'Dana', 'Leo'], topics: DEMO_MEETING.topics });
     expect(m?.startedAt.toISOString()).toBe('2026-10-05T12:00:00.000Z');
     expect(await meetings.getSegments(id)).toHaveLength(DEMO_SEGMENTS.length);
     expect((await meetings.getSummary(id))?.actionItems).toHaveLength(4);
+  });
+
+  it('seeds the demo with the account holder’s first name for "You"', async () => {
+    const id = await new DemoService(meetings).seed(userId, new Date('2026-10-06T12:34:56Z'), 'Ann Example');
+    const m = (await meetings.findById(id))!;
+    expect(m.speakers).toEqual(['Ann', 'Dana', 'Leo']);
+    expect((await meetings.getSummary(id))?.actionItems.map((a) => a.owner)).toEqual(['Dana', 'Leo', 'Ann', 'Ann']);
+    await meetings.delete(id);
+  });
+
+  describe('filters, facets and names', () => {
+    let filterUser: string;
+    beforeAll(async () => {
+      filterUser = (await users.insertIfAbsent({ firebaseUid: 'fb-filters', email: null, name: null }))!.id;
+      const add = async (title: string, day: string, speakers: string[], topics: string[]) => {
+        const m = await meetings.create({ userId: filterUser, title, status: 'ready', source: 'macos', startedAt: new Date(`2026-03-${day}T10:00:00Z`), speakers, topics });
+        await meetings.replaceTranscript(m.id, speakers.map((s, i) => seg(s === 'Maya' ? 'Speaker 1' : s, i * 1000, i * 1000 + 500, `line ${i}`)), {});
+        if (speakers.includes('Maya')) await meetings.update(m.id, { speakerNames: { 'Speaker 1': { name: 'Maya', by: 'ai' } } });
+        await meetings.saveSummary(m.id, { summary: 's', keyTopics: [], actionItems: [{ id: `${title}-1`, text: 't', owner: 'You', due: null, done: false }], decisions: [], model: 'm' }, {});
+        return m;
+      };
+      await add('Pricing with Maya', '01', ['You', 'Maya'], ['Pricing']);
+      await add('Hiring with Maya', '02', ['You', 'Maya'], ['Hiring']);
+      await add('Pricing solo', '03', ['You'], ['Pricing', 'Launch']);
+    });
+    const titles = async (o: Parameters<MeetingsRepository['list']>[1]) => (await meetings.list(filterUser, o)).map((m) => m.title);
+
+    it('filters by speaker, topic and start time', async () => {
+      expect(await titles({ cursor: null, limit: 10, speaker: 'Maya' })).toEqual(['Hiring with Maya', 'Pricing with Maya']);
+      expect(await titles({ cursor: null, limit: 10, topic: 'Pricing' })).toEqual(['Pricing solo', 'Pricing with Maya']);
+      expect(await titles({ cursor: null, limit: 10, topic: 'Pricing', speaker: 'Maya' })).toEqual(['Pricing with Maya']);
+      expect(await titles({ cursor: null, limit: 10, from: new Date('2026-03-02T00:00:00Z'), to: new Date('2026-03-03T00:00:00Z') })).toEqual(['Hiring with Maya']);
+    });
+
+    it('counts speakers and topics, most frequent first', async () => {
+      const f = await meetings.facets(filterUser, 10);
+      expect(f.speakers).toEqual([
+        { value: 'You', count: 3 },
+        { value: 'Maya', count: 2 },
+      ]);
+      expect(f.topics[0]).toEqual({ value: 'Pricing', count: 2 });
+      expect(await meetings.topTopics(filterUser, 1)).toEqual(['Pricing']);
+    });
+
+    it('lists raw speaker labels in order and saves renames with their owners', async () => {
+      const [m] = await meetings.list(filterUser, { cursor: null, limit: 1, speaker: 'Maya' });
+      expect(await meetings.speakerLabels(m.id)).toEqual(['You', 'Speaker 1']);
+      const saved = await meetings.saveSpeakerNames(m.id, { You: { name: 'Me', by: 'user' } }, ['Me', 'Maya'], [['You', 'Me']]);
+      expect(saved.speakers).toEqual(['Me', 'Maya']);
+      expect((await meetings.getSummary(m.id))?.actionItems[0].owner).toBe('Me');
+    });
+
+    it('gives "You" a new name everywhere except where it was typed by hand', async () => {
+      expect(await meetings.renameOwner(filterUser, 'Zoe')).toBe(2);
+      const all = await meetings.list(filterUser, { cursor: null, limit: 10 });
+      expect(all.map((m) => m.speakers[0])).toEqual(['Zoe', 'Me', 'Zoe']);
+      const solo = all.find((m) => m.title === 'Pricing solo')!;
+      expect(solo.speakerNames.You).toEqual({ name: 'Zoe', by: 'ai' });
+      expect((await meetings.getSummary(solo.id))?.actionItems[0].owner).toBe('Zoe');
+      // Running it again changes nothing.
+      expect(await meetings.renameOwner(filterUser, 'Zoe')).toBe(0);
+    });
   });
 });
 

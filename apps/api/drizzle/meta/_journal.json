@@ -15,6 +15,13 @@
       "when": 1791286775782,
       "tag": "0001_meeting_client_key",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791304438798,
+      "tag": "0002_speaker_names_topics",
+      "breakpoints": true
     }
   ]
 }

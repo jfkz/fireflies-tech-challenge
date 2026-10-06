@@ -17,6 +17,7 @@ export function SettingsView() {
       <h1 className="font-display text-4xl leading-none sm:text-5xl">Settings</h1>
       <div className="mt-8 space-y-6">
         <AccountSection />
+        <NameSection />
         <EmailSection />
         <DevicesSection />
         <DownloadCard />
@@ -59,6 +60,49 @@ function AccountSection() {
           Sign out
         </button>
       </div>
+    </Card>
+  );
+}
+
+/** The name transcripts use for you (speaker "You"); changing it updates past meetings too. */
+function NameSection() {
+  const me = useMe();
+  const update = useUpdateSettings();
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = draft ?? me.data?.name ?? '';
+  const changed = value.trim() !== '' && value.trim() !== (me.data?.name ?? '');
+  return (
+    <Card title="Your name">
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (changed) update.mutate({ name: value.trim() }, { onSuccess: () => setDraft(null) });
+        }}
+      >
+        <label htmlFor="your-name" className="min-w-0 flex-1">
+          <span className="block font-extrabold">What should meetings call you?</span>
+          <span className="block text-sm font-semibold text-ink-soft">Your side of the call shows up under your first name instead of “You”, in new and past meetings.</span>
+          <input
+            id="your-name"
+            className="field mt-2"
+            value={value}
+            maxLength={80}
+            autoComplete="name"
+            placeholder="e.g. Maya Chen"
+            disabled={!me.data}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+        </label>
+        <button type="submit" className="btn btn-primary" disabled={!changed || update.isPending}>
+          {update.isPending ? 'Saving…' : update.isSuccess && !changed ? 'Saved' : 'Save'}
+        </button>
+      </form>
+      {update.isError && (
+        <div className="mt-3">
+          <ErrorNote>{update.error.message}</ErrorNote>
+        </div>
+      )}
     </Card>
   );
 }

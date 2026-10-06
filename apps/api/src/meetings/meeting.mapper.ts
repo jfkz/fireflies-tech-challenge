@@ -1,5 +1,6 @@
-import type { MeetingDetail, MeetingListItem, Segment } from '@boringtalks/shared';
+import { applySpeakerNames, type MeetingDetail, type MeetingListItem, type Segment } from '@boringtalks/shared';
 import type { MeetingRow, SummaryRow } from '../db/schema';
+import { displayNames } from '../processing/speaker-names';
 
 export function toListItem(row: MeetingRow, actionItemCount: number): MeetingListItem {
   return {
@@ -11,6 +12,7 @@ export function toListItem(row: MeetingRow, actionItemCount: number): MeetingLis
     startedAt: row.startedAt.toISOString(),
     durationSec: row.durationSec,
     speakers: row.speakers,
+    topics: row.topics,
     actionItemCount,
     hasAudio: row.hasAudio,
   };
@@ -35,7 +37,8 @@ export function toDetail(
           model: summary.model,
         }
       : null,
-    segments,
+    // Segments are stored with their raw labels; clients see the display names.
+    segments: applySpeakerNames(segments, displayNames(row.speakerNames)),
     audioUrl,
   };
 }

@@ -9,9 +9,13 @@ export const Me = z.object({
 });
 export type Me = z.infer<typeof Me>;
 
-export const UpdateSettingsRequest = z.object({
-  emailOnReady: z.boolean(),
-});
+export const UpdateSettingsRequest = z
+  .object({
+    emailOnReady: z.boolean().optional(),
+    /** How transcripts should call the person recording (speaker "You"). */
+    name: z.string().trim().min(1).max(80).optional(),
+  })
+  .refine((v) => v.emailOnReady !== undefined || v.name !== undefined, { message: 'Nothing to update' });
 export type UpdateSettingsRequest = z.infer<typeof UpdateSettingsRequest>;
 
 /** `latest.json` next to the DMGs, and the body of `GET /downloads/latest`. */

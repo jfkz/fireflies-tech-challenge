@@ -1,28 +1,49 @@
 'use client';
 
-import { formatDuration, type MeetingListItem } from '@boringtalks/shared';
+import { formatDuration, type MeetingFacets, type MeetingListItem } from '@boringtalks/shared';
 import Link from 'next/link';
-import { useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Avatar } from '@/components/avatar/Avatar';
 import { SpeechBubble } from '@/components/avatar/SpeechBubble';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { SpeakerChip } from '@/components/ui/SpeakerChip';
 import { StatusChip } from '@/components/ui/StatusChip';
-import { useMe, useMeetings } from '@/hooks/queries';
+import { TopicPill } from '@/components/ui/TopicPill';
+import { useMe, useMeetingFacets, useMeetings, type MeetingFilters } from '@/hooks/queries';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { stillPose } from '@/lib/avatar/pose';
 import { LISTENER } from '@/lib/avatar/styles';
+import { filtersFromParams, filtersToSearch, hasFilters } from '@/lib/filters';
 import { formatMeetingDate } from '@/lib/format';
 
 export function MeetingsList() {
-  const [search, setSearch] = useState('');
+  const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const filters = filtersFromParams(params);
+  const [search, setSearch] = useState(filters.q ?? '');
   const q = useDebouncedValue(search.trim(), 300);
   const me = useMe();
-  const list = useMeetings(q, me.isSuccess);
+  const list = useMeetings({ ...filters, q }, me.isSuccess);
+  const facets = useMeetingFacets(me.isSuccess);
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
-  const searching = q !== '';
+  const filtered = hasFilters({ ...filters, q });
   const loadFailed = list.isError && !list.data;
   const moreFailed = list.isFetchNextPageError;
+
+  // Typing replaces the URL (no history entry per keystroke); clicking a pill pushes one.
+  useEffect(() => {
+    if (q === (params.get('q') ?? '')) return;
+    router.replace(`${pathname}${filtersToSearch({ ...filtersFromParams(params), q })}`, { scroll: false });
+  }, [q, params, pathname, router]);
+
+  const applyFilter = (next: MeetingFilters) => router.push(`${pathname}${filtersToSearch({ ...filters, q, ...next })}`, { scroll: false });
+  const toggle = (key: 'speaker' | 'topic', value: string) => applyFilter({ [key]: filters[key] === value ? undefined : value });
+  const clear = () => {
+    setSearch('');
+    router.push(pathname, { scroll: false });
+  };
 
   return (
     <div>
@@ -50,6 +71,8 @@ export function MeetingsList() {
         </form>
       </div>
 
+      <FilterBar facets={facets.data} filters={filters} onToggle={toggle} onClear={filtered ? clear : undefined} />
+
       <div className="mt-6">
         {me.isError ? (
           <ErrorNote onRetry={() => me.refetch()}>{me.error.message}</ErrorNote>
@@ -58,12 +81,12 @@ export function MeetingsList() {
         ) : list.isPending ? (
           <ListSkeleton />
         ) : items.length === 0 ? (
-          searching ? <NoResults q={q} /> : <EmptyState />
+          filtered ? <NoResults filters={{ ...filters, q }} onClear={clear} /> : <EmptyState />
         ) : (
           <>
             <ul className="sticker divide-y-2 divide-ink/10 overflow-hidden" aria-label="Meetings" aria-busy={list.isFetching}>
               {items.map((m) => (
-                <MeetingRow key={m.id} meeting={m} />
+                <MeetingRow key={m.id} meeting={m} filters={filters} onToggle={toggle} />
               ))}
             </ul>
             {list.hasNextPage && (
@@ -85,46 +108,147 @@ export function MeetingsList() {
   );
 }
 
-export function MeetingRow({ meeting: m }: { meeting: MeetingListItem }) {
+type Toggle = (key: 'speaker' | 'topic', value: string) => void;
+
+/** How many people and topics show before "more". */
+const FACETS_SHOWN = 8;
+
+/** People and topics to filter by, most frequent first; the active ones are highlighted. */
+export function FilterBar({
+  facets,
+  filters,
+  onToggle,
+  onClear,
+}: {
+  facets: MeetingFacets | undefined;
+  filters: MeetingFilters;
+  onToggle: Toggle;
+  onClear?: () => void;
+}) {
+  const [all, setAll] = useState(false);
+  const pick = (values: string[], active: string | undefined) => {
+    const shown = all ? values : values.slice(0, FACETS_SHOWN);
+    // An active filter from a link stays visible even if it isn't among the most frequent.
+    return active && !shown.includes(active) ? [active, ...shown] : shown;
+  };
+  const speakers = pick(facets?.speakers.map((f) => f.value) ?? [], filters.speaker);
+  const topics = pick(facets?.topics.map((f) => f.value) ?? [], filters.topic);
+  const more = !all && ((facets?.speakers.length ?? 0) > FACETS_SHOWN || (facets?.topics.length ?? 0) > FACETS_SHOWN);
+  if (speakers.length === 0 && topics.length === 0 && !onClear) return null;
+
   return (
-    <li>
-      <Link href={`/meetings/${m.id}`} className="group flex flex-col gap-2 px-5 py-4 transition-colors hover:bg-sun-soft/60 focus-visible:bg-sun-soft sm:flex-row sm:items-start sm:gap-6 sm:px-6">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-ink-soft">
-            <time dateTime={m.startedAt}>{formatMeetingDate(m.startedAt)}</time>
-            <span aria-hidden>, </span>
-            {formatDuration(m.durationSec)}
-            {m.source === 'demo' && <span className="ml-2 rounded-full bg-call-light px-2 py-0.5 text-xs font-extrabold text-ink">Demo</span>}
-          </p>
-          <h2 className="mt-1 text-lg leading-snug font-extrabold text-ink group-hover:underline group-hover:decoration-2 group-hover:underline-offset-4 sm:text-xl">
+    <div className="mt-5 space-y-2" aria-label="Filters" role="group">
+      {speakers.length > 0 && (
+        <PillRow label="People">
+          {speakers.map((s) => (
+            <li key={s}>
+              <button type="button" onClick={() => onToggle('speaker', s)} aria-pressed={filters.speaker === s} className="rounded-full" title={`Meetings with ${s}`}>
+                <SpeakerChip name={s} active={filters.speaker === s} />
+              </button>
+            </li>
+          ))}
+        </PillRow>
+      )}
+      {topics.length > 0 && (
+        <PillRow label="Topics">
+          {topics.map((t) => (
+            <li key={t}>
+              <button type="button" onClick={() => onToggle('topic', t)} aria-pressed={filters.topic === t} className="rounded-full" title={`Meetings about ${t}`}>
+                <TopicPill topic={t} active={filters.topic === t} />
+              </button>
+            </li>
+          ))}
+        </PillRow>
+      )}
+      <div className="flex gap-4">
+        {more && (
+          <button type="button" className="text-sm font-extrabold text-call-deep underline underline-offset-2" onClick={() => setAll(true)}>
+            Show all people and topics
+          </button>
+        )}
+        {onClear && (
+          <button type="button" className="text-sm font-extrabold text-call-deep underline underline-offset-2" onClick={onClear}>
+            Clear filters
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PillRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+      <span className="w-16 shrink-0 text-xs font-extrabold tracking-wide text-ink-soft uppercase">{label}</span>
+      <ul className="flex flex-wrap gap-1.5" aria-label={label}>
+        {children}
+      </ul>
+    </div>
+  );
+}
+
+export function MeetingRow({ meeting: m, filters = {}, onToggle }: { meeting: MeetingListItem; filters?: MeetingFilters; onToggle?: Toggle }) {
+  return (
+    <li className="group relative flex flex-col gap-2 px-5 py-4 transition-colors focus-within:bg-sun-soft hover:bg-sun-soft/60 sm:flex-row sm:items-start sm:gap-6 sm:px-6">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-ink-soft">
+          <time dateTime={m.startedAt}>{formatMeetingDate(m.startedAt)}</time>
+          <span aria-hidden>, </span>
+          {formatDuration(m.durationSec)}
+          {m.source === 'demo' && <span className="ml-2 rounded-full bg-call-light px-2 py-0.5 text-xs font-extrabold text-ink">Demo</span>}
+        </p>
+        <h2 className="mt-1 text-lg leading-snug font-extrabold text-ink sm:text-xl">
+          {/* The whole row is the link (stretched); the pills below sit on top of it as their own buttons. */}
+          <Link
+            href={`/meetings/${m.id}`}
+            className="outline-none after:absolute after:inset-0 group-hover:underline group-hover:decoration-2 group-hover:underline-offset-4"
+          >
             {m.title}
-          </h2>
-          {m.description && <p className="mt-1 line-clamp-2 leading-relaxed font-semibold text-ink-soft">{m.description}</p>}
-          {m.speakers.length > 0 && (
-            <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Speakers">
-              {m.speakers.slice(0, 6).map((s) => (
-                <li key={s}>
-                  <SpeakerChip name={s} />
-                </li>
-              ))}
-              {m.speakers.length > 6 && <li className="self-center text-xs font-extrabold text-ink-soft">+{m.speakers.length - 6} more</li>}
-            </ul>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
-          <StatusChip status={m.status} />
-          {m.actionItemCount > 0 && (
-            <span className="text-sm font-extrabold text-ink-soft">
-              {m.actionItemCount} action item{m.actionItemCount === 1 ? '' : 's'}
-            </span>
-          )}
-        </div>
-      </Link>
+          </Link>
+        </h2>
+        {m.description && <p className="mt-1 line-clamp-2 leading-relaxed font-semibold text-ink-soft">{m.description}</p>}
+        {(m.speakers.length > 0 || m.topics.length > 0) && (
+          <ul className="relative z-10 mt-2.5 flex flex-wrap items-center gap-1.5" aria-label="Speakers and topics">
+            {m.speakers.slice(0, 6).map((s) => (
+              <li key={`s:${s}`}>
+                <Pill onClick={onToggle && (() => onToggle('speaker', s))} pressed={filters.speaker === s} title={`Meetings with ${s}`}>
+                  <SpeakerChip name={s} active={filters.speaker === s} />
+                </Pill>
+              </li>
+            ))}
+            {m.speakers.length > 6 && <li className="self-center text-xs font-extrabold text-ink-soft">+{m.speakers.length - 6} more</li>}
+            {m.topics.map((t) => (
+              <li key={`t:${t}`}>
+                <Pill onClick={onToggle && (() => onToggle('topic', t))} pressed={filters.topic === t} title={`Meetings about ${t}`}>
+                  <TopicPill topic={t} active={filters.topic === t} />
+                </Pill>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
+        <StatusChip status={m.status} />
+        {m.actionItemCount > 0 && (
+          <span className="text-sm font-extrabold text-ink-soft">
+            {m.actionItemCount} action item{m.actionItemCount === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
     </li>
   );
 }
 
-function ListSkeleton() {
+function Pill({ onClick, pressed, title, children }: { onClick?: () => void; pressed: boolean; title: string; children: React.ReactNode }) {
+  if (!onClick) return <>{children}</>;
+  return (
+    <button type="button" onClick={onClick} aria-pressed={pressed} title={title} className="rounded-full transition-transform hover:-translate-y-px">
+      {children}
+    </button>
+  );
+}
+
+export function ListSkeleton() {
   return (
     <div className="sticker divide-y-2 divide-ink/10" aria-busy="true" aria-label="Loading meetings">
       {[0, 1, 2].map((i) => (
@@ -163,12 +287,16 @@ function EmptyState() {
   );
 }
 
-function NoResults({ q }: { q: string }) {
+function NoResults({ filters, onClear }: { filters: MeetingFilters; onClear: () => void }) {
+  const parts = [filters.speaker && `with ${filters.speaker}`, filters.topic && `about ${filters.topic}`, filters.q && `matching “${filters.q}”`].filter(Boolean);
   return (
     <div className="sticker px-6 py-10 text-center" role="status">
       <Avatar style={LISTENER} pose={stillPose({ emotion: 'sad' })} className="mx-auto h-24 w-24" />
-      <p className="mt-3 text-lg font-extrabold">Nothing matches “{q}”.</p>
-      <p className="mt-1 font-semibold text-ink-soft">Search looks at titles, summaries and everything anyone said. Try another word.</p>
+      <p className="mt-3 text-lg font-extrabold">No meetings {parts.join(' ')}.</p>
+      <p className="mt-1 font-semibold text-ink-soft">Search looks at titles, summaries and everything anyone said. Try another word, or clear the filters.</p>
+      <button type="button" className="btn btn-secondary btn-sm mt-4" onClick={onClear}>
+        Clear filters
+      </button>
     </div>
   );
 }

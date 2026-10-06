@@ -14,6 +14,14 @@ import {
 } from 'drizzle-orm/pg-core';
 import type { ActionItem, MeetingSource, MeetingStatus } from '@boringtalks/shared';
 
+/** Who named a speaker: the summarizer from the conversation, or the user by hand (never overwritten). */
+export interface SpeakerNameEntry {
+  name: string;
+  by: 'ai' | 'user';
+}
+/** Raw transcript label ("You", "Speaker 1") → its display name. */
+export type SpeakerNameMap = Record<string, SpeakerNameEntry>;
+
 const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' });
 
 const createdAt = () => timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
@@ -23,6 +31,8 @@ export const users = pgTable('users', {
   firebaseUid: text('firebase_uid').notNull().unique(),
   email: text('email'),
   name: text('name'),
+  /** The user typed their name in settings, so sign-ins stop overwriting it with the provider's. */
+  nameLocked: boolean('name_locked').notNull().default(false),
   emailOnReady: boolean('email_on_ready').notNull().default(true),
   createdAt: createdAt(),
 });
@@ -75,8 +85,12 @@ export const meetings = pgTable(
     /** True once the audio object was seen in storage (HeadObject). */
     hasAudio: boolean('has_audio').notNull().default(false),
     transcriptKey: text('transcript_key'),
-    /** Distinct speakers in order of appearance, cached for the list view. */
+    /** Distinct speakers' display names in order of appearance, cached for the list view and the speaker filter. */
     speakers: text('speakers').array().notNull().default(sql`'{}'::text[]`),
+    /** Display names for the raw labels in `segments.speaker`; segments keep their labels so renames never lose data. */
+    speakerNames: jsonb('speaker_names').$type<SpeakerNameMap>().notNull().default({}),
+    /** Short reusable tags from the summary, for the topic filter. */
+    topics: text('topics').array().notNull().default(sql`'{}'::text[]`),
     error: text('error'),
     /** Processing runs started; part of the job id so a reprocess is a new job. */
     attempts: integer('attempts').notNull().default(0),
@@ -94,6 +108,8 @@ export const meetings = pgTable(
   (t) => [
     index('meetings_user_started_idx').on(t.userId, t.startedAt.desc(), t.id.desc()),
     index('meetings_search_idx').using('gin', t.search),
+    index('meetings_speakers_idx').using('gin', t.speakers),
+    index('meetings_topics_idx').using('gin', t.topics),
     uniqueIndex('meetings_user_client_key_idx').on(t.userId, t.clientKey),
   ],
 );
