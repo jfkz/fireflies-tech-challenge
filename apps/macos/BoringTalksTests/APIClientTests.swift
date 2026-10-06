@@ -39,6 +39,15 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(page.items.first?.status, .summarizing)
     }
 
+    func testBotAndUnknownSourcesDoNotBreakTheList() throws {
+        let item = { (source: String) in
+            #"{"id":"x","title":"T","description":null,"status":"ready","source":"\#(source)","startedAt":"2026-10-06T09:30:00Z","durationSec":1,"speakers":[],"topics":[],"actionItemCount":0,"hasAudio":false}"#
+        }
+        let json = #"{"items":[\#(item("bot")),\#(item("telepathy"))],"nextCursor":null}"#
+        let page = try APICoding.decoder().decode(MeetingPage.self, from: Data(json.utf8))
+        XCTAssertEqual(page.items.map(\.source), [.bot, .unknown])
+    }
+
     func testDeviceTokenExchangeIsUnauthenticated() async throws {
         StubURLProtocol.install { _, _ in (200, try Fixture.data("device-token-response")) }
         let response = try await client(token: nil).exchangeDeviceCode(

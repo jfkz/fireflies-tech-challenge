@@ -40,7 +40,13 @@ public enum MeetingStatus: String, Codable, Sendable, CaseIterable {
 }
 
 public enum MeetingSource: String, Codable, Sendable {
-    case macos, browser, upload, demo
+    case macos, browser, upload, demo, bot
+    /// A source this version doesn't know yet, so a newer server never breaks the meeting list.
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        self = MeetingSource(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
+    }
 }
 
 public struct MeetingListItem: Codable, Equatable, Identifiable, Sendable {
