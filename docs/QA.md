@@ -82,6 +82,8 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 5.4 | Block the microphone in the browser and press Start. | Plain explanation of how to allow it; nothing uploaded. |
 | 5.5 | Chrome: tick **Also capture a tab**, pick a tab playing a video, tick “Share tab audio”. | Both your voice and the tab are in the recording. Choosing a window without audio explains to share a tab with audio. Stopping the share from the browser bar stops the recording. |
 | 5.6 | Upload an `.m4a`/`.mp3` from a phone recording. | Title left empty (the summarizer names the meeting); progress bar; meeting page; later a summary. |
+| 5.10 | Play a call or video through the **speakers** (no headphones) and record with the built-in mic. | The other side is in the recording: echo cancellation is only on when a tab is captured separately. |
+| 5.11 | Record 20 s of silence and save. | The meeting fails with “No speech was found” instead of a made-up “Thanks for watching” transcript. |
 | 5.9 | With a Bluetooth headset connected, record once, then reload `/record`. | A **Microphone** menu lists the headset and the built-in mic; recording with the other one works and the choice survives a reload. |
 | 5.7 | Choose a `.pdf` or a file over 200 MB. | Clear message, Upload button disabled, nothing sent. |
 | 5.8 | Turn the network off during an upload (DevTools → Offline). | Error with **Try again**; the recording is not lost. |
