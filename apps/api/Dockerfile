@@ -28,6 +28,8 @@ RUN pnpm install --frozen-lockfile --prod --filter @boringtalks/api...
 
 FROM node:24-slim AS runtime
 ENV NODE_ENV=production
+# ffmpeg shrinks (and splits) big recordings to fit the transcription API's 25 MB limit.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY --from=prod-deps /repo/node_modules ./node_modules
 COPY --from=prod-deps /repo/packages/shared/node_modules ./packages/shared/node_modules

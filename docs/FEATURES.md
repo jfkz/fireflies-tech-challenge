@@ -412,7 +412,10 @@ duplicate.
 
 ### Processing pipeline (worker)
 - **Transcribe** (browser recordings and uploads only): Whisper through the AI Gateway, with
-  segment timestamps.
+  segment timestamps. The API takes at most 25 MB per request, so bigger audio is first re-encoded
+  for speech with ffmpeg (mono, 16 kHz, 24 kbps MP3: about 11 MB an hour) and, past about two
+  hours, cut into hour-long parts whose transcripts are stitched back at their offsets
+  (`processing/audio-prep.ts`).
 - **Summarize:** Claude Haiku 4.5 through the AI Gateway with structured output: a specific title,
   one-line description, summary, key topics, 1–4 reusable topic tags, action items (owner, due date),
   decisions, in the meeting's language, plus who each speaker label is. Given the meeting's date,

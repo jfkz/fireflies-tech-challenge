@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { transcribe } from 'ai';
 import { AppConfig } from '../config/config.module';
+import { prepareForTranscription } from './audio-prep';
 import { SERVER_SPEAKER, Transcriber, type TranscribeInput, type TranscribeResult } from './transcriber';
 
 /** Whisper through the Vercel AI Gateway (`openai/whisper-1` by default), same key as the summarizer. */
@@ -10,15 +11,21 @@ export class GatewayTranscriber extends Transcriber {
     super();
   }
 
-  async transcribe({ audio, language }: TranscribeInput): Promise<TranscribeResult> {
-    const result = await transcribe({
-      model: this.config.env.TRANSCRIBE_MODEL,
-      audio,
-      providerOptions: {
-        openai: { timestampGranularities: ['segment'], ...(language ? { language } : {}) },
-      },
-    });
-    return toTranscribeResult(result);
+  /** Big recordings are compressed (and if need be split) first: the API takes at most 25 MB per request. */
+  async transcribe({ audio, mediaType, language }: TranscribeInput): Promise<TranscribeResult> {
+    const parts = await prepareForTranscription(audio, mediaType);
+    const results: TranscribeResult[] = [];
+    for (const part of parts) {
+      const result = await transcribe({
+        model: this.config.env.TRANSCRIBE_MODEL,
+        audio: part.audio,
+        providerOptions: {
+          openai: { timestampGranularities: ['segment'], ...(language ? { language } : {}) },
+        },
+      });
+      results.push(shiftResult(toTranscribeResult(result), part.offsetMs));
+    }
+    return joinResults(results);
   }
 }
 
@@ -46,6 +53,23 @@ export function toTranscribeResult(result: {
     segments,
     language: result.language ?? null,
     durationSec: result.durationInSeconds != null ? Math.round(result.durationInSeconds) : null,
+  };
+}
+
+/** Moves a part's segments to where the part starts in the whole recording. */
+export function shiftResult(r: TranscribeResult, offsetMs: number): TranscribeResult {
+  if (offsetMs === 0) return r;
+  return { ...r, segments: r.segments.map((s) => ({ ...s, startMs: s.startMs + offsetMs, endMs: s.endMs + offsetMs })) };
+}
+
+/** One transcript from consecutive parts: segments in order, the first language heard, durations added up. */
+export function joinResults(results: readonly TranscribeResult[]): TranscribeResult {
+  if (results.length === 1) return results[0];
+  const durations = results.map((r) => r.durationSec);
+  return {
+    segments: results.flatMap((r) => r.segments),
+    language: results.find((r) => r.language)?.language ?? null,
+    durationSec: durations.every((d) => d !== null) ? durations.reduce<number>((a, d) => a + (d ?? 0), 0) : null,
   };
 }
 
