@@ -49,6 +49,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Chainguard's MinIO runs as a non-root user; the bind-mounted data folder must be writable.
+      - run: mkdir -p .data/minio && chmod 777 .data/minio
       - run: docker compose up -d --wait postgres redis minio && docker compose up minio-setup
       - run: pnpm turbo run build --filter @boringtalks/api
       - run: pnpm --filter @boringtalks/api test:e2e
