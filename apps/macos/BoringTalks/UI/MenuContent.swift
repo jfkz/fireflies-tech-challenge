@@ -85,10 +85,15 @@ private struct SignInPanel: View {
             }
             .controlSize(.large)
             .buttonStyle(.borderedProminent)
+            Button("Signed in to another browser? Copy the sign-in link") { model.copySignInLink() }
+                .buttonStyle(.link)
+                .font(.caption)
             if model.auth == .waitingForBrowser {
                 HStack {
                     ProgressView().controlSize(.small)
-                    Text("Finish signing in in your browser…").font(.caption).foregroundStyle(.secondary)
+                    Text(model.linkCopied ? "Link copied. Open it in the browser you use for BoringTalks…" : "Finish signing in in your browser…")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Button("Cancel") { model.cancelSignIn() }.buttonStyle(.borderless).font(.caption)
                 }

@@ -23,6 +23,8 @@ final class AppModel {
 
     private(set) var auth: Auth = .unknown
     private(set) var authError: String?
+    /// The sign-in link was copied rather than opened.
+    private(set) var linkCopied = false
     private(set) var recentMeetings: [MeetingListItem] = []
     private(set) var meetingsError: String?
     private(set) var uploads = UploadQueue.Snapshot()
@@ -102,6 +104,7 @@ final class AppModel {
 
     func signIn() {
         authError = nil
+        linkCopied = false
         Task {
             let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName)
             auth = .waitingForBrowser
@@ -117,7 +120,21 @@ final class AppModel {
         }
     }
 
+    /// For when the default browser isn't the one the user is signed in to:
+    /// starts the same sign-in, but puts the link on the clipboard instead of opening it.
+    func copySignInLink() {
+        authError = nil
+        Task {
+            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName)
+            auth = .waitingForBrowser
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.absoluteString, forType: .string)
+            linkCopied = true
+        }
+    }
+
     func cancelSignIn() {
+        linkCopied = false
         if auth == .waitingForBrowser { auth = .signedOut }
     }
 
