@@ -118,15 +118,47 @@ export async function mockApi(
       const q = (url.searchParams.get('q') ?? '').toLowerCase();
       const speaker = url.searchParams.get('speaker');
       const topic = url.searchParams.get('topic');
+      const from = url.searchParams.get('from');
+      const to = url.searchParams.get('to');
       const limit = Number(url.searchParams.get('limit') ?? 20);
       const start = Number(url.searchParams.get('cursor') ?? 0);
       const all = state.meetings
         .filter((m) => !q || [m.title, m.description ?? '', ...m.segments.map((s) => s.text)].join(' ').toLowerCase().includes(q))
         .filter((m) => (!speaker || m.speakers.includes(speaker)) && (!topic || m.topics.includes(topic)))
+        .filter((m) => (!from || m.startedAt >= new Date(from).toISOString()) && (!to || m.startedAt < new Date(to).toISOString()))
         .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
       const items = all.slice(start, start + limit).map(toListItem);
       const next = start + limit < all.length ? String(start + limit) : null;
       return json(route, 200, { items, nextCursor: next });
+    }
+    if (path === '/tasks' && method === 'GET') {
+      const status = url.searchParams.get('status') ?? 'open';
+      const owner = url.searchParams.get('owner');
+      const items = state.meetings
+        .flatMap((m) => (m.summary?.actionItems ?? []).map((a, idx) => ({ ...a, idx, meeting: { id: m.id, title: m.title, startedAt: m.startedAt } })))
+        .filter((t) => (status === 'all' || t.done === (status === 'done')) && (!owner || t.owner === owner))
+        .sort(
+          (a, b) =>
+            Number(a.done) - Number(b.done) ||
+            (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31') ||
+            b.meeting.startedAt.localeCompare(a.meeting.startedAt) ||
+            a.idx - b.idx,
+        )
+        .map(({ idx: _idx, ...t }) => t);
+      return json(route, 200, { items, nextCursor: null });
+    }
+    if (path === '/meetings/stats' && method === 'GET') {
+      const from = url.searchParams.get('from')!;
+      const to = url.searchParams.get('to')!;
+      const tz = url.searchParams.get('tz') ?? 'UTC';
+      const byDay = new Map<string, { date: string; count: number; totalSec: number }>();
+      for (const m of state.meetings) {
+        const date = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(m.startedAt));
+        if (date < from || date >= to) continue;
+        const d = byDay.get(date) ?? { date, count: 0, totalSec: 0 };
+        byDay.set(date, { date, count: d.count + 1, totalSec: d.totalSec + (m.durationSec ?? 0) });
+      }
+      return json(route, 200, { tz, days: [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)) });
     }
     if (path === '/meetings/facets' && method === 'GET') {
       const count = (values: string[]) =>

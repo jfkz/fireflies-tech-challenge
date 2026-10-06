@@ -18,7 +18,7 @@ export class FakeSummarizer extends Summarizer {
       keyTopics: ['Testing', 'Fake summaries', 'Pipelines'],
       topics: ['Testing'],
       speakers: speakers.map((label, i) => ({ label, name: i === 1 ? 'Maya' : null, role: null })),
-      actionItems: [{ text: 'Check the fake summary', owner: speakers[0] ?? null, due: null }],
+      actionItems: [{ text: 'Check the fake summary', owner: speakers[0] ?? null, due: 'Friday', dueDate: '2026-10-09' }],
       decisions: ['Use fakes in tests'],
     };
     return Promise.resolve({ ...finalize(draft), model: 'fake', inputTokens: 0, outputTokens: 0 });

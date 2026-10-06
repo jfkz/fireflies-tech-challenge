@@ -76,4 +76,29 @@ for (const size of SIZES) {
     await page.goto('/this-does-not-exist');
     await shot(page, `404-${size.name}`);
   });
+
+  test(`tasks and calendar ${size.name}`, async ({ page }) => {
+    await page.setViewportSize(size);
+    const api = await mockApi(page, { latest: latestDownload() });
+    const day = (n: number, h = 10) => new Date(Date.now() - n * 86_400_000 + (h - new Date().getHours()) * 3600_000).toISOString();
+    api.meetings.push(demoMeeting());
+    // A plausible few months of meetings for the heatmap.
+    for (let i = 1; i < 120; i++) {
+      if (i % 7 === 5 || i % 7 === 6 || (i * 37) % 11 < 4) continue;
+      const n = 1 + ((i * 13) % 4);
+      for (let k = 0; k < n; k++) {
+        api.meetings.push(demoMeeting({ title: `Sync ${i}.${k}`, durationSec: 900 + ((i * 7 + k * 13) % 6) * 900, startedAt: day(i, 9 + k), summary: null }));
+      }
+    }
+    await signUp(page);
+    await page.goto('/tasks');
+    await page.getByRole('region', { name: 'Overdue' }).waitFor();
+    await shot(page, `tasks-${size.name}`);
+    await page.goto('/calendar');
+    await page.getByTestId('heatmap').waitFor();
+    const month = page.getByRole('region', { name: /^[A-Z][a-z]+ \d{4}$/ });
+    await month.getByRole('button', { name: /meetings?,/ }).first().click();
+    await shot(page, `calendar-${size.name}`);
+    await page.screenshot({ path: join(OUT, `calendar-${size.name}-full.png`), fullPage: true });
+  });
 }

@@ -37,6 +37,7 @@ export const SummarySchema = z.object({
         text: z.string().describe('The task, starting with a verb'),
         owner: z.string().nullable().describe('Speaker label or the name mentioned for the person who owns it, else null'),
         due: z.string().nullable().describe('Due date or time as said in the meeting, else null'),
+        dueDate: z.string().nullable().describe('The same deadline as a calendar date YYYY-MM-DD, worked out from the meeting date; null when no deadline was given'),
       }),
     )
     .describe('Concrete follow-ups someone agreed to do'),
@@ -52,6 +53,7 @@ Rules:
 - The summary has 3 to 6 sentences and states facts from the transcript only.
 - Key topics: 3 to 8 short labels.
 - Action items: only tasks someone actually took on or was asked to do. Owner is the speaker label exactly as it appears in the transcript (for example "You" or "Speaker 2"), or the person's name if one is mentioned; null if unclear. Due is the deadline as said, or null.
+- Due dates: when an action item has a deadline, also give it as a calendar date (YYYY-MM-DD), counting from the meeting date: "Friday" is the next Friday after the meeting, "tomorrow" the next day, "end of month" its last day, "next week" that Friday. No deadline: null for both.
 - Decisions: only things that were agreed, not proposals. Empty if none.
 - Speaker "You" is the person who recorded the meeting.
 - Speakers: one entry per speaker label. Give a name only when the conversation shows whose it is: the person introduces themselves, is greeted or addressed by name ("Thanks, Maya", "Leo, can you…") and answers, or signs off with it. A name that is only talked about ("ask Sam") belongs to nobody here. Never guess or invent a name; use null. If there is no name but the person's role is obvious, give it in a word or two, else null.
@@ -63,10 +65,15 @@ export interface PromptContext {
   ownerName?: string | null;
   /** Tags the user's other meetings already have, most used first. */
   knownTopics?: readonly string[];
+  /** When the meeting took place, so deadlines like "Friday" can become dates. */
+  meetingDate?: Date;
 }
 
-function contextLines({ ownerName, knownTopics }: PromptContext): string {
+const DATE_LINE = new Intl.DateTimeFormat('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+function contextLines({ ownerName, knownTopics, meetingDate }: PromptContext): string {
   const lines: string[] = [];
+  if (meetingDate) lines.push(`The meeting took place on ${DATE_LINE.format(meetingDate)} (${meetingDate.toISOString().slice(0, 10)}).`);
   if (ownerName) lines.push(`Speaker "You" is ${ownerName}; do not give that name to anyone else.`);
   if (knownTopics?.length) lines.push(`Reuse one of these existing topic tags when it fits: ${knownTopics.map((t) => JSON.stringify(t)).join(', ')}.`);
   return lines.length ? `${lines.join('\n')}\n` : '';

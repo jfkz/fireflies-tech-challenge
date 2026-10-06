@@ -1,6 +1,7 @@
 import { applySpeakerNames, type MeetingDetail, type MeetingListItem, type Segment } from '@boringtalks/shared';
-import type { MeetingRow, SummaryRow } from '../db/schema';
+import type { MeetingRow } from '../db/schema';
 import { displayNames } from '../processing/speaker-names';
+import type { SummaryWithItems } from './meetings.repository';
 
 export function toListItem(row: MeetingRow, actionItemCount: number): MeetingListItem {
   return {
@@ -20,7 +21,7 @@ export function toListItem(row: MeetingRow, actionItemCount: number): MeetingLis
 
 export function toDetail(
   row: MeetingRow,
-  summary: SummaryRow | null,
+  summary: SummaryWithItems | null,
   segments: Segment[],
   audioUrl: string | null,
 ): MeetingDetail {

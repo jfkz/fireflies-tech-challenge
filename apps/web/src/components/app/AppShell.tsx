@@ -9,6 +9,8 @@ import { useMe } from '@/hooks/queries';
 
 const LINKS = [
   { href: '/meetings', label: 'Meetings' },
+  { href: '/tasks', label: 'Tasks' },
+  { href: '/calendar', label: 'Calendar' },
   { href: '/record', label: 'Record' },
   { href: '/settings', label: 'Settings' },
 ] as const;
@@ -38,9 +40,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </div>
-        <nav aria-label="App" className="flex justify-around border-t-2 border-ink/10 px-2 py-1 sm:hidden">
+        <nav aria-label="App" className="flex justify-around overflow-x-auto border-t-2 border-ink/10 px-1 py-1 sm:hidden">
           {LINKS.map((l) => (
-            <NavLink key={l.href} {...l} active={pathname.startsWith(l.href)} />
+            <NavLink key={l.href} {...l} active={pathname.startsWith(l.href)} compact />
           ))}
         </nav>
       </header>
@@ -49,12 +51,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+function NavLink({ href, label, active, compact = false }: { href: string; label: string; active: boolean; compact?: boolean }) {
   return (
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={`rounded-full px-3.5 py-1.5 text-sm font-extrabold transition-colors ${active ? 'bg-ink text-white' : 'text-ink hover:bg-ink/5'}`}
+      className={`shrink-0 rounded-full py-1.5 font-extrabold transition-colors ${compact ? 'px-2.5 text-[0.8rem]' : 'px-3.5 text-sm'} ${active ? 'bg-ink text-white' : 'text-ink hover:bg-ink/5'}`}
     >
       {label}
     </Link>

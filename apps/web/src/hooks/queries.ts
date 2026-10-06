@@ -1,6 +1,6 @@
 'use client';
 
-import type { MeetingDetail, MeetingPage, UpdateMeetingRequest } from '@boringtalks/shared';
+import type { ListTasksQuery, MeetingDetail, MeetingPage, MeetingStatsQuery, TaskItem, TaskPage, UpdateMeetingRequest } from '@boringtalks/shared';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { publicApi, useAuth } from '@/components/providers/AuthProvider';
 import { isProcessing, meetingPollInterval } from '@/lib/status';
@@ -12,6 +12,9 @@ export const keys = {
   /** Every filtered list (the infinite queries). */
   meetingLists: (uid: string | undefined) => ['meetings', uid, 'list'] as const,
   facets: (uid: string | undefined) => ['meetings', uid, 'facets'] as const,
+  stats: (uid: string | undefined, q: MeetingStatsQuery) => ['meetings', uid, 'stats', q] as const,
+  tasks: (uid: string | undefined, status: TaskStatus, owner?: string) => ['tasks', uid, status, owner ?? null] as const,
+  allTasks: (uid: string | undefined) => ['tasks', uid] as const,
   /** Lists and facets together: what changes when a meeting does. */
   allMeetings: (uid: string | undefined) => ['meetings', uid] as const,
   meeting: (uid: string | undefined, id: string) => ['meeting', uid, id] as const,
@@ -38,6 +41,48 @@ export function useUpdateSettings() {
       }
     },
   });
+}
+
+type TaskStatus = ListTasksQuery['status'];
+
+/** Action items from every meeting, soonest due first (open ones by default). */
+export function useTasks(status: TaskStatus = 'open', owner?: string, enabled = true) {
+  const { api, user } = useAuth();
+  return useInfiniteQuery({
+    queryKey: keys.tasks(user?.uid, status, owner),
+    queryFn: ({ pageParam, signal }) => api.listTasks({ status, owner, cursor: pageParam, limit: 100 }, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: TaskPage) => last.nextCursor ?? undefined,
+    enabled: !!user && enabled,
+  });
+}
+
+/** Ticks a task off (or back on) through its meeting; the task moves between lists right away. */
+export function useToggleTask() {
+  const { api, user } = useAuth();
+  const qc = useQueryClient();
+  const setDone = (id: string, meetingId: string, done: boolean) =>
+    qc.setQueriesData<InfiniteData<TaskPage>>({ queryKey: keys.allTasks(user?.uid) }, (data) =>
+      data
+        ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map((t) => (t.id === id && t.meeting.id === meetingId ? { ...t, done } : t)) })) }
+        : data,
+    );
+  return useMutation({
+    mutationFn: (t: Pick<TaskItem, 'id' | 'meeting'> & { done: boolean }) => api.updateMeeting(t.meeting.id, { actionItem: { id: t.id, done: t.done } }),
+    onMutate: async (t) => {
+      await qc.cancelQueries({ queryKey: keys.allTasks(user?.uid) });
+      setDone(t.id, t.meeting.id, t.done);
+    },
+    onError: (_e, t) => setDone(t.id, t.meeting.id, !t.done),
+    onSuccess: (m) => qc.setQueryData(keys.meeting(user?.uid, m.id), m),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.allTasks(user?.uid) }),
+  });
+}
+
+/** Meetings and minutes per day, for the calendar. */
+export function useMeetingStats(q: MeetingStatsQuery) {
+  const { api, user } = useAuth();
+  return useQuery({ queryKey: keys.stats(user?.uid, q), queryFn: ({ signal }) => api.meetingStats(q, signal), enabled: !!user });
 }
 
 /** What the meeting list is narrowed to: search text, a person, a topic, a time range (ISO). */
@@ -87,6 +132,7 @@ function useSetMeeting() {
   return (m: MeetingDetail) => {
     qc.setQueryData(keys.meeting(user?.uid, m.id), m);
     void qc.invalidateQueries({ queryKey: keys.allMeetings(user?.uid) });
+    void qc.invalidateQueries({ queryKey: keys.allTasks(user?.uid) });
   };
 }
 

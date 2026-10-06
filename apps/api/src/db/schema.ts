@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   customType,
+  date,
   index,
   integer,
   jsonb,
@@ -12,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { ActionItem, MeetingSource, MeetingStatus } from '@boringtalks/shared';
+import type { MeetingSource, MeetingStatus } from '@boringtalks/shared';
 
 /** Who named a speaker: the summarizer from the conversation, or the user by hand (never overwritten). */
 export interface SpeakerNameEntry {
@@ -138,13 +139,50 @@ export const summaries = pgTable('summaries', {
     .references(() => meetings.id, { onDelete: 'cascade' }),
   summary: text('summary').notNull(),
   keyTopics: jsonb('key_topics').$type<string[]>().notNull(),
-  actionItems: jsonb('action_items').$type<ActionItem[]>().notNull(),
+  /**
+   * @deprecated Action items moved to their own table. Kept (nullable) for one release so the
+   * previous version keeps working during a deploy; a later migration drops it.
+   */
+  legacyActionItems: jsonb('action_items').$type<unknown[]>(),
   decisions: jsonb('decisions').$type<string[]>().notNull(),
   model: text('model').notNull(),
   inputTokens: integer('input_tokens'),
   outputTokens: integer('output_tokens'),
   createdAt: createdAt(),
 });
+
+/**
+ * Action items, one row each, so tasks from every meeting can be listed in due-date order.
+ * Rewritten as a whole with each summary; `done` and `owner` change in place.
+ */
+export const actionItems = pgTable(
+  'action_items',
+  {
+    meetingId: uuid('meeting_id')
+      .notNull()
+      .references(() => meetings.id, { onDelete: 'cascade' }),
+    /** Short id from the summarizer run; unique within the meeting. */
+    id: text('id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Order within the meeting's summary. */
+    idx: integer('idx').notNull(),
+    text: text('text').notNull(),
+    owner: text('owner'),
+    /** The deadline as said ("Friday"). */
+    due: text('due'),
+    /** The deadline as a date, for sorting; null when none was given. */
+    dueDate: date('due_date', { mode: 'string' }),
+    done: boolean('done').notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.meetingId, t.id] }),
+    // The tasks page: a user's open (or done) items, soonest due first.
+    index('action_items_user_due_idx').on(t.userId, t.done, t.dueDate),
+  ],
+);
 
 export const emailLog = pgTable('email_log', {
   idempotencyKey: text('idempotency_key').primaryKey(),
@@ -158,3 +196,4 @@ export type DeviceRow = typeof devices.$inferSelect;
 export type MeetingRow = typeof meetings.$inferSelect;
 export type SegmentRow = typeof segments.$inferSelect;
 export type SummaryRow = typeof summaries.$inferSelect;
+export type ActionItemRow = typeof actionItems.$inferSelect;

@@ -80,6 +80,26 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 4.13 | **Rename speakers** → change one name → **Save names**; then Reprocess. | Chips, transcript and action item owners update at once; the name you typed survives the reprocess. Clicking a speaker or topic chip opens the filtered list. |
 | 4.11 | Phone width. | Sections stack; transcript below the summary; no overflow. |
 
+### 4b. Tasks `/tasks`
+
+| # | Steps | Expected |
+|---|---|---|
+| 4b.1 | Open **Tasks** from the top bar. | Sections Overdue / Today / Tomorrow / This week / Later / No date, only the non-empty ones. Each task: owner chip, a due label (late ones in red), and “from *meeting* · date”. A new account shows the demo meeting's tasks, due in the next few days. |
+| 4b.2 | Tick a task. | It is ticked at once and, after a moment, leaves the open list; **Show done tasks** lists it. Untick it there: it comes back. The meeting page shows the same state. |
+| 4b.3 | Click an owner chip, then **Everyone**. | Only that person's tasks, then all again. |
+| 4b.4 | Click the meeting link of a task. | The meeting opens scrolled to that action item, which flashes yellow. |
+| 4b.5 | Record a meeting where someone says “I'll send it by Friday”. | Its task shows “Due Fri, …” for the Friday after the meeting, and sorts by that date. |
+
+### 4c. Calendar `/calendar`
+
+| # | Steps | Expected |
+|---|---|---|
+| 4c.1 | Open **Calendar**. | Cards for this week, this month, an average week and the busiest day; a year heatmap with darker days for more meeting time; this month's grid; “Pick a day to see its meetings.” |
+| 4c.2 | Hover a heatmap day; click one with meetings. | Tooltip “Tue, Oct 6: 2 meetings, 1 h 30 min”; the month view jumps to that month with the day selected, and its meetings are listed on the right (or below on a phone). |
+| 4c.3 | ‹ and › in the month view, then **Today**. | Other months load with their numbers; Today returns to this month and is disabled there. |
+| 4c.4 | Record a meeting late in the evening, check its day. | It counts for the day it happened where you are, not in UTC. |
+| 4c.5 | Phone width. | Cards two per row; the heatmap scrolls sideways and starts at the latest weeks; month cells show counts. |
+
 ### 5. Browser recorder and upload `/record`
 
 | # | Steps | Expected |

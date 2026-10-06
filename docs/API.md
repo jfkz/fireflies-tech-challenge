@@ -100,6 +100,15 @@ At least one of:
 also renames "You" in all past meetings, except where the user named that speaker by hand, and
 stops sign-ins from overwriting it with the provider's name.
 
+### `GET /meetings/stats?from=&to=&tz=` → `MeetingStats`
+Meetings and minutes per calendar day, for the calendar. `from` and `to` are dates (`to`
+exclusive, at most 400 days apart); `tz` is an IANA time zone (default `UTC`) that decides which
+day a meeting belongs to. Only days with meetings are listed:
+```json
+{ "tz": "Europe/Berlin", "days": [{ "date": "2026-10-06", "count": 2, "totalSec": 5400 }] }
+```
+`400` for an unknown time zone.
+
 ### `GET /meetings/facets` → `MeetingFacets`
 The speakers and topics of the user's meetings, most frequent first (24 of each), for the filter bar:
 ```json
@@ -227,6 +236,28 @@ Poll `GET /meetings/:id` until `status` is `ready` or `failed`.
 ### `POST /meetings/:id/reprocess` → `MeetingDetail`
 Runs the pipeline again: from transcription when there is no transcript, else from the summary.
 Allowed from `ready` and `failed`.
+
+## Tasks
+
+### `GET /tasks?status=&owner=&cursor=&limit=` → `TaskPage`
+Action items from every meeting as one to-do list. `status` is `open` (default), `done` or `all`;
+`owner` keeps one person's (display name, exact); `limit` 1–200 (default 100), keyset-paginated
+with `nextCursor`. Order: open before done, soonest `dueDate` first, undated last, then newest
+meeting first, then summary order.
+```json
+{
+  "items": [{
+    "id": "zmRnapn6Bn", "text": "Send the CSV samples to Tom", "owner": "Priya",
+    "due": "today", "dueDate": "2026-10-06", "done": false,
+    "meeting": { "id": "41fc…", "title": "Acme onboarding: import before the 20th", "startedAt": "2026-10-06T09:00:00.000Z" }
+  }],
+  "nextCursor": null
+}
+```
+Tick a task off with `PATCH /meetings/:meetingId { "actionItem": { "id", "done" } }`.
+
+**Due dates.** `due` is the deadline as said; `dueDate` is the same deadline as a date, worked out by
+the summarizer from the meeting's date ("Friday" → the Friday after the meeting), or `null`.
 
 ## Devices (Mac app sign-in, PKCE)
 

@@ -143,6 +143,37 @@ account and its demo meeting on first visit.
 **Limits.** Unknown or foreign meeting ids show a friendly “This meeting isn’t
 here”. Presigned audio URLs expire server-side; reloading the page fetches a new one.
 
+### Tasks `/tasks`
+
+**What.** Every action item from every meeting in one list, in sections: Overdue, Today,
+Tomorrow, This week, Later, No date. Each shows who owns it (speaker chip), when it is due
+(“Due tomorrow”, “Due Fri, Oct 16”, or “2 days late” in red; the deadline as it was said on
+hover), and “from *meeting title* · date”, linking to `/meetings/<id>#task-<id>`; the meeting
+page scrolls to that action item and flashes it. Ticking a task off is an optimistic
+`PATCH` through its meeting; it stays struck through in place until the list refreshes. Filter by
+owner with chips (“Everyone” clears it); **Show done tasks** lists finished ones. Empty state:
+“Nothing to do. Suspicious.”
+
+**Where.** `components/app/TasksView.tsx`, `lib/tasks.ts` (sections, due labels, owners),
+`lib/dates.ts`, `hooks/queries.ts` (`useTasks`, `useToggleTask`); API `GET /tasks`.
+
+**Limits.** 100 tasks per page with **Load more**. Meetings summarized before due dates existed
+show the deadline as said and sort under “No date” until reprocessed.
+
+### Calendar `/calendar`
+
+**What.** Where your meeting time went, counted in your browser's time zone:
+- Cards: this week and this month (time and number of meetings), an average week since your first
+  meeting in the last year, and the busiest day.
+- A year heatmap (a column per week, Monday on top), shaded by minutes in meetings: none, under
+  30 min, under 1½ h, under 3 h, 3 h or more. Hover or focus a day for its numbers; click it to open it.
+- A month view with previous/next/today: each day shows its number of meetings and time, with a bar
+  as tall as the time spent.
+- The picked day's meetings, as list rows linking to each meeting.
+
+**Where.** `components/app/CalendarView.tsx`, `lib/calendar.ts` (heatmap, month grid, totals),
+`lib/dates.ts`; API `GET /meetings/stats` and `GET /meetings?from=&to=`.
+
 ### Browser recorder and upload `/record`
 
 **What.** For people without the Mac app.
@@ -373,7 +404,9 @@ duplicate.
   segment timestamps.
 - **Summarize:** Claude Haiku 4.5 through the AI Gateway with structured output: a specific title,
   one-line description, summary, key topics, 1–4 reusable topic tags, action items (owner, due date),
-  decisions, in the meeting's language, plus who each speaker label is. Long meetings are
+  decisions, in the meeting's language, plus who each speaker label is. Given the meeting's date,
+  it also turns each deadline into a calendar date ("Friday" → the next Friday), validated before it
+  is stored. Action items live in their own table (`action_items`), indexed for the tasks list. Long meetings are
   map-reduced. Generic titles are rejected. Each result is also snapshotted to R2.
 - **Speaker names** (`processing/speaker-names.ts`): "You" becomes the account holder's first
   name; "Speaker N" gets the name the conversation reveals (introductions, being addressed by name

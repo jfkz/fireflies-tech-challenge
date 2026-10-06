@@ -57,7 +57,7 @@ export class PipelineService {
     const user = await this.users.findById(meeting.userId);
     const ownerName = user?.name ?? null;
     const knownTopics = await this.meetings.topTopics(meeting.userId, KNOWN_TOPICS);
-    const result = await this.summarizer.summarize({ segments, language: meeting.language, ownerName, knownTopics });
+    const result = await this.summarizer.summarize({ segments, language: meeting.language, ownerName, knownTopics, meetingDate: meeting.startedAt });
     const at = new Date();
     await this.storage.putJson(summaryKey(meeting.userId, meeting.id, at), { meetingId: meeting.id, createdAt: at, ...result });
 

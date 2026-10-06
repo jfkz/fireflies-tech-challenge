@@ -25,6 +25,8 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     revokeDevice: notMocked('revokeDevice'),
     latestDownload: notMocked('latestDownload'),
     meetingFacets: vi.fn(() => Promise.resolve({ speakers: [], topics: [] })),
+    meetingStats: notMocked('meetingStats'),
+    listTasks: notMocked('listTasks'),
     ...overrides,
   } as ApiClient;
 }
@@ -86,8 +88,8 @@ export function meeting(overrides: Partial<MeetingDetail> = {}): MeetingDetail {
       summary: 'We raised the price.\n\nAnnual stays.',
       keyTopics: ['Pricing', 'Launch'],
       actionItems: [
-        { id: 'a1', text: 'Write the launch email', owner: 'Maya', due: 'Oct 30', done: false },
-        { id: 'a2', text: 'Update the pricing page', owner: null, due: null, done: true },
+        { id: 'a1', text: 'Write the launch email', owner: 'Maya', due: 'Oct 30', dueDate: '2026-10-30', done: false },
+        { id: 'a2', text: 'Update the pricing page', owner: null, due: null, dueDate: null, done: true },
       ],
       decisions: ['Pro is $29'],
       model: 'anthropic/claude-haiku-4.5',
