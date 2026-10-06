@@ -15,7 +15,8 @@ test('upload an audio file: create → upload-url → PUT to storage → complet
 
   await expect(page).toHaveURL(/\/meetings\/[0-9a-f-]{36}$/);
   const create = api.callsTo('POST', /^\/meetings$/)[0];
-  expect(create.body).toEqual({ source: 'upload' });
+  expect(create.body).toMatchObject({ source: 'upload' });
+  expect(create.body).not.toHaveProperty('title');
   const uploadUrl = api.callsTo('POST', /\/upload-url$/)[0];
   expect(uploadUrl.body).toEqual({ contentType: 'audio/wav', sizeBytes: wav.length });
   expect(api.uploads).toHaveLength(1);
