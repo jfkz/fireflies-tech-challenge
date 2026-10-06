@@ -8,7 +8,7 @@
 | Push to `main` (merge) | **production** | `deploy.yml`, `macos.yml` |
 | Any pull request or push | — (checks only) | `ci.yml` |
 
-Only one pull request may be open at a time (Dependabot excluded): all PRs share the dev
+Only one ready pull request may be open at a time (drafts and Dependabot excluded): all PRs share the dev
 environment, so the "One open PR" job fails a second one and nothing deploys. Pushing to an open,
 ready PR is shipping to dev.
 
