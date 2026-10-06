@@ -7,6 +7,8 @@ import {
   speakerName,
   type MeetingDetail,
   type MeetingFacets,
+  type MeetingStats,
+  type MeetingStatsQuery,
   type MeetingPage,
   type MeetingStatus,
   type TranscriptUpload,
@@ -24,6 +26,16 @@ import { displayNames, renameSpeakers } from '../processing/speaker-names';
 import { defaultTitle, toDetail, toListItem } from './meeting.mapper';
 import { MeetingsRepository } from './meetings.repository';
 import { TranscriptService } from './transcript.service';
+
+/** An IANA zone both Node and Postgres understand ("Europe/Berlin", "UTC"). */
+export function isTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/.test(tz);
+  } catch {
+    return false;
+  }
+}
 
 /** How many speakers and topics the filter bar offers. */
 const FACETS_LIMIT = 24;
@@ -93,6 +105,12 @@ export class MeetingsService {
     const winner = await this.repo.findByClientKey(user.id, clientKey);
     if (!winner) throw new ConflictException('Could not create the meeting; try again');
     return { meeting: await this.detail(winner), created: false };
+  }
+
+  /** Meetings and time spent per day, for the calendar. */
+  async stats(user: UserRow, query: MeetingStatsQuery): Promise<MeetingStats> {
+    if (!isTimeZone(query.tz)) throw validationError([{ path: 'tz', message: 'Unknown time zone' }]);
+    return { tz: query.tz, days: await this.repo.dailyStats(user.id, query.from, query.to, query.tz) };
   }
 
   /** The speakers and topics a user's meetings have, most frequent first, for the filter bar. */

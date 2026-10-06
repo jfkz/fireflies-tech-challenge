@@ -4,11 +4,13 @@ import {
   CompleteMeetingRequest,
   CreateMeetingRequest,
   ListMeetingsQuery,
+  MeetingStatsQuery,
   TranscriptUpload,
   UpdateMeetingRequest,
   UploadUrlRequest,
   type MeetingDetail,
   type MeetingFacets,
+  type MeetingStats,
   type MeetingPage,
   type UploadUrlResponse,
 } from '@boringtalks/shared';
@@ -28,6 +30,12 @@ export class MeetingsController {
   @Get()
   list(@CurrentUser() user: UserRow, @Query(new ZodPipe(ListMeetingsQuery)) query: ListMeetingsQuery): Promise<MeetingPage> {
     return this.meetings.list(user, query);
+  }
+
+  /** Meetings and minutes per day for the calendar. Declared before `:id`. */
+  @Get('stats')
+  stats(@CurrentUser() user: UserRow, @Query(new ZodPipe(MeetingStatsQuery)) query: MeetingStatsQuery): Promise<MeetingStats> {
+    return this.meetings.stats(user, query);
   }
 
   /** Speakers and topics to filter by. Declared before `:id` so "facets" isn't taken for an id. */

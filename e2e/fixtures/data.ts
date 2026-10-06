@@ -29,6 +29,13 @@ export const DEMO_SEGMENTS: Segment[] = [
   { speaker: 'You', startMs: 43000, endMs: 46000, text: 'Ending early. Historic.' },
 ];
 
+/** The local calendar date `days` from today, "YYYY-MM-DD". */
+export function dayFromToday(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return new Intl.DateTimeFormat('en-CA').format(d);
+}
+
 export function demoMeeting(overrides: Partial<MeetingDetail> = {}): MeetingDetail {
   return MeetingDetail.parse({
     id: randomUUID(),
@@ -49,8 +56,9 @@ export function demoMeeting(overrides: Partial<MeetingDetail> = {}): MeetingDeta
         'The team agreed to raise the Pro plan from $24 to $29 a month starting November 3rd. The annual plan stays at $240, which keeps existing yearly customers happy.\n\nThe launch email goes out before the change, and the pricing page is updated a day ahead.',
       keyTopics: ['Pro pricing', 'Annual plan', 'Launch timing'],
       actionItems: [
-        { id: 'ai-1', text: 'Write the launch email', owner: 'Speaker 2', due: 'Oct 30', done: false },
-        { id: 'ai-2', text: 'Update the pricing page', owner: 'You', due: 'Nov 2', done: false },
+        // Due dates relative to today, so the tasks page always has something overdue and something upcoming.
+        { id: 'ai-1', text: 'Write the launch email', owner: 'Speaker 2', due: 'yesterday', dueDate: dayFromToday(-1), done: false },
+        { id: 'ai-2', text: 'Update the pricing page', owner: 'You', due: 'next week', dueDate: dayFromToday(10), done: false },
       ],
       decisions: ['Pro is $29/month from Nov 3', 'Annual plan stays at $240'],
       model: 'anthropic/claude-haiku-4.5',

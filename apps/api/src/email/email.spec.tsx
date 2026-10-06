@@ -9,8 +9,8 @@ import { MeetingReadyEmail } from './templates/meeting-ready';
 import { WelcomeEmail } from './templates/welcome';
 
 const actionItems = [
-  { id: 'a1', text: 'Send the contract', owner: 'Dana', due: 'Friday', done: false },
-  { id: 'a2', text: 'Book the venue', owner: 'You', due: null, done: false },
+  { id: 'a1', text: 'Send the contract', owner: 'Dana', due: 'Friday', dueDate: null, done: false },
+  { id: 'a2', text: 'Book the venue', owner: 'You', due: null, dueDate: null, done: false },
 ];
 
 describe('templates', () => {

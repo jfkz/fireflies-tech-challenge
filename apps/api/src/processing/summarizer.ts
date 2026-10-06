@@ -26,6 +26,8 @@ export interface SummarizeInput {
   ownerName?: string | null;
   /** Topic tags the user's other meetings already use, most used first. */
   knownTopics?: readonly string[];
+  /** When the meeting started, to turn "Friday" into a date. */
+  meetingDate?: Date;
 }
 
 /** Turns a transcript into title, summary, topics, action items and decisions. */

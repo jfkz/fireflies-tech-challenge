@@ -1,14 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, sql, type SQL } from 'drizzle-orm';
 import type { ActionItem, FacetCount, MeetingStatus, Segment } from '@boringtalks/shared';
 import type { MeetingCursor } from '../common/cursor';
 import { InjectDb, type Database } from '../db/db.module';
-import { meetings, segments, summaries, type MeetingRow, type SpeakerNameMap, type SummaryRow } from '../db/schema';
+import { actionItems, meetings, segments, summaries, type MeetingRow, type SpeakerNameMap, type SummaryRow } from '../db/schema';
 
 export type MeetingWithCount = MeetingRow & { actionItemCount: number };
 export type NewMeeting = typeof meetings.$inferInsert;
 export type MeetingPatch = Partial<Omit<NewMeeting, 'id' | 'userId' | 'createdAt'>>;
-export type SummaryValues = Omit<typeof summaries.$inferInsert, 'meetingId' | 'createdAt'>;
+export type SummaryValues = Omit<typeof summaries.$inferInsert, 'meetingId' | 'createdAt' | 'legacyActionItems'> & { actionItems: ActionItem[] };
+/** A summary row with its action items, in order. */
+export type SummaryWithItems = Omit<SummaryRow, 'legacyActionItems'> & { actionItems: ActionItem[] };
+
+const ITEM_COLUMNS = {
+  id: actionItems.id,
+  text: actionItems.text,
+  owner: actionItems.owner,
+  due: actionItems.due,
+  dueDate: actionItems.dueDate,
+  done: actionItems.done,
+};
 
 /** Rows per INSERT; 6 columns × 1000 rows stays far below Postgres' 65k parameter limit. */
 const SEGMENT_BATCH = 1_000;
@@ -80,10 +91,10 @@ export class MeetingsRepository {
     return this.db
       .select({
         ...getTableColumns(meetings),
-        actionItemCount: sql<number>`coalesce(jsonb_array_length(${summaries.actionItems}), 0)::int`,
+        // Spelled out: inside a subquery Drizzle leaves column names unqualified, and "id" exists in both tables.
+        actionItemCount: sql<number>`(select count(*) from action_items ai where ai.meeting_id = "meetings"."id")::int`,
       })
       .from(meetings)
-      .leftJoin(summaries, eq(summaries.meetingId, meetings.id))
       .where(and(...where))
       .orderBy(desc(meetings.startedAt), desc(meetings.id))
       .limit(opts.limit);
@@ -101,6 +112,29 @@ export class MeetingsRepository {
         limit ${limit}`);
     const [speakers, topics] = await Promise.all([count(meetings.speakers), count(meetings.topics)]);
     return { speakers: speakers.rows, topics: topics.rows };
+  }
+
+  /**
+   * Meetings and minutes per calendar day in `tz`, for days in [from, to) that had any.
+   * Days are the meeting's start in that time zone.
+   */
+  async dailyStats(userId: string, from: string, to: string, tz: string): Promise<{ date: string; count: number; totalSec: number }[]> {
+    const day = sql`(${meetings.startedAt} at time zone ${tz})::date`;
+    const rows = await this.db
+      .select({ date: sql<string>`to_char(${day}, 'YYYY-MM-DD')`, count: sql<number>`count(*)::int`, totalSec: sql<number>`coalesce(sum(${meetings.durationSec}), 0)::int` })
+      .from(meetings)
+      .where(
+        and(
+          eq(meetings.userId, userId),
+          sql`${meetings.startedAt} >= (${from}::timestamp at time zone ${tz})`,
+          sql`${meetings.startedAt} < (${to}::timestamp at time zone ${tz})`,
+        ),
+      )
+      // By position: the time zone is a separate bind parameter in each clause, so Postgres
+      // wouldn't see the expressions as the same.
+      .groupBy(sql`1`)
+      .orderBy(sql`1`);
+    return rows;
   }
 
   /** The user's most used topic tags, so new summaries reuse them. */
@@ -125,13 +159,16 @@ export class MeetingsRepository {
    */
   async saveSpeakerNames(meetingId: string, map: SpeakerNameMap, speakers: string[], owners: readonly [string, string][]): Promise<MeetingRow> {
     return this.db.transaction(async (tx) => {
+      // All renames at once (a swap A↔B must not chain), so map old owner → new owner in one UPDATE.
       if (owners.length > 0) {
-        const [row] = await tx.select({ actionItems: summaries.actionItems }).from(summaries).where(eq(summaries.meetingId, meetingId)).for('update');
-        if (row) {
-          const rename = new Map(owners);
-          const next = row.actionItems.map((a) => (a.owner && rename.has(a.owner) ? { ...a, owner: rename.get(a.owner)! } : a));
-          await tx.update(summaries).set({ actionItems: next }).where(eq(summaries.meetingId, meetingId));
-        }
+        const cases = sql.join(
+          owners.map(([from, to]) => sql`when ${from} then ${to}`),
+          sql` `,
+        );
+        await tx
+          .update(actionItems)
+          .set({ owner: sql`case ${actionItems.owner} ${cases} else ${actionItems.owner} end` })
+          .where(and(eq(actionItems.meetingId, meetingId), inArray(actionItems.owner, owners.map(([from]) => from))));
       }
       const [meeting] = await tx.update(meetings).set({ speakerNames: map, speakers }).where(eq(meetings.id, meetingId)).returning();
       return meeting;
@@ -154,13 +191,10 @@ export class MeetingsRepository {
           and coalesce(speaker_names->'You'->>'name', 'You') <> ${name}
       ),
       owners as (
-        update ${summaries} s
-        set action_items = (
-          select coalesce(jsonb_agg(case when e->>'owner' = t.old then jsonb_set(e, '{owner}', to_jsonb(${name}::text)) else e end order by i), '[]'::jsonb)
-          from jsonb_array_elements(s.action_items) with ordinality as x(e, i)
-        )
+        update ${actionItems} a
+        set owner = ${name}::text
         from targets t
-        where s.meeting_id = t.id
+        where a.meeting_id = t.id and a.owner = t.old
         returning 1
       )
       update ${meetings} m
@@ -227,12 +261,19 @@ export class MeetingsRepository {
     });
   }
 
-  async getSummary(meetingId: string): Promise<SummaryRow | null> {
+  async getSummary(meetingId: string): Promise<SummaryWithItems | null> {
     const [row] = await this.db.select().from(summaries).where(eq(summaries.meetingId, meetingId));
-    return row ?? null;
+    if (!row) return null;
+    const { legacyActionItems: _legacy, ...summary } = row;
+    return { ...summary, actionItems: await this.getActionItems(meetingId) };
   }
 
-  async saveSummary(meetingId: string, values: SummaryValues, patch: MeetingPatch): Promise<MeetingRow> {
+  async getActionItems(meetingId: string): Promise<ActionItem[]> {
+    return this.db.select(ITEM_COLUMNS).from(actionItems).where(eq(actionItems.meetingId, meetingId)).orderBy(asc(actionItems.idx));
+  }
+
+  /** Stores a summary and replaces the meeting's action items, in one transaction. */
+  async saveSummary(meetingId: string, { actionItems: items, ...values }: SummaryValues, patch: MeetingPatch): Promise<MeetingRow> {
     return this.db.transaction(async (tx) => {
       const row = { meetingId, ...values, createdAt: new Date() };
       await tx.insert(summaries).values(row).onConflictDoUpdate({ target: summaries.meetingId, set: row });
@@ -241,22 +282,23 @@ export class MeetingsRepository {
         .set({ ...patch, updatedAt: new Date() })
         .where(eq(meetings.id, meetingId))
         .returning();
+      await tx.delete(actionItems).where(eq(actionItems.meetingId, meetingId));
+      if (items.length > 0) {
+        await tx.insert(actionItems).values(
+          items.map((a, idx) => ({ meetingId, userId: meeting.userId, idx, id: a.id, text: a.text, owner: a.owner, due: a.due, dueDate: a.dueDate, done: a.done })),
+        );
+      }
       return meeting;
     });
   }
 
   /** Flips one action item; returns false when the meeting has no such item. */
   async setActionItemDone(meetingId: string, itemId: string, done: boolean): Promise<boolean> {
-    return this.db.transaction(async (tx) => {
-      const [row] = await tx
-        .select({ actionItems: summaries.actionItems })
-        .from(summaries)
-        .where(eq(summaries.meetingId, meetingId))
-        .for('update');
-      if (!row?.actionItems.some((a) => a.id === itemId)) return false;
-      const next: ActionItem[] = row.actionItems.map((a) => (a.id === itemId ? { ...a, done } : a));
-      await tx.update(summaries).set({ actionItems: next }).where(eq(summaries.meetingId, meetingId));
-      return true;
-    });
+    const rows = await this.db
+      .update(actionItems)
+      .set({ done })
+      .where(and(eq(actionItems.meetingId, meetingId), eq(actionItems.id, itemId)))
+      .returning({ id: actionItems.id });
+    return rows.length > 0;
   }
 }

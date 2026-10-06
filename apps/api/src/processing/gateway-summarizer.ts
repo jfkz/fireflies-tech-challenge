@@ -36,8 +36,8 @@ export class GatewaySummarizer extends Summarizer {
     super();
   }
 
-  async summarize({ segments, language, ownerName, knownTopics = [] }: SummarizeInput): Promise<SummaryResult> {
-    const context = { ownerName, knownTopics };
+  async summarize({ segments, language, ownerName, knownTopics = [], meetingDate }: SummarizeInput): Promise<SummaryResult> {
+    const context = { ownerName, knownTopics, meetingDate };
     const merged = mergeSegments(segments);
     const transcript = transcriptText(merged);
     const usage: Usage = { input: 0, output: 0 };
@@ -100,7 +100,23 @@ export function finalize(draft: SummaryDraft, knownTopics: readonly string[] = [
     speakers: draft.speakers.map((s) => ({ label: s.label, name: s.name ?? null, role: s.role ?? null })),
     actionItems: draft.actionItems
       .filter((a) => a.text.trim())
-      .map((a) => ({ id: nanoid(10), text: a.text.trim(), owner: a.owner?.trim() || null, due: a.due?.trim() || null, done: false })),
+      .map((a) => ({
+        id: nanoid(10),
+        text: a.text.trim(),
+        owner: a.owner?.trim() || null,
+        due: a.due?.trim() || null,
+        dueDate: validDate(a.dueDate),
+        done: false,
+      })),
     decisions: draft.decisions.map((d) => d.trim()).filter(Boolean),
   };
+}
+
+/** A real calendar date "YYYY-MM-DD" in a sane range, or null (models sometimes answer "Friday" or "2026-02-30"). */
+export function validDate(value: string | null | undefined): string | null {
+  const v = value?.trim();
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T00:00:00Z`);
+  const year = d.getUTCFullYear();
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v && year >= 2000 && year <= 2100 ? v : null;
 }

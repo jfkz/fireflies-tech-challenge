@@ -1,7 +1,7 @@
 import { MockLanguageModelV4 } from 'ai/test';
 import { seg } from '../testing/fixtures';
 import { FakeSummarizer, FakeTranscriber } from './fake-ai';
-import { finalize, GatewaySummarizer } from './gateway-summarizer';
+import { finalize, GatewaySummarizer, validDate } from './gateway-summarizer';
 import { chunkSegments, clamp, fallbackTitle, isGenericTitle, SINGLE_PASS_MAX_CHARS, SYSTEM_PROMPT } from './summary-prompt';
 
 const usage = (input: number, output: number) => ({
@@ -16,7 +16,7 @@ const draft = {
   keyTopics: ['Pricing', 'Launch date', 'Free tier'],
   topics: ['pricing', 'Launch'],
   speakers: [{ label: 'Speaker 1', name: 'Dana', role: null }],
-  actionItems: [{ text: 'Update the pricing page', owner: 'Dana', due: 'Oct 30' }],
+  actionItems: [{ text: 'Update the pricing page', owner: 'Dana', due: 'Oct 30', dueDate: '2026-10-30' }],
   decisions: ['Pro is $29'],
 };
 
@@ -64,7 +64,7 @@ describe('GatewaySummarizer', () => {
       inputTokens: 100,
       outputTokens: 10,
       decisions: ['Pro is $29'],
-      actionItems: [{ text: 'Update the pricing page', owner: 'Dana', due: 'Oct 30', done: false }],
+      actionItems: [{ text: 'Update the pricing page', owner: 'Dana', due: 'Oct 30', dueDate: '2026-10-30', done: false }],
     });
     expect(result.actionItems[0].id).toMatch(/^[\w-]{10}$/);
   });
@@ -76,12 +76,15 @@ describe('GatewaySummarizer', () => {
       language: null,
       ownerName: 'Ann',
       knownTopics: ['Pricing', 'Hiring'],
+      meetingDate: new Date('2026-10-09T15:00:00Z'),
     });
+    expect(result.actionItems[0].dueDate).toBe('2026-10-30');
     const text = promptText(calls[0]);
     expect(text).toContain('Speaker \\"You\\" is Ann');
     expect(text).toContain('existing topic tags');
     expect(text).toContain('\\"Hiring\\"');
     expect(text).toContain('Never guess or invent a name');
+    expect(text).toContain('Friday, October 9, 2026 (2026-10-09)');
     // "pricing" is spelled like the existing tag.
     expect(result.topics).toEqual(['Pricing', 'Launch']);
     expect(result.speakers).toEqual([{ label: 'Speaker 1', name: 'Dana', role: null }]);
@@ -157,12 +160,16 @@ describe('summary helpers', () => {
       ...draft,
       description: 'd'.repeat(300),
       keyTopics: ['a', '', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'],
-      actionItems: [{ text: ' ', owner: null, due: null }, { text: 'Ship', owner: ' ', due: ' ' }],
+      actionItems: [
+        { text: ' ', owner: null, due: null, dueDate: null },
+        { text: 'Ship', owner: ' ', due: ' ', dueDate: '2026-02-30' },
+      ],
       decisions: [' ok ', ''],
     });
     expect(out.description.length).toBeLessThanOrEqual(200);
     expect(out.keyTopics).toHaveLength(8);
-    expect(out.actionItems).toEqual([{ id: expect.any(String), text: 'Ship', owner: null, due: null, done: false }]);
+    // An impossible date is dropped rather than stored.
+    expect(out.actionItems).toEqual([{ id: expect.any(String), text: 'Ship', owner: null, due: null, dueDate: null, done: false }]);
     expect(out.decisions).toEqual(['ok']);
     expect(SYSTEM_PROMPT).toContain('same language as the transcript');
   });
@@ -176,5 +183,15 @@ describe('fakes', () => {
     expect(empty.actionItems[0].owner).toBeNull();
     const t = await new FakeTranscriber().transcribe({ audio: new Uint8Array(7), mediaType: 'audio/webm', language: null });
     expect(t.segments[0].text).toContain('7 bytes');
+  });
+});
+
+describe('validDate', () => {
+  it('keeps real calendar dates and drops everything else', () => {
+    expect(validDate(' 2026-10-09 ')).toBe('2026-10-09');
+    expect(validDate('2026-02-29')).toBeNull();
+    expect(validDate('Friday')).toBeNull();
+    expect(validDate('1999-12-31')).toBeNull();
+    expect(validDate(null)).toBeNull();
   });
 });

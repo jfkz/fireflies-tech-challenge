@@ -1,17 +1,17 @@
 import { BadRequestException, ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { encodeCursor } from '../common/cursor';
-import type { SummaryRow } from '../db/schema';
+import type { SummaryWithItems } from './meetings.repository';
 import { meeting, seg, user } from '../testing/fixtures';
 import { defaultTitle, toDetail } from './meeting.mapper';
 import { MeetingsController } from './meetings.controller';
 import { canStart, MeetingsService } from './meetings.service';
 import { TranscriptService } from './transcript.service';
 
-const summaryRow = (o: Partial<SummaryRow> = {}): SummaryRow => ({
+const summaryRow = (o: Partial<SummaryWithItems> = {}): SummaryWithItems => ({
   meetingId: meeting().id,
   summary: 'Summary.',
   keyTopics: ['a'],
-  actionItems: [{ id: 'a1', text: 'Do it', owner: 'You', due: null, done: false }],
+  actionItems: [{ id: 'a1', text: 'Do it', owner: 'You', due: null, dueDate: null, done: false }],
   decisions: ['d'],
   model: 'm',
   inputTokens: 1,
@@ -38,6 +38,7 @@ function setup() {
     facets: vi.fn(),
     speakerLabels: vi.fn(),
     saveSpeakerNames: vi.fn(),
+    dailyStats: vi.fn(),
   };
   const storage = {
     presignPut: vi.fn().mockResolvedValue('https://r2/put'),
@@ -153,6 +154,18 @@ describe('MeetingsService', () => {
         from: new Date('2026-09-30T22:00:00Z'),
         to: new Date('2026-10-02T00:00:00Z'),
       });
+    });
+
+    it('counts meetings per day in a valid time zone only', async () => {
+      const { repo, service } = setup();
+      repo.dailyStats.mockResolvedValue([{ date: '2026-10-01', count: 2, totalSec: 3600 }]);
+      await expect(service.stats(user(), { from: '2026-10-01', to: '2026-11-01', tz: 'Europe/Berlin' })).resolves.toEqual({
+        tz: 'Europe/Berlin',
+        days: [{ date: '2026-10-01', count: 2, totalSec: 3600 }],
+      });
+      expect(repo.dailyStats).toHaveBeenCalledWith(user().id, '2026-10-01', '2026-11-01', 'Europe/Berlin');
+      await expect(service.stats(user(), { from: '2026-10-01', to: '2026-11-01', tz: 'Mars/Olympus' })).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.stats(user(), { from: '2026-10-01', to: '2026-11-01', tz: "UTC'; drop" })).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('offers the most frequent speakers and topics as filters', async () => {
@@ -317,12 +330,14 @@ describe('MeetingsController', () => {
       complete: vi.fn(() => 'complete'),
       reprocess: vi.fn(() => 'reprocess'),
       facets: vi.fn(() => 'facets'),
+      stats: vi.fn(() => 'stats'),
     };
     const c = new MeetingsController(s as never);
     const u = user();
     const id = meeting().id;
     expect(await c.list(u, { limit: 20 })).toBe('list');
     expect(await c.facets(u)).toBe('facets');
+    expect(await c.stats(u, { from: '2026-10-01', to: '2026-10-02', tz: 'UTC' })).toBe('stats');
     s.create.mockReturnValueOnce({ meeting: 'new', created: true } as never).mockReturnValueOnce({ meeting: 'old', created: false } as never);
     const res = { status: vi.fn() };
     expect(await c.create(u, { source: 'macos' }, undefined, res as never)).toBe('new');

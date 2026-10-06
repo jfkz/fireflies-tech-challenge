@@ -81,7 +81,7 @@ describe('MeetingsRepository', () => {
       {
         summary: 's',
         keyTopics: ['k'],
-        actionItems: [{ id: 'a1', text: 'Unblock it', owner: 'You', due: null, done: false }],
+        actionItems: [{ id: 'a1', text: 'Unblock it', owner: 'You', due: null, dueDate: null, done: false }],
         decisions: [],
         model: 'm',
         inputTokens: 1,
@@ -148,6 +148,14 @@ describe('MeetingsRepository', () => {
     const m = await meetings.findById(id);
     expect(m).toMatchObject({ title: DEMO_MEETING.title, status: 'ready', source: 'demo', speakers: ['You', 'Dana', 'Leo'], topics: DEMO_MEETING.topics });
     expect(m?.startedAt.toISOString()).toBe('2026-10-05T12:00:00.000Z');
+    // Deadlines are days after the meeting, so the tasks page shows upcoming work.
+    const items = (await meetings.getSummary(id))!.actionItems;
+    expect(items.map((a) => [a.due, a.dueDate])).toEqual([
+      ['Thu, Oct 8', '2026-10-08'],
+      ['Wed, Oct 7', '2026-10-07'],
+      ['Fri, Oct 9', '2026-10-09'],
+      [null, null],
+    ]);
     expect(await meetings.getSegments(id)).toHaveLength(DEMO_SEGMENTS.length);
     expect((await meetings.getSummary(id))?.actionItems).toHaveLength(4);
   });
@@ -168,7 +176,7 @@ describe('MeetingsRepository', () => {
         const m = await meetings.create({ userId: filterUser, title, status: 'ready', source: 'macos', startedAt: new Date(`2026-03-${day}T10:00:00Z`), speakers, topics });
         await meetings.replaceTranscript(m.id, speakers.map((s, i) => seg(s === 'Maya' ? 'Speaker 1' : s, i * 1000, i * 1000 + 500, `line ${i}`)), {});
         if (speakers.includes('Maya')) await meetings.update(m.id, { speakerNames: { 'Speaker 1': { name: 'Maya', by: 'ai' } } });
-        await meetings.saveSummary(m.id, { summary: 's', keyTopics: [], actionItems: [{ id: `${title}-1`, text: 't', owner: 'You', due: null, done: false }], decisions: [], model: 'm' }, {});
+        await meetings.saveSummary(m.id, { summary: 's', keyTopics: [], actionItems: [{ id: `${title}-1`, text: 't', owner: 'You', due: null, dueDate: null, done: false }], decisions: [], model: 'm' }, {});
         return m;
       };
       await add('Pricing with Maya', '01', ['You', 'Maya'], ['Pricing']);
@@ -200,6 +208,21 @@ describe('MeetingsRepository', () => {
       const saved = await meetings.saveSpeakerNames(m.id, { You: { name: 'Me', by: 'user' } }, ['Me', 'Maya'], [['You', 'Me']]);
       expect(saved.speakers).toEqual(['Me', 'Maya']);
       expect((await meetings.getSummary(m.id))?.actionItems[0].owner).toBe('Me');
+    });
+
+    it('counts meetings and minutes per day in the user’s time zone', async () => {
+      // The meetings start at 10:00Z on Mar 1, 2 and 3. In Pacific/Kiritimati (UTC+14) that is midnight of
+      // the next day, so the Mar 1 meeting counts for Mar 2 there.
+      expect(await meetings.dailyStats(filterUser, '2026-03-01', '2026-03-04', 'UTC')).toEqual([
+        { date: '2026-03-01', count: 1, totalSec: 0 },
+        { date: '2026-03-02', count: 1, totalSec: 0 },
+        { date: '2026-03-03', count: 1, totalSec: 0 },
+      ]);
+      expect(await meetings.dailyStats(filterUser, '2026-03-02', '2026-03-04', 'Pacific/Kiritimati')).toEqual([
+        { date: '2026-03-02', count: 1, totalSec: 0 },
+        { date: '2026-03-03', count: 1, totalSec: 0 },
+      ]);
+      expect(await meetings.dailyStats(filterUser, '2026-04-01', '2026-05-01', 'UTC')).toEqual([]);
     });
 
     it('gives "You" a new name everywhere except where it was typed by hand', async () => {

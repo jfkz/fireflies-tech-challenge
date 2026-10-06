@@ -18,6 +18,7 @@ import { ApiRequestError } from '@/lib/api';
 import { stillPose } from '@/lib/avatar/pose';
 import { LISTENER, MEN } from '@/lib/avatar/styles';
 import { meetingsHref } from '@/lib/filters';
+import { formatDay, todayKey } from '@/lib/dates';
 import { formatMeetingDate } from '@/lib/format';
 import { summaryToMarkdown } from '@/lib/markdown';
 import { isProcessing, STATUS_QUIP } from '@/lib/status';
@@ -387,6 +388,7 @@ function FailedBanner({ meeting: m }: { meeting: MeetingDetail }) {
 function ActionItems({ meeting: m }: { meeting: MeetingDetail }) {
   const update = useUpdateMeeting(m.id);
   const items = m.summary?.actionItems ?? [];
+  useHighlightHashTarget(items.length > 0);
   const done = items.filter((a) => a.done).length;
   return (
     <Section title="Action items" action={items.length > 0 && <span className="text-sm font-extrabold text-ink-soft">{done} of {items.length} done</span>}>
@@ -411,7 +413,11 @@ function ActionItems({ meeting: m }: { meeting: MeetingDetail }) {
 function ActionItemRow({ item, onToggle }: { item: ActionItem; onToggle(next: boolean): void }) {
   const id = `ai-${item.id}`;
   return (
-    <li className="flex items-start gap-3">
+    // `task-<id>` is the anchor the tasks page links to; arriving there highlights the row for a moment.
+    <li
+      id={`task-${item.id}`}
+      className="-mx-2 flex scroll-mt-28 items-start gap-3 rounded-xl px-2 py-1 transition-colors duration-700 data-[highlight=true]:bg-sun-soft data-[highlight=true]:ring-2 data-[highlight=true]:ring-ink"
+    >
       <input
         id={id}
         type="checkbox"
@@ -424,12 +430,35 @@ function ActionItemRow({ item, onToggle }: { item: ActionItem; onToggle(next: bo
         {(item.owner || item.due) && (
           <span className="mt-1 flex flex-wrap gap-1.5 text-xs font-extrabold">
             {item.owner && <span className="rounded-full bg-paper px-2 py-0.5 text-ink">{item.owner}</span>}
-            {item.due && <span className="rounded-full bg-sun-soft px-2 py-0.5 text-ink">Due {item.due}</span>}
+            {item.due && (
+              <span className="rounded-full bg-sun-soft px-2 py-0.5 text-ink">
+                Due {item.due}
+                {item.dueDate && <span className="font-bold text-ink-soft"> · {formatDay(item.dueDate, todayKey())}</span>}
+              </span>
+            )}
           </span>
         )}
       </label>
     </li>
   );
+}
+
+/**
+ * The meeting loads after navigation, so the browser's own jump to `#task-…` finds
+ * nothing. Once the items are on the page, scroll to that one and flash it.
+ */
+function useHighlightHashTarget(ready: boolean) {
+  useEffect(() => {
+    if (!ready || !window.location.hash.startsWith('#task-')) return;
+    const el = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+    if (!el) return;
+    el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    el.dataset.highlight = 'true';
+    const off = setTimeout(() => {
+      el.dataset.highlight = 'false';
+    }, 2500);
+    return () => clearTimeout(off);
+  }, [ready]);
 }
 
 function TranscriptPanel({ meeting: m, segments }: { meeting: MeetingDetail; segments: ReturnType<typeof mergeSegments> }) {

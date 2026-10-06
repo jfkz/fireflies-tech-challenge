@@ -218,6 +218,17 @@ describe('MeetingView', () => {
     expect(within(transcript).getByText('Okay, pricing. Pro goes to 29.')).toBeInTheDocument();
   });
 
+  it('scrolls to and flashes the action item a task link points at, with its due date', async () => {
+    window.location.hash = '#task-a1';
+    setup();
+    const row = await screen.findByText('Write the launch email');
+    const li = row.closest('li')!;
+    await waitFor(() => expect(li).toHaveAttribute('data-highlight', 'true'));
+    expect(li).toHaveAttribute('id', 'task-a1');
+    expect(within(li).getByText(/Due Oct 30/)).toHaveTextContent('Due Oct 30 · Fri, Oct 30');
+    window.location.hash = '';
+  });
+
   it('toggles an action item with a PATCH', async () => {
     const api = setup();
     fireEvent.click(await screen.findByRole('checkbox', { name: /Write the launch email/ }));

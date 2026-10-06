@@ -78,7 +78,7 @@ describe('PipelineService.summarize', () => {
     t.meetings.findById.mockResolvedValue(m);
     t.meetings.getSegments.mockResolvedValue([seg('You', 0, 1, 'hallo')]);
     await expect(t.pipeline.summarize({ meetingId: m.id, run: 1 })).resolves.toBe('done');
-    expect(t.summarizer.summarize).toHaveBeenCalledWith({ segments: [seg('You', 0, 1, 'hallo')], language: 'de', ownerName: 'Ann', knownTopics: [] });
+    expect(t.summarizer.summarize).toHaveBeenCalledWith({ segments: [seg('You', 0, 1, 'hallo')], language: 'de', ownerName: 'Ann', knownTopics: [], meetingDate: m.startedAt });
     expect(t.storage.putJson).toHaveBeenCalledWith(expect.stringMatching(/summary-.*\.json$/), expect.objectContaining({ title: 'Specific title' }));
     expect(t.meetings.saveSummary).toHaveBeenCalledWith(
       m.id,

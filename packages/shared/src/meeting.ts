@@ -44,11 +44,17 @@ export const Segment = z
   .refine((s) => s.endMs >= s.startMs, { message: 'endMs must not be before startMs', path: ['endMs'] });
 export type Segment = z.infer<typeof Segment>;
 
+/** A calendar date, "2026-10-09". */
+export const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected a date like 2026-10-09');
+
 export const ActionItem = z.object({
   id: z.string(),
   text: z.string().min(1),
   owner: z.string().nullable(),
+  /** The deadline as it was said ("Friday", "end of month"). */
   due: z.string().nullable(),
+  /** The same deadline as a date, resolved against the meeting's date; null when none was given. */
+  dueDate: IsoDate.nullable().default(null),
   done: z.boolean(),
 });
 export type ActionItem = z.infer<typeof ActionItem>;
@@ -182,3 +188,50 @@ export const MeetingFacets = z.object({
   topics: z.array(FacetCount),
 });
 export type MeetingFacets = z.infer<typeof MeetingFacets>;
+
+// ---- tasks: action items from every meeting
+
+export const TaskItem = ActionItem.extend({
+  meeting: z.object({ id: z.string().uuid(), title: z.string(), startedAt: z.string().datetime() }),
+});
+export type TaskItem = z.infer<typeof TaskItem>;
+
+export const TaskPage = z.object({
+  items: z.array(TaskItem),
+  nextCursor: z.string().nullable(),
+});
+export type TaskPage = z.infer<typeof TaskPage>;
+
+export const ListTasksQuery = z.object({
+  /** open (default), done, or all. Open tasks come soonest due first, then those without a date. */
+  status: z.enum(['open', 'done', 'all']).default('open'),
+  /** Only tasks owned by this person (display name, exact). */
+  owner: z.string().trim().min(1).max(80).optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+export type ListTasksQuery = z.infer<typeof ListTasksQuery>;
+
+// ---- calendar: how much time went into meetings
+
+export const MeetingStatsQuery = z
+  .object({
+    from: IsoDate,
+    /** Exclusive. */
+    to: IsoDate,
+    /** IANA time zone the days are counted in, e.g. "Europe/Berlin". */
+    tz: z.string().min(1).max(64).default('UTC'),
+  })
+  .refine((v) => v.from < v.to, { message: '`from` must be before `to`', path: ['to'] })
+  .refine((v) => Date.parse(v.to) - Date.parse(v.from) <= 400 * 86_400_000, { message: 'At most 400 days at a time', path: ['to'] });
+export type MeetingStatsQuery = z.infer<typeof MeetingStatsQuery>;
+
+export const DayStats = z.object({ date: IsoDate, count: z.number().int().positive(), totalSec: z.number().int().nonnegative() });
+export type DayStats = z.infer<typeof DayStats>;
+
+/** Days with at least one meeting, oldest first. */
+export const MeetingStats = z.object({
+  tz: z.string(),
+  days: z.array(DayStats),
+});
+export type MeetingStats = z.infer<typeof MeetingStats>;

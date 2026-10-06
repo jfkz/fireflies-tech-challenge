@@ -116,6 +116,21 @@ describe('Mac flow: transcript + audio → summary', () => {
     expect(facets.topics).toEqual(expect.arrayContaining([{ value: 'Testing', count: 1 }]));
     expect(facets.speakers).toEqual(expect.arrayContaining([{ value: 'Maya', count: 1 }]));
 
+    // The action item is on the tasks page with its due date and meeting.
+    // (The account's demo meeting has tasks too; it was seeded on the first request.)
+    const tasks = (await h.http.get('/tasks').set(bearer(token)).expect(200)).body;
+    expect(tasks.items.filter((t: { meeting: { id: string } }) => t.meeting.id === created.id)).toEqual([
+      expect.objectContaining({ text: 'Check the fake summary', due: 'Friday', dueDate: '2026-10-09', done: false, meeting: expect.objectContaining({ id: created.id }) }),
+    ]);
+    await h.http.get('/tasks').query({ status: 'later' }).set(bearer(token)).expect(400);
+
+    // The calendar counts it on its day.
+    const day = ready.startedAt.slice(0, 10);
+    const next = new Date(Date.parse(day) + 86_400_000).toISOString().slice(0, 10);
+    const stats = (await h.http.get('/meetings/stats').query({ from: day, to: next, tz: 'UTC' }).set(bearer(token)).expect(200)).body;
+    expect(stats.days).toEqual([{ date: day, count: 1, totalSec: 5 }]);
+    await h.http.get('/meetings/stats').query({ from: day, to: next, tz: 'Nowhere/Land' }).set(bearer(token)).expect(400);
+
     // Rename a speaker by hand: it sticks, even through a reprocess.
     const renamed = await h.http.patch(`/meetings/${created.id}`).set(bearer(token)).send({ speakers: { Maya: 'Mia' } }).expect(200);
     expect(renamed.body.speakers).toEqual(['You', 'Mia']);
@@ -136,6 +151,8 @@ describe('Mac flow: transcript + audio → summary', () => {
       .expect(200);
     expect(patched.body.title).toBe('Zanzibar kickoff');
     expect(patched.body.summary.actionItems[0].done).toBe(true);
+    const done = (await h.http.get('/tasks').query({ status: 'done' }).set(bearer(token))).body.items;
+    expect(done.map((t: { id: string }) => t.id)).toContain(itemId);
 
     await h.http.post(`/meetings/${created.id}/reprocess`).set(bearer(token)).expect(200);
     const again = await waitForStatus(token, created.id, 'ready');

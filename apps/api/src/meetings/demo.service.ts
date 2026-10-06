@@ -5,6 +5,9 @@ import { displayNames, resolveSpeakerNames } from '../processing/speaker-names';
 import { DEMO_MEETING, DEMO_SEGMENTS } from './demo-meeting';
 import { MeetingsRepository } from './meetings.repository';
 
+/** "Thu, Oct 8": how the demo's deadlines read, as if someone said them. */
+const DUE_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
 @Injectable()
 export class DemoService {
   constructor(private readonly repo: MeetingsRepository) {}
@@ -35,7 +38,10 @@ export class DemoService {
       {
         summary: DEMO_MEETING.summary,
         keyTopics: DEMO_MEETING.keyTopics,
-        actionItems: DEMO_MEETING.actionItems.map((a) => ({ ...a, owner: a.owner && speakerName(a.owner, names) })),
+        actionItems: DEMO_MEETING.actionItems.map(({ dueInDays, ...a }) => {
+          const due = dueInDays === null ? null : new Date(startedAt.getTime() + dueInDays * 86_400_000);
+          return { ...a, owner: speakerName(a.owner, names), due: due && DUE_FORMAT.format(due), dueDate: due && due.toISOString().slice(0, 10) };
+        }),
         decisions: DEMO_MEETING.decisions,
         model: 'demo',
         inputTokens: null,

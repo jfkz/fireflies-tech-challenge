@@ -1,4 +1,4 @@
-import type { ActionItem, Segment } from '@boringtalks/shared';
+import type { Segment } from '@boringtalks/shared';
 
 /** Canned meeting every new account starts with, so the dashboard is never empty. No LLM involved. */
 export const DEMO_MEETING = {
@@ -16,12 +16,13 @@ export const DEMO_MEETING = {
     'Existing subscribers keep $19 for twelve months.',
     'Public launch moves from October 27 to November 3.',
   ],
+  /** Due dates are days after the demo meeting, so a new account always sees upcoming tasks. */
   actionItems: [
-    { id: 'demo-ai-1', text: 'Update the pricing page and the in-app paywall copy to $29', owner: 'Dana', due: 'Oct 30', done: false },
-    { id: 'demo-ai-2', text: 'Draft the announcement email for existing subscribers, including the 12-month price lock', owner: 'Leo', due: 'Oct 29', done: false },
-    { id: 'demo-ai-3', text: 'Run the billing migration against a copy of production and share the QA report', owner: 'You', due: 'Oct 31', done: false },
-    { id: 'demo-ai-4', text: 'Tell support about the new launch date', owner: 'You', due: null, done: true },
-  ] satisfies ActionItem[],
+    { id: 'demo-ai-1', text: 'Update the pricing page and the in-app paywall copy to $29', owner: 'Dana', dueInDays: 3, done: false },
+    { id: 'demo-ai-2', text: 'Draft the announcement email for existing subscribers, including the 12-month price lock', owner: 'Leo', dueInDays: 2, done: false },
+    { id: 'demo-ai-3', text: 'Run the billing migration against a copy of production and share the QA report', owner: 'You', dueInDays: 4, done: false },
+    { id: 'demo-ai-4', text: 'Tell support about the new launch date', owner: 'You', dueInDays: null, done: true },
+  ] satisfies { id: string; text: string; owner: string; dueInDays: number | null; done: boolean }[],
 };
 
 const lines: Array<[string, number, string]> = [
