@@ -12,13 +12,13 @@ export interface SpeechBubbleProps {
   marker?: string;
 }
 
-// Talking Heads' BubbleShape at scale 1: corner radius 22, tail 26×22.
+// The Mac app's BubbleShape at scale 1: corner radius 22, tail 26×22.
 const R = 22;
 const TW = 26;
 const TH = 22;
 
 /**
- * The comic speech bubble from Talking Heads: a rounded white body with an ink
+ * The comic speech bubble: a rounded white body with an ink
  * outline and a curved tail at a bottom corner. Pure CSS + a small SVG for the
  * tail, so it renders on the server and wraps text naturally.
  */

@@ -18,7 +18,7 @@ final class LiveTranscript {
 
     private(set) var lines: [Line] = []
     private(set) var previews: [AudioChannel: Line] = [:]
-    /// When each side last got words; drives the talking heads.
+    /// When each side last got words; drives the cartoon heads.
     @ObservationIgnored let clocks: [AudioChannel: SpeechClock] = [.microphone: SpeechClock(), .system: SpeechClock()]
     @ObservationIgnored private var labeler = SpeakerLabeler()
     /// The last speaker heard on system audio, for words whose voice isn't known yet.

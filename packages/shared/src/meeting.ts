@@ -71,6 +71,18 @@ export const MeetingSummary = z.object({
 });
 export type MeetingSummary = z.infer<typeof MeetingSummary>;
 
+/** Where a search hit a meeting: the first matching transcript line, or else its notes or title. */
+export const SearchMatch = z.object({
+  in: z.enum(['transcript', 'notes', 'title', 'people']),
+  /** Text around the match; matched words are wrapped in ⟦ ⟧. */
+  snippet: z.string(),
+  speaker: z.string().nullable(),
+  startMs: z.number().int().nonnegative().nullable(),
+  /** Transcript lines that match. */
+  hits: z.number().int().nonnegative(),
+});
+export type SearchMatch = z.infer<typeof SearchMatch>;
+
 /** One row of the meeting list. */
 export const MeetingListItem = z.object({
   id: z.string().uuid(),
@@ -86,6 +98,8 @@ export const MeetingListItem = z.object({
   topics: z.array(z.string()),
   actionItemCount: z.number().int().nonnegative(),
   hasAudio: z.boolean(),
+  /** With a search: where the meeting matched, with the words marked ⟦like this⟧. */
+  match: SearchMatch.nullable().optional(),
 });
 export type MeetingListItem = z.infer<typeof MeetingListItem>;
 

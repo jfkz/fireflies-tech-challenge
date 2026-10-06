@@ -13,7 +13,7 @@ its limits. Paths are relative to `apps/web/src`.
 
 ### Landing page `/`
 
-**What.** A long, funny scroll story with the Talking Heads characters, then the
+**What.** A long, funny scroll story with a cast of cartoon heads, then the
 download and sign-up calls to action.
 
 1. *The meeting* (hero): four heads in a meeting room trade deadpan clichés
@@ -81,7 +81,9 @@ email, sign-out (Settings). A sleepy receptionist head wakes up when you type,
 looks away (“I’m not looking. Promise.”) while you type the password, looks sad
 on errors and cheers on success. Firebase error codes become plain sentences.
 `?next=` is honoured (same-site paths only) and carried between the sign-in and
-sign-up forms.
+sign-up forms. Google sign-in runs through the site's own domain (`/__/auth/*`, proxied to
+Firebase by `next.config.ts`; `ownAuthDomain` in `lib/firebase.ts`), so Google's account picker
+says “to continue to boringtalks.lol” instead of the Firebase project's address.
 
 **Where.** `app/(auth)/*`, `components/auth/AuthForm.tsx`, `components/auth/AuthMood.tsx`,
 `components/providers/AuthProvider.tsx`, `lib/firebase.ts`, `lib/auth-errors.ts`.
@@ -98,7 +100,11 @@ server-side session. The Auth emulator is used when
 speaker chips (each speaker gets a stable head and colour; “You” is always the
 microphone head), a status chip (animated while recording / transcribing /
 summarizing, red when failed) and the action-item count. Debounced search (300 ms)
-over titles, summaries and transcripts via `q`, cursor pagination with “Load more”,
+over titles, notes, action items, people, topics and transcripts via `q`, matching
+words as you type them (“pric” finds “pricing”), with “quoted phrases” and -exclusions. Each
+result shows where it matched with the words highlighted: the first matching transcript line with
+who said it, when, and how many lines match (a click opens the meeting at that moment), or the
+notes, title or people. Press **/** anywhere on the list to search. cursor pagination with “Load more”,
 an empty state and a “nothing matches” state. Statuses refresh every 5 s while
 anything is still processing.
 
@@ -129,6 +135,10 @@ account and its demo meeting on first visit.
 - Failed: the error from the server and a **Reprocess** button.
 - Summary, key topics, action items (checkbox toggles are optimistic `PATCH`es;
   owner and due date shown), decisions, and which model wrote it.
+- Transcript with **Find in transcript**: highlights every line containing the words, “2 of 7”
+  with ↑/↓ (Enter / Shift+Enter). Opened from a search result (`?q=…&t=…`), it is filled in,
+  scrolls to the matching line and cues the audio there without playing.
+- Key topics under the transcript; “Written by AI” under the notes.
 - Transcript: consecutive phrases by the same speaker merged into turns
   (`mergeSegments`), speaker colour dot, timestamps (`formatTimestamp`).
 - Audio player when the meeting has audio (presigned `audioUrl`): the segment
@@ -327,7 +337,7 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   arrive, and the transcript with speaker labels and times; the phrase being spoken shows
   grey.
 - **Where:** `BoringTalks/UI/LiveTranscriptWindow.swift`, `BoringTalks/Recording/LiveTranscript.swift`,
-  `BoringTalks/Avatar/AvatarView.swift` (from Talking Heads, emotions removed).
+  `BoringTalks/Avatar/AvatarView.swift` (emotions removed).
 - **Limits:** keeps the latest 300 lines on screen (the upload has all of them).
 
 ### Upload queue

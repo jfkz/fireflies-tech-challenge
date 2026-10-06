@@ -121,8 +121,17 @@ The speakers and topics of the user's meetings, most frequent first (24 of each)
 Newest first (`started_at desc, id desc`), keyset pagination. `limit` 1–100 (default 20). Pass the
 returned `nextCursor` (opaque) to get the next page; it is `null` on the last page.
 
-`q` is a full-text search (Postgres `websearch_to_tsquery('simple', q)`) over titles, descriptions
-and transcript text: `pricing launch`, `"exact phrase"`, `pricing -draft`, `budget or pricing`.
+`q` searches titles, descriptions, the notes (summary, key topics, decisions, action items and
+their owners), speakers, topic tags and every transcript line. Each word matches as the start of a
+word, so results appear while typing (`pric` finds "pricing"); `"exact phrase"`, `-word` to leave
+a word out, and `budget or pricing` work too. Words are only letters and digits, and the query is
+built from them (`to_tsquery('simple', …)`), so its syntax can't be injected.
+
+With `q`, every item has a `match` saying where it matched, with the matched words in `⟦ ⟧`:
+```json
+"match": { "in": "transcript", "snippet": "so we agreed ⟦pricing⟧ goes to 29", "speaker": "Dana", "startMs": 247000, "hits": 3 }
+```
+`in` is `transcript` (the first matching line; `hits` counts matching lines), `notes`, `title` or `people`.
 
 Filters (all optional, combined with AND): `speaker` (a display name, exact), `topic` (a tag,
 exact), `from` / `to` (ISO date-times with offset; `from` inclusive, `to` exclusive).

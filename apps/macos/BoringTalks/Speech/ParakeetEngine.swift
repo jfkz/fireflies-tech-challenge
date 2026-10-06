@@ -2,7 +2,6 @@ import FluidAudio
 import enum FluidAudio.Language
 import Foundation
 
-// From Talking Heads.
 
 /// NVIDIA Parakeet TDT 0.6B v3 in moondream's "Ultra" post-training, run on the
 /// Neural Engine by FluidAudio. 25 European languages, punctuation built in, and it

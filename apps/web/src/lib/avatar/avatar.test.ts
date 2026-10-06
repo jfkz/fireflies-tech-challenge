@@ -76,7 +76,7 @@ describe('pose', () => {
 });
 
 describe('styles', () => {
-  it('ports all ten Talking Heads styles', () => {
+  it('ports all ten head styles', () => {
     expect(ALL_STYLES).toHaveLength(10);
     for (const s of ALL_STYLES) expect(s.skin).toMatch(/^#[0-9a-f]{6}$/);
   });

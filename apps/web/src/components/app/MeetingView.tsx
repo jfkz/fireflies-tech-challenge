@@ -1,15 +1,16 @@
 'use client';
 
-import { formatDuration, formatTimestamp, mergeSegments, type ActionItem, type MeetingDetail, type MeetingStatus } from '@boringtalks/shared';
+import { formatDuration, formatTimestamp, mergeSegments, segmentAt, type ActionItem, type MeetingDetail, type MeetingStatus } from '@boringtalks/shared';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from '@/components/avatar/Avatar';
 import { SpeechBubble } from '@/components/avatar/SpeechBubble';
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { SpeakerChip, speakerColor } from '@/components/ui/SpeakerChip';
+import { Marked } from '@/components/ui/Marked';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { TopicPill } from '@/components/ui/TopicPill';
 import { useDeleteMeeting, useMeeting, useReprocessMeeting, useUpdateMeeting } from '@/hooks/queries';
@@ -20,6 +21,7 @@ import { LISTENER, MEN } from '@/lib/avatar/styles';
 import { meetingsHref } from '@/lib/filters';
 import { formatDay, todayKey } from '@/lib/dates';
 import { formatMeetingDate } from '@/lib/format';
+import { hasMatch, highlightParts, searchTerms } from '@/lib/search';
 import { summaryToMarkdown } from '@/lib/markdown';
 import { isProcessing, STATUS_QUIP } from '@/lib/status';
 
@@ -61,17 +63,6 @@ function MeetingDetailView({ meeting: m }: { meeting: MeetingDetail }) {
                     ))}
                 </div>
               </Section>
-              {m.summary.keyTopics.length > 0 && (
-                <Section title="Key topics">
-                  <ul className="flex flex-wrap gap-2">
-                    {m.summary.keyTopics.map((t) => (
-                      <li key={t} className="rounded-full border-2 border-ink bg-call-light px-3 py-1 text-sm font-extrabold">
-                        {t}
-                      </li>
-                    ))}
-                  </ul>
-                </Section>
-              )}
               <ActionItems meeting={m} />
               {m.summary.decisions.length > 0 && (
                 <Section title="Decisions">
@@ -87,7 +78,7 @@ function MeetingDetailView({ meeting: m }: { meeting: MeetingDetail }) {
                   </ul>
                 </Section>
               )}
-              {m.summary.model && <p className="text-xs font-bold text-ink-soft/80">Written by {m.summary.model}. It can be wrong; the transcript is the source.</p>}
+              {m.summary.model && <p className="text-xs font-bold text-ink-soft/80">Written by AI. It can be wrong; the transcript is the source.</p>}
             </>
           ) : (
             !processing && (
@@ -97,7 +88,21 @@ function MeetingDetailView({ meeting: m }: { meeting: MeetingDetail }) {
             )
           )}
         </div>
-        <TranscriptPanel meeting={m} segments={segments} />
+        {/* Transcript, then the key topics under it; together they stay in view while the summary scrolls. */}
+        <div className="space-y-6 lg:sticky lg:top-24">
+          <TranscriptPanel meeting={m} segments={segments} />
+          {m.summary && m.summary.keyTopics.length > 0 && (
+            <Section title="Key topics">
+              <ul className="flex flex-wrap gap-2">
+                {m.summary.keyTopics.map((t) => (
+                  <li key={t} className="rounded-full border-2 border-ink bg-call-light px-3 py-1 text-sm font-extrabold">
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -465,16 +470,45 @@ function TranscriptPanel({ meeting: m, segments }: { meeting: MeetingDetail; seg
   const { ref, activeIndex, seek } = useAudioSync(segments);
   const list = useRef<HTMLOListElement>(null);
   const hasAudio = !!m.audioUrl;
+  const params = useSearchParams();
+  // Arriving from a search: the words to find, and the moment that matched.
+  const [find, setFind] = useState(() => params.get('q') ?? '');
+  const startAt = Number(params.get('t') ?? NaN);
+  const terms = useMemo(() => searchTerms(find), [find]);
+  const matches = useMemo(() => (terms.length ? segments.flatMap((s, i) => (hasMatch(s.text, terms) ? [i] : [])) : []), [segments, terms]);
+  const [current, setCurrent] = useState(-1);
+  const focused = matches.length ? matches[Math.min(Math.max(current, 0), matches.length - 1)] : -1;
+
+  const scrollTo = useCallback((index: number) => {
+    const el = list.current?.querySelector<HTMLElement>(`[data-index="${index}"]`);
+    el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, []);
 
   // Keep the playing segment in view inside the transcript box.
   useEffect(() => {
-    if (activeIndex < 0) return;
-    const el = list.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
-    el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
-  }, [activeIndex]);
+    if (activeIndex >= 0) scrollTo(activeIndex);
+  }, [activeIndex, scrollTo]);
+
+  // Opened at a moment (?t=): show that line and cue the audio there, without playing.
+  const cued = useRef(false);
+  useEffect(() => {
+    if (cued.current || segments.length === 0) return;
+    cued.current = true;
+    const index = Number.isFinite(startAt) ? segmentAt(segments, startAt) : matches[0];
+    if (index === undefined || index < 0) return;
+    scrollTo(index);
+    if (Number.isFinite(startAt) && hasAudio) seek(segments[index].startMs, false);
+  }, [segments, startAt, matches, scrollTo, seek, hasAudio]);
+
+  const step = (by: number) => {
+    if (matches.length === 0) return;
+    const next = (Math.max(current, 0) + by + matches.length) % matches.length;
+    setCurrent(next);
+    scrollTo(matches[next]);
+  };
 
   return (
-    <section className="sticker overflow-hidden lg:sticky lg:top-24" aria-label="Transcript">
+    <section className="sticker overflow-hidden" aria-label="Transcript">
       <div className="border-b-[2.5px] border-ink bg-paper p-4">
         <h2 className="font-display text-2xl leading-none">Transcript</h2>
         {hasAudio ? (
@@ -484,13 +518,52 @@ function TranscriptPanel({ meeting: m, segments }: { meeting: MeetingDetail; seg
         ) : (
           <p className="mt-2 text-sm font-semibold text-ink-soft">No audio was kept for this meeting, only the text.</p>
         )}
+        {segments.length > 0 && (
+          <div className="mt-3 flex items-center gap-2">
+            <label htmlFor="find-in-transcript" className="sr-only">
+              Find in transcript
+            </label>
+            <input
+              id="find-in-transcript"
+              type="search"
+              className="field py-1.5 text-sm"
+              placeholder="Find in transcript"
+              value={find}
+              autoComplete="off"
+              onChange={(e) => {
+                setFind(e.target.value);
+                setCurrent(-1);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  step(e.shiftKey ? -1 : current < 0 ? 0 : 1);
+                }
+              }}
+            />
+            {terms.length > 0 && (
+              <>
+                <span className="shrink-0 text-xs font-extrabold text-ink-soft tabular-nums" aria-live="polite" data-testid="find-count">
+                  {matches.length === 0 ? 'No matches' : `${Math.max(current, 0) + 1} of ${matches.length}`}
+                </span>
+                <button type="button" className="btn btn-secondary btn-sm px-2.5" onClick={() => step(-1)} disabled={matches.length === 0} aria-label="Previous match">
+                  ↑
+                </button>
+                <button type="button" className="btn btn-secondary btn-sm px-2.5" onClick={() => step(1)} disabled={matches.length === 0} aria-label="Next match">
+                  ↓
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {segments.length === 0 ? (
         <p className="p-5 font-semibold text-ink-soft">{isProcessing(m.status) ? 'The transcript shows up here once it’s ready.' : 'Nobody said anything. A true miracle.'}</p>
       ) : (
-        <ol ref={list} className="max-h-[70svh] space-y-1 overflow-y-auto p-3" data-testid="transcript">
+        <ol ref={list} className="max-h-[60svh] space-y-1 overflow-y-auto p-3" data-testid="transcript">
           {segments.map((s, i) => {
             const active = i === activeIndex;
+            const found = i === focused;
             const content = (
               <>
                 <span className="flex items-baseline gap-2">
@@ -500,23 +573,26 @@ function TranscriptPanel({ meeting: m, segments }: { meeting: MeetingDetail; seg
                   </span>
                   <span className="text-xs font-bold text-ink-soft tabular-nums">{formatTimestamp(s.startMs)}</span>
                 </span>
-                <span className="mt-0.5 block leading-relaxed font-semibold text-ink">{s.text}</span>
+                <span className="mt-0.5 block leading-relaxed font-semibold text-ink">
+                  <Marked parts={highlightParts(s.text, terms)} />
+                </span>
               </>
             );
+            const tone = active ? 'border-ink bg-sun-soft' : found ? 'border-ink/50 bg-white' : 'border-transparent hover:bg-paper';
             return (
-              <li key={`${s.startMs}-${i}`} data-index={i} data-active={active || undefined}>
+              <li key={`${s.startMs}-${i}`} data-index={i} data-active={active || undefined} data-found={found || undefined}>
                 {hasAudio ? (
                   <button
                     type="button"
                     onClick={() => seek(s.startMs)}
-                    className={`w-full rounded-2xl border-2 px-3 py-2 text-left transition-colors ${active ? 'border-ink bg-sun-soft' : 'border-transparent hover:bg-paper'}`}
+                    className={`w-full rounded-2xl border-2 px-3 py-2 text-left transition-colors ${tone}`}
                     aria-current={active ? 'true' : undefined}
                     aria-label={`Play from ${formatTimestamp(s.startMs)}: ${s.speaker}`}
                   >
                     {content}
                   </button>
                 ) : (
-                  <div className="rounded-2xl px-3 py-2">{content}</div>
+                  <div className={`rounded-2xl border-2 px-3 py-2 ${tone}`}>{content}</div>
                 )}
               </li>
             );

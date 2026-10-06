@@ -11,8 +11,8 @@ BoringTalks API, which writes the title, summary and action items.
   (pyannote) turn detection. No audio is sent to any speech service.
 - Uploads go through a persistent queue that survives going offline and relaunching.
 
-The speech and voice code comes from the author's app **Talking Heads**
-(`~/Documents/local/talking-head`), trimmed to what a meeting recorder needs.
+The speech and voice code comes from the author's earlier live-transcription app,
+trimmed to what a meeting recorder needs.
 
 ## Requirements
 
@@ -161,7 +161,7 @@ Stop ─► finish transcribers ─► SegmentAssembler ─► PendingMeeting �
 
 ### Accuracy
 
-From Talking Heads, which shares this code (its `tools/voices` benchmark on 40
+From the app this code comes from (a benchmark on 40
 LibriSpeech speakers): a single 1–5 s phrase is attributed to the wrong person **3.2 %**
 of the time (22 % with the pyannote embeddings used before WeSpeaker); in simulated
 conversations of 2–4 people **3.4 %** of phrases went to the wrong speaker; with 3 people
@@ -180,7 +180,7 @@ cuts) the result was the same.
 | | |
 |---|---|
 | `BoringTalksKit/` | pure logic, unit-tested: `APIClient` + Codable mirrors of `packages/shared`, `PKCE`, `DeviceLink`/`DeviceAuthenticator`, `KeychainStore`, `UploadQueue`/`PendingMeeting`, `SegmentAssembler`/`SpeakerLabeler`, `ChannelTimeline`/`AudioMixer`, `RecordingJanitor`, `AppConfig` |
-| `BoringTalks/Speech/` | from Talking Heads: `AudioCapture` (process tap, mic), `ParakeetEngine`, `PhraseTranscriber` (now with phrase times), `VoiceAnalysis` (`VoiceRegistry`, `VoiceIdentifier`, `VoiceEmbedder`), `VoiceTraits`, `LevelMeter`; plus `SpeechModels` (download/progress) |
+| `BoringTalks/Speech/` | shared speech code: `AudioCapture` (process tap, mic), `ParakeetEngine`, `PhraseTranscriber` (now with phrase times), `VoiceAnalysis` (`VoiceRegistry`, `VoiceIdentifier`, `VoiceEmbedder`), `VoiceTraits`, `LevelMeter`; plus `SpeechModels` (download/progress) |
 | `BoringTalks/Recording/` | `MeetingRecorder`, `RecordingChannel`, `RecordingWriter` (AAC), `LiveTranscript`, `FileTranscriber` (`--transcribe`) |
 | `BoringTalks/UI/`, `Avatar/`, `App/` | menu-bar window, settings, live transcript panel, the cartoon head and the icon, `AppModel` |
 | `BoringTalksTests/` | XCTest: PKCE (RFC 7636 vector), callback parsing, sign-in, Keychain, API encoding/decoding against JSON fixtures, upload queue state machine with a `URLProtocol` stub, segment assembly, timeline, mixer, janitor |

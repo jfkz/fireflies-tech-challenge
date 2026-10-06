@@ -1,6 +1,6 @@
 import SwiftUI
 
-// The cartoon head from Talking Heads, without emotions and music: it blinks,
+// The cartoon head, without emotions and music: it blinks,
 // bobs, and its mouth opens on each syllable while its words come in. BoringTalks
 // adds a sleepy face for the icon.
 

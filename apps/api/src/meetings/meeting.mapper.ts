@@ -1,9 +1,9 @@
-import { applySpeakerNames, type MeetingDetail, type MeetingListItem, type Segment } from '@boringtalks/shared';
+import { applySpeakerNames, type MeetingDetail, type MeetingListItem, type SearchMatch, type Segment } from '@boringtalks/shared';
 import type { MeetingRow } from '../db/schema';
 import { displayNames } from '../processing/speaker-names';
 import type { SummaryWithItems } from './meetings.repository';
 
-export function toListItem(row: MeetingRow, actionItemCount: number): MeetingListItem {
+export function toListItem(row: MeetingRow, actionItemCount: number, match?: SearchMatch | null): MeetingListItem {
   return {
     id: row.id,
     title: row.title,
@@ -16,6 +16,7 @@ export function toListItem(row: MeetingRow, actionItemCount: number): MeetingLis
     topics: row.topics,
     actionItemCount,
     hasAudio: row.hasAudio,
+    ...(match !== undefined ? { match } : {}),
   };
 }
 

@@ -3,7 +3,7 @@ import AVFoundation
 import BoringTalksKit
 import os
 
-// From Talking Heads, with the time of every phrase kept: a meeting transcript
+// With the time of every phrase kept: a meeting transcript
 // needs to know when each phrase was said, not only what and by whom.
 
 /// A speech model that transcribes a whole phrase at a time.

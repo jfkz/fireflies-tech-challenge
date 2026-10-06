@@ -6,7 +6,7 @@ import struct FluidAudio.DiarizerModels
 import SpeakerKit
 import os
 
-// From Talking Heads, without the avatar genders: who said a phrase.
+// Who said a phrase.
 
 /// Who said a phrase, as far as the transcriber can tell.
 struct SpeakerTag: Equatable, Sendable {
@@ -172,7 +172,7 @@ struct VoiceSample: Sendable {
 
 /// Remembers the voices heard on the call and recognizes them again.
 ///
-/// Who is who comes from WeSpeaker embeddings. Talking Heads fitted the thresholds
+/// Who is who comes from WeSpeaker embeddings. The thresholds were fitted
 /// on 514 clips of 1.2–5 s from 40 LibriSpeech speakers: on one such clip a voice
 /// is mistaken 3.2 % of the time, and in simulated conversations of 2–4 people
 /// 3.4 % of phrases went to the wrong speaker.

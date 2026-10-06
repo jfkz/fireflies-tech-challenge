@@ -96,6 +96,18 @@ describe('MeetingsRepository', () => {
     expect((await meetings.list(userId, { cursor: null, limit: 10, q: 'cluster' })).map((r) => r.id)).toEqual([m.id]);
     expect(await meetings.list(userId, { cursor: null, limit: 10, q: 'nonexistentword' })).toEqual([]);
 
+    // Prefixes match while typing, and every result says where it matched.
+    const typing = await meetings.list(userId, { cursor: null, limit: 10, q: 'kuber' });
+    expect(typing.map((r) => r.id)).toEqual([m.id]);
+    expect(typing[0].match).toEqual({ in: 'transcript', snippet: '⟦Kubernetes⟧ migration is blocked', speaker: 'You', startMs: 0, hits: 1 });
+    // Action items (and the rest of the notes) are searchable too.
+    expect((await meetings.list(userId, { cursor: null, limit: 10, q: 'unblock' }))[0].match).toMatchObject({ in: 'notes' });
+    expect((await meetings.list(userId, { cursor: null, limit: 10, q: '"infra sync"' }))[0].match).toMatchObject({ in: 'title', snippet: expect.stringContaining('⟦Infra⟧ ⟦sync⟧') });
+    expect((await meetings.list(userId, { cursor: null, limit: 10, q: 'Bo' }))[0].match).toMatchObject({ in: 'people', snippet: 'You, ⟦Bo⟧' });
+    expect(await meetings.list(userId, { cursor: null, limit: 10, q: 'kubernetes -blocked' })).toEqual([]);
+    expect(await meetings.list(userId, { cursor: null, limit: 10, q: '!!!' })).toEqual([]);
+    expect((await meetings.list(userId, { cursor: null, limit: 10 }))[0].match).toBeNull();
+
     expect(await meetings.setActionItemDone(m.id, 'a1', true)).toBe(true);
     expect(await meetings.setActionItemDone(m.id, 'nope', true)).toBe(false);
     expect((await meetings.getSummary(m.id))?.actionItems[0].done).toBe(true);

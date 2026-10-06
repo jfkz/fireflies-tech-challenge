@@ -1,5 +1,5 @@
 /**
- * Gibberish voices for the landing page's talking heads ("animalese"): every
+ * Gibberish voices for the landing page's cartoon heads ("animalese"): every
  * letter of a speech bubble becomes a short pitched blip, timed to match the
  * bubble's typing speed so sound, mouth and text move together.
  *

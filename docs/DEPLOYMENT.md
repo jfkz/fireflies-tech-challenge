@@ -36,6 +36,13 @@ Each deploy run:
 | Object storage | Cloudflare R2 bucket `boringtalks` | `prod/` | `dev/` |
 | DMGs | same bucket, `downloads/`, served at `download.boringtalks.lol` | `downloads/` → `/` | `downloads/dev/` → `/dev/` |
 | Auth | Firebase project `boringtalks-fe45f` (Email/Password, Google) | shared | shared |
+
+Google sign-in uses the site's own domain as Firebase's auth domain: `next.config.ts` proxies
+`/__/auth/*` and `/__/firebase/*` to `boringtalks-fe45f.firebaseapp.com`, and the OAuth client
+"Web client (auto created by Google Service)" in Google Cloud lists
+`https://boringtalks.lol/__/auth/handler` and `https://dev.boringtalks.lol/__/auth/handler` as
+authorized redirect URIs. A new domain needs its handler added there first, or Google answers
+`redirect_uri_mismatch`.
 | AI | Vercel AI Gateway (team `jfkz0`) | key `boringtalks-worker-prod` | key `boringtalks-worker-dev` |
 | Email | Resend, domain `send.boringtalks.lol` | | allow-listed recipients only |
 | DNS | Cloudflare zone `boringtalks.lol`, all records DNS-only | | |

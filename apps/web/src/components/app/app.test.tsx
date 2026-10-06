@@ -185,6 +185,21 @@ describe('MeetingsList', () => {
     expect(nav.router.push).toHaveBeenLastCalledWith('/meetings', { scroll: false });
   });
 
+  it('shows where a search matched, linking to that moment, and focuses search with /', async () => {
+    const a = meeting({ id: '00000000-0000-4000-8000-000000000001' });
+    const hit = { ...a, actionItemCount: 0, match: { in: 'transcript' as const, snippet: 'we agreed ⟦pricing⟧ is fine', speaker: 'Maya', startMs: 247_000, hits: 3 } };
+    const listMeetings = vi.fn(async ({ q }: { q?: string }) => ({ items: [q ? hit : { ...a, actionItemCount: 0 }], nextCursor: null }));
+    renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), listMeetings: listMeetings as never }) }) });
+    await screen.findByRole('link', { name: /Pricing review/ });
+    fireEvent.keyDown(document.body, { key: '/' });
+    expect(screen.getByLabelText('Search meetings')).toHaveFocus();
+    fireEvent.change(screen.getByLabelText('Search meetings'), { target: { value: 'pric' } });
+    const snippet = await screen.findByTestId('search-match');
+    expect(snippet).toHaveTextContent('SaidMaya4:07· 3 mentions“we agreed pricing is fine”');
+    expect(within(snippet).getByText('pricing').tagName).toBe('MARK');
+    expect(snippet).toHaveAttribute('href', `/meetings/${a.id}?q=pric&t=247000`);
+  });
+
   it('says what was filtered when nothing matches', async () => {
     nav.search = new URLSearchParams('speaker=Maya&topic=Hiring');
     renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), listMeetings: vi.fn(async () => page([])) }) }) });
@@ -227,6 +242,20 @@ describe('MeetingView', () => {
     expect(li).toHaveAttribute('id', 'task-a1');
     expect(within(li).getByText(/Due Oct 30/)).toHaveTextContent('Due Oct 30 · Fri, Oct 30');
     window.location.hash = '';
+  });
+
+  it('finds words in the transcript, opened from a search', async () => {
+    nav.search = new URLSearchParams('q=pricing');
+    setup();
+    const count = await screen.findByTestId('find-count');
+    const transcript = screen.getByTestId('transcript');
+    const marks = transcript.querySelectorAll('mark');
+    expect(marks.length).toBeGreaterThan(0);
+    expect(count).toHaveTextContent(/^1 of \d+$/);
+    fireEvent.change(screen.getByLabelText('Find in transcript'), { target: { value: 'zebra' } });
+    expect(screen.getByTestId('find-count')).toHaveTextContent('No matches');
+    fireEvent.change(screen.getByLabelText('Find in transcript'), { target: { value: '' } });
+    expect(screen.queryByTestId('find-count')).toBeNull();
   });
 
   it('toggles an action item with a PATCH', async () => {

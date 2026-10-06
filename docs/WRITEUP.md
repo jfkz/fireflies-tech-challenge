@@ -11,12 +11,12 @@ Submission for the "Clone the Fireflies.ai app" technical challenge.
   - Transcription → on the Mac (Parakeet, speaker-labelled); Whisper on the server for browser audio
   - Summary & action items → server worker with Claude Haiku 4.5: title, description, summary, key
     topics, action items with owners and due dates, decisions
-  - User interface → Next.js dashboard + Mac app; landing page with talking heads
+  - User interface → Next.js dashboard + Mac app; landing page with cartoon heads
 
 ## The idea
 
 Fireflies sends a bot into your call and transcribes on its servers. That is the expensive part of
-the product: every minute of audio costs money. I already had **Talking Heads**, a Mac app I wrote
+the product: every minute of audio costs money. I already had a Mac app of my own
 that captures system audio and the microphone, transcribes live on the Neural Engine and tells
 voices apart. So BoringTalks moves transcription to the user's Mac, where it is free, and keeps
 the server for what really needs a server: describing the meeting, storing it, and showing it
@@ -47,12 +47,12 @@ server-side speech-to-text. Numbers in [COSTS.md](COSTS.md).
 
 ## What's in the box
 
-- **Mac app:** menu bar, Start/Stop, live transcript window with talking heads, offline-safe upload
+- **Mac app:** menu bar, Start/Stop, live transcript window with cartoon heads, offline-safe upload
   queue that resumes after relaunch, browser sign-in, model download progress, settings.
 - **Backend:** NestJS API + worker, Postgres, Redis, R2, AI Gateway (Haiku 4.5, Whisper), Resend
   emails ("your meeting is ready" with the summary and action items), per-user rate limits,
   idempotent creates, full-text search, health checks.
-- **Web:** funny parallax landing page with the Talking Heads characters ported to SVG, DMG
+- **Web:** funny parallax landing page with cartoon heads drawn in SVG, DMG
   download, sign-up/sign-in, meeting list with search, meeting page (summary, topics, action items,
   decisions, transcript synced to audio), browser recorder, Mac connect page, settings.
 - **Engineering:** monorepo (pnpm + Turborepo), CI with coverage gates and e2e suites, deploys on
@@ -72,8 +72,7 @@ server-side speech-to-text. Numbers in [COSTS.md](COSTS.md).
 
 ## Trade-offs and what I'd do next
 
-- **macOS 26 only** (Core Audio process taps and the current speech stack). A Windows build of
-  Talking Heads exists as a guide; a Chrome extension could cover web meetings.
+- **macOS 26 only** (Core Audio process taps and the current speech stack). A Chrome extension could cover web meetings.
 - **No live streaming to the server:** the transcript uploads when the meeting ends. Next: stream
   segments during long meetings so the summary is ready seconds after hanging up.
 - **Server transcription has no diarization** (single "Speaker 1"); fine for the fallback.

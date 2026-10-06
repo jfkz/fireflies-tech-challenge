@@ -1,4 +1,3 @@
-// From Talking Heads.
 import AVFoundation
 import Accelerate
 import os

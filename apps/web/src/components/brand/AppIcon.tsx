@@ -3,7 +3,7 @@ import { stillPose } from '@/lib/avatar/pose';
 import { INK, MEN, WOMEN } from '@/lib/avatar/styles';
 
 /**
- * The Talking Heads app icon (MarketingArt.swift `IconView`), redrawn in SVG:
+ * The app icon, drawn in SVG:
  * two heads in a periwinkle rounded square, one of them mid-sentence.
  */
 export function AppIcon({ className, title }: { className?: string; title?: string }) {
