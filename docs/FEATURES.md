@@ -120,6 +120,9 @@ here”. Presigned audio URLs expire server-side; reloading the page fetches a n
   **Discard**. Saving creates the meeting (`source: browser`), gets a presigned
   URL, PUTs the audio straight to storage with a progress bar, calls `complete`,
   and opens the meeting page. A failed upload keeps the recording for “Try again”.
+- *Microphone picker*: once the site may use the microphone, a **Microphone** menu
+  lists the inputs (e.g. the MacBook mic next to a Bluetooth headset); the choice
+  is remembered in this browser.
 - *Upload*: drag and drop or choose a file; accepts the shared
   `AUDIO_CONTENT_TYPES` (M4A, MP4, MP3, WAV, WebM, OGG; type inferred from the
   extension when the browser gives none) up to `MAX_AUDIO_BYTES` (200 MB);

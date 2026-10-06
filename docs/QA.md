@@ -81,7 +81,8 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 5.3 | **Save and summarize**. | Progress bar (creating, uploading with %, handing over), then the meeting page with the processing banner; minutes later a summary written from what you said. |
 | 5.4 | Block the microphone in the browser and press Start. | Plain explanation of how to allow it; nothing uploaded. |
 | 5.5 | Chrome: tick **Also capture a tab**, pick a tab playing a video, tick “Share tab audio”. | Both your voice and the tab are in the recording. Choosing a window without audio explains to share a tab with audio. Stopping the share from the browser bar stops the recording. |
-| 5.6 | Upload an `.m4a`/`.mp3` from a phone recording. | Title prefilled from the file name; progress bar; meeting page; later a summary. |
+| 5.6 | Upload an `.m4a`/`.mp3` from a phone recording. | Title left empty (the summarizer names the meeting); progress bar; meeting page; later a summary. |
+| 5.9 | With a Bluetooth headset connected, record once, then reload `/record`. | A **Microphone** menu lists the headset and the built-in mic; recording with the other one works and the choice survives a reload. |
 | 5.7 | Choose a `.pdf` or a file over 200 MB. | Clear message, Upload button disabled, nothing sent. |
 | 5.8 | Turn the network off during an upload (DevTools → Offline). | Error with **Try again**; the recording is not lost. |
 
@@ -171,6 +172,7 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | Type a title (optional), **Start meeting** | The button turns red "Stop" with a running timer; the menu-bar icon becomes a record dot |
 | **Show live transcript** | A floating window with two heads (Others, You) stays above other apps |
 | Play a YouTube interview/podcast with two people for ~2 minutes, and say a few sentences into the mic in between (headphones recommended) | Lines appear with labels **Speaker 1**, **Speaker 2** for the video's voices and **You** for yours; grey text while a phrase is spoken; the heads' mouths move with the audio |
+| With a Bluetooth headset as output (hands-free mode, 16 kHz), play the video | Words come out as clearly as through speakers. `BoringTalks --listen-test 6` prints the tap and device rates and the frames received per second (≈ the device rate) |
 | Without headphones, let the video play through the speakers | The video's words are not duplicated as "You" in the uploaded transcript (echo removal); the live window may briefly show them |
 | **Stop** | "Finishing transcript…", then the queue shows "Uploading…" and the meeting appears in Recent meetings as **Summarizing**, then **Ready** |
 | Click the meeting | The dashboard opens `…/meetings/<id>`: a meaningful title, summary, action items, the transcript with You / Speaker 1 / Speaker 2 and timestamps that match the audio player |

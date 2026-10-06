@@ -7,6 +7,7 @@ import { useEffect, useId, useState, useSyncExternalStore, type ChangeEvent, typ
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ErrorNote } from '@/components/ui/ErrorNote';
+import { useMicrophones } from '@/hooks/useMicrophones';
 import { useRecorder } from '@/hooks/useRecorder';
 import { TALKER } from '@/lib/avatar/styles';
 import { formatBytes, formatClock } from '@/lib/format';
@@ -61,6 +62,13 @@ function RecorderPanel() {
   const router = useRouter();
   const rec = useRecorder(api);
   const [withTab, setWithTab] = useState(false);
+  const mics = useMicrophones();
+  const micSelectId = useId();
+  const { refresh: refreshMics } = mics;
+  // Device names become readable once permission is granted by the first recording.
+  useEffect(() => {
+    if (rec.state.kind === 'recording' || rec.state.kind === 'recorded') void refreshMics();
+  }, [rec.state.kind, refreshMics]);
   const [title, setTitle] = useState('');
   const tabId = useId();
   const titleId = useId();
@@ -114,6 +122,21 @@ function RecorderPanel() {
       <div className="mt-5 space-y-4">
         {(s.kind === 'idle' || s.kind === 'error') && !(s.kind === 'error' && s.recorded) && (
           <>
+            {mics.microphones.length > 1 && (
+              <div>
+                <label htmlFor={micSelectId} className="label">
+                  Microphone
+                </label>
+                <select id={micSelectId} className="field" value={mics.selected} onChange={(e) => mics.choose(e.target.value)}>
+                  <option value="">System default</option>
+                  {mics.microphones.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             {canCaptureTab && (
               <label htmlFor={tabId} className="flex cursor-pointer items-start gap-3 font-bold">
                 <input id={tabId} type="checkbox" className="check mt-0.5" checked={withTab} onChange={(e) => setWithTab(e.target.checked)} />
@@ -125,7 +148,7 @@ function RecorderPanel() {
                 </span>
               </label>
             )}
-            <button type="button" className="btn btn-primary btn-lg w-full" onClick={() => rec.start(withTab)}>
+            <button type="button" className="btn btn-primary btn-lg w-full" onClick={() => rec.start(withTab, mics.selected || undefined)}>
               <span className="h-3.5 w-3.5 rounded-full border-2 border-ink bg-danger" aria-hidden /> Start recording
             </button>
           </>
