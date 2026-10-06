@@ -127,6 +127,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile --filter @boringtalks/e2e...
+      - run: pnpm --filter @boringtalks/shared build
       - run: pnpm --filter @boringtalks/e2e exec playwright install --with-deps chromium
       - run: pnpm --filter @boringtalks/e2e test:smoke
         env:
