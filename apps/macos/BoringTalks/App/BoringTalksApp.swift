@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import BoringTalksKit
 import SwiftUI
 
@@ -97,7 +98,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
         panel.level = .floating
-        panel.contentView = NSHostingView(rootView: MenuContent(model: model))
+        // A fixed-size panel whose content never resizes the window: letting SwiftUI drive
+        // the window size loops AppKit's constraint pass as the menu's content changes.
+        let host = NSHostingController(rootView: ScrollView { MenuContent(model: model).padding(.bottom, 8) }
+            .frame(width: 340, height: 560, alignment: .top))
+        host.sizingOptions = []
+        panel.contentViewController = host
+        panel.setContentSize(NSSize(width: 340, height: 560))
         panel.center()
         panel.orderFrontRegardless()
         previewPanel = panel
@@ -119,6 +126,13 @@ enum CommandLineTools {
                 exit(1)
             }
         }
+        if let index = arguments.firstIndex(of: "--listen-test") {
+            // `--listen-test [seconds]`: captures system audio and prints what arrives,
+            // to check the capture on unusual output devices (Bluetooth headsets, interfaces).
+            let seconds = index + 1 < arguments.count ? Double(arguments[index + 1]) ?? 6 : 6
+            ListenTest.run(seconds: seconds)
+            return true
+        }
         if let options = FileTranscriber.Options(arguments: arguments) {
             Task {
                 let status = await FileTranscriber.run(options, models: model.models)
@@ -127,5 +141,59 @@ enum CommandLineTools {
             return true
         }
         return false
+    }
+}
+
+/// `--listen-test`: how much system audio arrives, at which rate, and how loud.
+enum ListenTest {
+    static func run(seconds: Double) {
+        let capture = SystemAudioCapture()
+        let lock = NSLock()
+        var frames = 0
+        var converted = 0
+        var buffers = 0
+        var peak: Float = 0
+        var bufferRate: Double = 0
+        var channels: AVAudioChannelCount = 0
+        let converter = BufferConverter()
+        do {
+            try capture.start { buffer in
+                let samples = converter.samples(buffer) ?? []
+                let loudest = samples.map(abs).max() ?? 0
+                lock.lock()
+                frames += Int(buffer.frameLength)
+                converted += samples.count
+                buffers += 1
+                peak = max(peak, loudest)
+                bufferRate = buffer.format.sampleRate
+                channels = buffer.format.channelCount
+                lock.unlock()
+            }
+        } catch {
+            FileHandle.standardError.write(Data("capture failed: \(error.localizedDescription)\n".utf8))
+            exit(1)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+            capture.stop()
+            lock.lock()
+            let report: [String: Any] = [
+                "seconds": seconds,
+                "tapSampleRate": capture.tapFormat.mSampleRate,
+                "tapChannels": capture.tapFormat.mChannelsPerFrame,
+                "deviceSampleRate": capture.aggregateRate,
+                "bufferSampleRate": bufferRate,
+                "bufferChannels": channels,
+                "buffers": buffers,
+                "framesPerSecond": Double(frames) / seconds,
+                "converted16kPerSecond": Double(converted) / seconds,
+                "peak": peak,
+            ]
+            lock.unlock()
+            if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+                FileHandle.standardOutput.write(data)
+                FileHandle.standardOutput.write(Data("\n".utf8))
+            }
+            exit(0)
+        }
     }
 }

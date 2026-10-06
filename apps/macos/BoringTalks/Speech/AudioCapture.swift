@@ -31,6 +31,9 @@ final class SystemAudioCapture: @unchecked Sendable {
     private var procID: AudioDeviceIOProcID?
     private var deviceListener: AudioObjectPropertyListenerBlock?
     private let queue = DispatchQueue(label: "BoringTalks.system-audio", qos: .userInteractive)
+    /// What the tap reports, and the rate the capture device really runs at (diagnostics).
+    private(set) var tapFormat = AudioStreamBasicDescription()
+    private(set) var aggregateRate: Float64 = 0
 
     func start(_ handler: @escaping (AVAudioPCMBuffer) -> Void) throws {
         let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
@@ -42,9 +45,7 @@ final class SystemAudioCapture: @unchecked Sendable {
 
         var streamDescription = AudioStreamBasicDescription()
         try check(Self.read(tapID, kAudioTapPropertyFormat, into: &streamDescription), "read the system audio format")
-        guard let format = AVAudioFormat(streamDescription: &streamDescription) else {
-            throw CaptureError.coreAudio("read the system audio format", -1)
-        }
+        tapFormat = streamDescription
 
         let outputUID = try Self.defaultOutputDeviceUID()
         let configuration: [String: Any] = [
@@ -61,6 +62,18 @@ final class SystemAudioCapture: @unchecked Sendable {
             ]],
         ]
         try check(AudioHardwareCreateAggregateDevice(configuration as CFDictionary, &aggregateID), "create the capture device")
+        // The aggregate device runs at the output device's rate, which is not always the
+        // rate the tap reports: a Bluetooth headset in hands-free mode plays at 16 kHz
+        // while the tap says 48 kHz. Buffers arrive at the device rate, so label them with it,
+        // or the audio comes out slowed down and unintelligible.
+        var deviceRate = Float64(0)
+        if Self.read(aggregateID, kAudioDevicePropertyNominalSampleRate, into: &deviceRate) == noErr, deviceRate > 0 {
+            aggregateRate = deviceRate
+            streamDescription.mSampleRate = deviceRate
+        }
+        guard let format = AVAudioFormat(streamDescription: &streamDescription) else {
+            throw CaptureError.coreAudio("read the system audio format", -1)
+        }
         try check(AudioDeviceCreateIOProcIDWithBlock(&procID, aggregateID, queue) { _, inputData, _, _, _ in
             guard let buffer = AVAudioPCMBuffer(pcmFormat: format, bufferListNoCopy: inputData, deallocator: nil) else { return }
             handler(buffer)
