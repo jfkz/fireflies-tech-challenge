@@ -23,16 +23,21 @@ export interface ObjectInfo {
  * Cloudflare R2 (or MinIO locally) over the S3 API. Presigned URLs are signed
  * against R2_PUBLIC_ENDPOINT when the API reaches storage at a different address
  * than browsers do (e.g. MinIO inside docker).
+ *
+ * Environments share one bucket: every key is stored under R2_KEY_PREFIX
+ * ("prod/", "dev/"). Callers and the database only ever see keys without it.
  */
 @Injectable()
 export class StorageService implements OnApplicationShutdown {
   readonly bucket: string;
+  private readonly prefix: string;
   private readonly client: S3Client;
   private readonly signer: S3Client;
 
   constructor(config: AppConfig) {
     const { env } = config;
     this.bucket = env.R2_BUCKET;
+    this.prefix = env.R2_KEY_PREFIX;
     const base: S3ClientConfig = {
       region: env.R2_REGION,
       credentials: { accessKeyId: env.R2_ACCESS_KEY_ID, secretAccessKey: env.R2_SECRET_ACCESS_KEY },
@@ -46,13 +51,13 @@ export class StorageService implements OnApplicationShutdown {
   }
 
   presignPut(key: string, contentType: string): Promise<string> {
-    return getSignedUrl(this.signer, new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: contentType }), {
+    return getSignedUrl(this.signer, new PutObjectCommand({ Bucket: this.bucket, Key: this.key(key), ContentType: contentType }), {
       expiresIn: UPLOAD_URL_TTL_SEC,
     });
   }
 
   presignGet(key: string): Promise<string> {
-    return getSignedUrl(this.signer, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
+    return getSignedUrl(this.signer, new GetObjectCommand({ Bucket: this.bucket, Key: this.key(key) }), {
       expiresIn: AUDIO_URL_TTL_SEC,
     });
   }
@@ -61,7 +66,7 @@ export class StorageService implements OnApplicationShutdown {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
-        Key: key,
+        Key: this.key(key),
         Body: JSON.stringify(value),
         ContentType: 'application/json',
       }),
@@ -71,7 +76,7 @@ export class StorageService implements OnApplicationShutdown {
   /** Metadata of an object, or null when it does not exist. */
   async head(key: string): Promise<ObjectInfo | null> {
     try {
-      const out = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      const out = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: this.key(key) }));
       return { size: out.ContentLength ?? 0, contentType: out.ContentType };
     } catch (err) {
       if (isNotFound(err)) return null;
@@ -80,7 +85,7 @@ export class StorageService implements OnApplicationShutdown {
   }
 
   async getBytes(key: string): Promise<Uint8Array> {
-    const out = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    const out = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: this.key(key) }));
     if (!out.Body) throw new Error(`Empty object ${key}`);
     return out.Body.transformToByteArray();
   }
@@ -91,7 +96,7 @@ export class StorageService implements OnApplicationShutdown {
     let token: string | undefined;
     do {
       const page = await this.client.send(
-        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }),
+        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: this.key(prefix), ContinuationToken: token }),
       );
       const keys = (page.Contents ?? []).flatMap((o) => (o.Key ? [{ Key: o.Key }] : []));
       if (keys.length > 0) {
@@ -101,6 +106,10 @@ export class StorageService implements OnApplicationShutdown {
       token = page.IsTruncated ? page.NextContinuationToken : undefined;
     } while (token);
     return removed;
+  }
+
+  private key(key: string): string {
+    return this.prefix + key;
   }
 
   onApplicationShutdown(): void {

@@ -38,6 +38,11 @@ export const EnvSchema = z
     R2_ACCESS_KEY_ID: z.string().min(1),
     R2_SECRET_ACCESS_KEY: z.string().min(1),
     R2_BUCKET: z.string().min(1),
+    /** Environments share one bucket; "prod/" or "dev/". Empty locally. */
+    R2_KEY_PREFIX: z
+      .string()
+      .regex(/^([a-z0-9-]+\/)?$/, 'R2_KEY_PREFIX must be empty or like "prod/"')
+      .default(''),
     R2_REGION: z.string().default('auto'),
 
     DOWNLOADS_BASE_URL: z.string().url().default('https://download.boringtalks.lol'),

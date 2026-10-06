@@ -32,18 +32,22 @@ Each deploy run:
 | API | Railway project `boringtalks`, service `api` | `api.boringtalks.lol`, environment `production` | `api.dev.boringtalks.lol`, environment `dev` |
 | Worker | Railway service `worker` | same image, `node dist/worker.js` | same |
 | Postgres, Redis | Railway services, one per environment | | |
-| Object storage | Cloudflare R2 | `boringtalks-prod` | `boringtalks-dev` |
-| DMGs | R2 `boringtalks-downloads` behind `download.boringtalks.lol` | `/` | `/dev/` |
+| Object storage | Cloudflare R2 bucket `boringtalks` | `prod/` | `dev/` |
+| DMGs | same bucket, `downloads/`, served at `download.boringtalks.lol` | `downloads/` → `/` | `downloads/dev/` → `/dev/` |
 | Auth | Firebase project `boringtalks-fe45f` (Email/Password, Google) | shared | shared |
 | AI | Vercel AI Gateway (team `jfkz0`) | key `boringtalks-worker-prod` | key `boringtalks-worker-dev` |
 | Email | Resend, domain `send.boringtalks.lol` | | allow-listed recipients only |
 | DNS | Cloudflare zone `boringtalks.lol`, all records DNS-only | | |
 
+One R2 bucket holds every environment under its own prefix. An R2 custom domain exposes the whole
+bucket, so a URL-rewrite rule on `download.boringtalks.lol` prepends `/downloads` to every path:
+the public domain can only ever reach the `downloads/` folder, never meeting audio or transcripts.
+
 ## Configuration
 
 **Railway** (per environment, shared variables referenced by both services): `DATABASE_URL`,
 `REDIS_URL` (references to the Postgres/Redis services), `NODE_ENV`, `WEB_URL`, `WEB_ORIGINS`,
-`FIREBASE_PROJECT_ID`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+`FIREBASE_PROJECT_ID`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_KEY_PREFIX` (`prod/` / `dev/`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
 `DOWNLOADS_BASE_URL`, `AI_GATEWAY_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_ALLOWLIST` (dev),
 `SUMMARIZE_CONCURRENCY`. CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
 [apps/api/README.md](../apps/api/README.md#environment).
@@ -56,7 +60,7 @@ Each deploy run:
 |---|---|---|
 | `RAILWAY_TOKEN` | per environment (Railway project token for that environment) | deploy |
 | `VERCEL_TOKEN` | repository (team-scoped token; dev needs `vercel alias`) | deploy |
-| `R2_DOWNLOADS_ACCESS_KEY_ID`, `R2_DOWNLOADS_SECRET_ACCESS_KEY` | repository (Object R/W on `boringtalks-downloads`) | DMG publish |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | repository (Object R/W on the `boringtalks` bucket) | DMG publish |
 | `DEVELOPER_ID_P12`, `DEVELOPER_ID_P12_PASSWORD` | repository, optional | DMG signing |
 | `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | repository, optional | notarization |
 

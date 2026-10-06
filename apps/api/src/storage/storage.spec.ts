@@ -61,6 +61,31 @@ describe('StorageService', () => {
     await expect(s.head('a')).rejects.toThrow('network');
   });
 
+  it('keeps an environment inside its R2_KEY_PREFIX', async () => {
+    const send = vi.spyOn(S3Client.prototype, 'send');
+    const s = new StorageService(testConfig({ R2_KEY_PREFIX: 'prod/' }));
+    expect(new URL(await s.presignPut('users/u/a.m4a', 'audio/mp4')).pathname).toBe('/bucket/prod/users/u/a.m4a');
+    expect(new URL(await s.presignGet('users/u/a.m4a')).pathname).toBe('/bucket/prod/users/u/a.m4a');
+
+    send.mockResolvedValueOnce({} as never);
+    await s.putJson('k.json', {});
+    expect((send.mock.calls[0][0] as PutObjectCommand).input.Key).toBe('prod/k.json');
+    send.mockResolvedValueOnce({ ContentLength: 1 } as never);
+    await s.head('a');
+    expect((send.mock.calls[1][0] as HeadObjectCommand).input.Key).toBe('prod/a');
+    send.mockResolvedValueOnce({ Body: { transformToByteArray: () => Promise.resolve(new Uint8Array()) } } as never);
+    await s.getBytes('a');
+    expect((send.mock.calls[2][0] as GetObjectCommand).input.Key).toBe('prod/a');
+
+    // Listed keys already carry the prefix and are deleted as listed, never prefixed twice.
+    send
+      .mockResolvedValueOnce({ Contents: [{ Key: 'prod/p/a' }], IsTruncated: false } as never)
+      .mockResolvedValueOnce({} as never);
+    await s.deletePrefix('p/');
+    expect((send.mock.calls[3][0] as ListObjectsV2Command).input.Prefix).toBe('prod/p/');
+    expect((send.mock.calls[4][0] as DeleteObjectsCommand).input.Delete?.Objects).toEqual([{ Key: 'prod/p/a' }]);
+  });
+
   it('deletes a prefix page by page', async () => {
     const send = vi.spyOn(S3Client.prototype, 'send');
     send

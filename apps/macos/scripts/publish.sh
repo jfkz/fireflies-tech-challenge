@@ -5,9 +5,11 @@
 #   scripts/publish.sh build/BoringTalks.dmg 0.1.0 42 false dev/    # dev environment
 #
 # Env: R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_DOWNLOADS_BUCKET,
-#      DOWNLOADS_BASE_URL (e.g. https://download.boringtalks.lol).
-# Writes  [prefix]BoringTalks-<version>.dmg, [prefix]BoringTalks-latest.dmg and
-# [prefix]latest.json, whose shape is LatestDownload in packages/shared/src/user.ts.
+#      DOWNLOADS_BASE_URL (e.g. https://download.boringtalks.lol),
+#      R2_DOWNLOADS_KEY_PREFIX (default "downloads/": the folder of the shared bucket
+#      that download.boringtalks.lol serves).
+# Writes  <key prefix>[prefix]BoringTalks-<version>.dmg, …BoringTalks-latest.dmg and
+# …latest.json, whose shape is LatestDownload in packages/shared/src/user.ts.
 set -euo pipefail
 DMG="${1:?usage: publish.sh <dmg> <version> <build> <notarized:true|false> [prefix]}"
 VERSION="${2:?version missing}"
@@ -45,7 +47,8 @@ JSON
 
 export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_DEFAULT_REGION=auto
 s3() { aws s3 cp --endpoint-url "$R2_ENDPOINT" --only-show-errors "$@"; }
-BUCKET="s3://$R2_DOWNLOADS_BUCKET/$PREFIX"
+KEY_PREFIX="${R2_DOWNLOADS_KEY_PREFIX-downloads/}"
+BUCKET="s3://$R2_DOWNLOADS_BUCKET/$KEY_PREFIX$PREFIX"
 s3 "$DMG" "$BUCKET$NAME" --content-type application/x-apple-diskimage --cache-control "public, max-age=31536000, immutable"
 s3 "$DMG" "${BUCKET}BoringTalks-latest.dmg" --content-type application/x-apple-diskimage --cache-control "public, max-age=300"
 s3 "$LATEST" "${BUCKET}latest.json" --content-type application/json --cache-control "public, max-age=60"

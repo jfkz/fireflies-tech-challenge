@@ -44,7 +44,7 @@ with every build and macOS asks again. Without that certificate add `BT_SIGN_IDE
 | `scripts/build.sh` | universal Release build (`ARCHS="arm64 x86_64"`); `SIGN_IDENTITY=-` for ad-hoc, `SIGN_IDENTITY="Developer ID Application: …"` for a release (adds `--timestamp`); `MARKETING_VERSION`, `BUILD_NUMBER` (→ `CURRENT_PROJECT_VERSION`), `KEYCHAIN` optional. Leaves the app in `build/Release/BoringTalks.app`. |
 | `scripts/make-dmg.sh <app> <out.dmg>` | UDZO DMG, volume "BoringTalks", app + `/Applications` link; signs the DMG when `SIGN_IDENTITY` is a Developer ID |
 | `scripts/notarize.sh <dmg>` | `notarytool submit --wait` with an App Store Connect API key (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH` or `ASC_KEY_P8`), then `stapler staple`. Exit 0 = notarized, 1 = rejected (prints the log), 2 = skipped because the key isn't set. |
-| `scripts/publish.sh <dmg> <version> <build> <true\|false> [dev/]` | uploads `BoringTalks-<version>.dmg`, `BoringTalks-latest.dmg` and `latest.json` (shared `LatestDownload` shape) to R2 with `aws s3 cp --endpoint-url $R2_ENDPOINT`; env `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_DOWNLOADS_BUCKET`, `DOWNLOADS_BASE_URL` |
+| `scripts/publish.sh <dmg> <version> <build> <true\|false> [dev/]` | uploads `BoringTalks-<version>.dmg`, `BoringTalks-latest.dmg` and `latest.json` (shared `LatestDownload` shape) to R2 with `aws s3 cp --endpoint-url $R2_ENDPOINT`; env `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_DOWNLOADS_BUCKET` (`boringtalks`), `DOWNLOADS_BASE_URL`, optional `R2_DOWNLOADS_KEY_PREFIX` (default `downloads/`) |
 
 A full release, by hand:
 

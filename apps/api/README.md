@@ -33,7 +33,7 @@ Without `AI_GATEWAY_API_KEY` the worker cannot summarize (jobs retry, then the m
 
 MinIO stands in for R2. The Docker Hub `minio/minio` image is no longer published, so compose uses
 Chainguard's build of the same server; a one-shot `minio-setup` container creates the
-`boringtalks-dev` and `boringtalks-test` buckets.
+`boringtalks` (keys under `R2_KEY_PREFIX`, `dev/` locally) and `boringtalks-test` buckets.
 
 ## Scripts
 
@@ -71,9 +71,10 @@ Validated with zod at boot (`src/config/env.ts`); the process exits with a list 
 | `FIREBASE_AUTH_EMULATOR_HOST` | | dev/test only: accept unsigned emulator tokens; ignored in production |
 | `R2_ENDPOINT` | yes | `https://<accountid>.r2.cloudflarestorage.com`, or MinIO |
 | `R2_PUBLIC_ENDPOINT` | | host used inside presigned URLs when clients reach storage elsewhere |
-| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | yes | private bucket per environment |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | yes | the shared `boringtalks` bucket |
+| `R2_KEY_PREFIX` | | `prod/`, `dev/`; every object key lives under it (empty by default) |
 | `R2_REGION` | | `auto` |
-| `DOWNLOADS_BASE_URL` | | `https://download.boringtalks.lol`; public bucket with `latest.json` |
+| `DOWNLOADS_BASE_URL` | | `https://download.boringtalks.lol` (the bucket's `downloads/` folder; dev: `…/dev`) with `latest.json` |
 | `AI_GATEWAY_API_KEY` | worker | Vercel AI Gateway key (summaries and fallback transcription) |
 | `SUMMARY_MODEL` | | `anthropic/claude-haiku-4.5` |
 | `TRANSCRIBE_MODEL` | | `openai/whisper-1` |
@@ -136,7 +137,7 @@ is unrecoverable, e.g. no speech in the audio) the meeting becomes `failed` with
   idempotency key is claimed in `email_log` before sending and passed to Resend as
   `Idempotency-Key`; a failed send releases the claim so the retry can send.
 
-**Storage layout** (private bucket): `users/<userId>/meetings/<meetingId>/audio.<ext>`,
+**Storage layout** (one private bucket `boringtalks` for all environments, every key under `R2_KEY_PREFIX` — `prod/`, `dev/`): `users/<userId>/meetings/<meetingId>/audio.<ext>`,
 `transcript.json`, `summary-<timestamp>.json`. Audio goes from the client straight to R2 with a
 presigned PUT (15 min) and is played back through a presigned GET (1 h).
 

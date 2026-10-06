@@ -171,7 +171,7 @@ summary snapshots).
 { "contentType": "audio/mp4", "sizeBytes": 14000000 }
 ```
 ```json
-{ "url": "https://<account>.r2.cloudflarestorage.com/boringtalks-prod/users/…/audio.m4a?X-Amz-…",
+{ "url": "https://<account>.r2.cloudflarestorage.com/boringtalks/prod/users/…/audio.m4a?X-Amz-…",
   "key": "users/<userId>/meetings/<id>/audio.m4a", "headers": { "Content-Type": "audio/mp4" }, "expiresInSec": 900 }
 ```
 Then `PUT` the bytes to `url` with exactly those `headers`. The audio never passes through the API.

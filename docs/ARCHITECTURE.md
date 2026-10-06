@@ -21,7 +21,7 @@ flowchart LR
   end
 
   fb[(Firebase Auth)]
-  r2[(Cloudflare R2<br/>audio · transcript.json · summary.json)]
+  r2[(Cloudflare R2 bucket boringtalks<br/>prod/ · dev/ · downloads/)]
 
   subgraph Railway["Railway (apps/api)"]
     api[NestJS API<br/>stateless, N replicas]
@@ -134,7 +134,8 @@ docs/           this documentation
 |---|---|---|
 | Web | https://boringtalks.lol | https://dev.boringtalks.lol |
 | API | https://api.boringtalks.lol | https://api.dev.boringtalks.lol |
-| DMG | https://download.boringtalks.lol | https://download.boringtalks.lol/dev/ |
+| DMG | https://download.boringtalks.lol (`downloads/`) | https://download.boringtalks.lol/dev/ (`downloads/dev/`) |
+| Storage prefix in R2 bucket `boringtalks` | `prod/` | `dev/` |
 | Deployed by | push to `main` | a ready (non-draft) pull request |
 
 Details in [DEPLOYMENT.md](DEPLOYMENT.md).
