@@ -1,5 +1,5 @@
 import { testConfig } from '../testing/fixtures';
-import { GatewayTranscriber, isFillerOnly, isNoSpeechText, isSilenceHallucination, joinResults, shiftResult, toTranscribeResult } from './gateway-transcriber';
+import { GatewayTranscriber, isFillerOnly, isNoSpeechText, isSilenceHallucination, joinResults, shiftResult, tailText, toTranscribeResult } from './gateway-transcriber';
 
 const transcribe = vi.hoisted(() => vi.fn());
 vi.mock('ai', async (original) => ({ ...(await original<typeof import('ai')>()), transcribe }));
@@ -11,32 +11,65 @@ vi.mock('./audio-prep', async (original) => ({
 beforeEach(() => prepare.mockImplementation(async (audio: Uint8Array, mediaType: string) => [{ audio, mediaType, offsetMs: 0 }]));
 
 describe('GatewayTranscriber', () => {
-  it('transcribes a long recording in parts and stitches them back in place', async () => {
+  it('transcribes a long recording part by part, carrying context and dropping the overlap', async () => {
     const a = new Uint8Array([1]);
     const b = new Uint8Array([2]);
     prepare.mockResolvedValueOnce([
       { audio: a, mediaType: 'audio/mpeg', offsetMs: 0 },
-      { audio: b, mediaType: 'audio/mpeg', offsetMs: 3_600_000 },
+      { audio: b, mediaType: 'audio/mpeg', offsetMs: 1_195_000 },
     ]);
     transcribe
-      .mockResolvedValueOnce({ text: 'One', segments: [{ text: 'One', startSecond: 1, endSecond: 2 }], language: 'en', durationInSeconds: 3600 })
-      .mockResolvedValueOnce({ text: 'Two', segments: [{ text: 'Two', startSecond: 5, endSecond: 6 }], language: undefined, durationInSeconds: 600 });
+      .mockResolvedValueOnce({
+        text: '',
+        segments: [
+          { text: 'Thanks, Priya.', startSecond: 1, endSecond: 2 },
+          { text: 'The import runs Monday.', startSecond: 1196, endSecond: 1199 },
+        ],
+        language: 'en',
+        durationInSeconds: 1200,
+      })
+      .mockResolvedValueOnce({
+        text: '',
+        segments: [
+          // The overlap (1195–1200 s) heard again by the second part:
+          { text: 'import runs Monday.', startSecond: 1, endSecond: 4 },
+          { text: 'And SSO is mine.', startSecond: 6, endSecond: 8 },
+        ],
+        language: undefined,
+        durationInSeconds: 600,
+      });
     const out = await new GatewayTranscriber(testConfig()).transcribe({ audio: new Uint8Array(30), mediaType: 'audio/wav', language: null });
     expect(transcribe.mock.calls.map((c) => c[0].audio)).toEqual([a, b]);
+    // The second part knows how the first ended, and is held to its language.
+    expect(transcribe.mock.calls[1][0].providerOptions.openai).toEqual({
+      timestampGranularities: ['segment'],
+      language: 'en',
+      prompt: 'Thanks, Priya. The import runs Monday.',
+    });
     expect(out).toEqual({
       segments: [
-        { speaker: 'Speaker 1', startMs: 1000, endMs: 2000, text: 'One' },
-        { speaker: 'Speaker 1', startMs: 3_605_000, endMs: 3_606_000, text: 'Two' },
+        { speaker: 'Speaker 1', startMs: 1000, endMs: 2000, text: 'Thanks, Priya.' },
+        { speaker: 'Speaker 1', startMs: 1_196_000, endMs: 1_199_000, text: 'The import runs Monday.' },
+        { speaker: 'Speaker 1', startMs: 1_201_000, endMs: 1_203_000, text: 'And SSO is mine.' },
       ],
       language: 'en',
-      durationSec: 4200,
+      durationSec: 1795,
     });
   });
 
-  it('only knows the total length when every part does', () => {
+  it('keeps the context to the last ~200 characters, cut at a word', () => {
+    const long = { segments: [{ speaker: 'S', startMs: 0, endMs: 1, text: `${'word '.repeat(60)}end` }], language: null, durationSec: 1 };
+    const tail = tailText(long);
+    expect(tail.length).toBeLessThanOrEqual(200);
+    expect(tail.startsWith('word')).toBe(true);
+    expect(tail.endsWith('end')).toBe(true);
+  });
+
+  it('takes the length from the last part', () => {
     const r = (durationSec: number | null) => ({ segments: [], language: null, durationSec });
     expect(joinResults([r(10), r(null)]).durationSec).toBeNull();
     expect(shiftResult(r(5), 0)).toEqual(r(5));
+    expect(shiftResult(r(5), 10_000).durationSec).toBe(15);
   });
 
   it('asks the gateway model for segment timestamps and labels one speaker', async () => {

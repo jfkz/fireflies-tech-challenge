@@ -11,19 +11,28 @@ export class GatewayTranscriber extends Transcriber {
     super();
   }
 
-  /** Big recordings are compressed (and if need be split) first: the API takes at most 25 MB per request. */
+  /**
+   * Big or long recordings are compressed and cut into overlapping parts first (the API takes at
+   * most 25 MB a request). Parts go in order, each told how the previous one ended so names and
+   * spelling carry over the cut, and their transcripts are stitched into one.
+   */
   async transcribe({ audio, mediaType, language }: TranscribeInput): Promise<TranscribeResult> {
     const parts = await prepareForTranscription(audio, mediaType);
     const results: TranscribeResult[] = [];
+    let detected = language;
     for (const part of parts) {
+      const context = results.length ? tailText(results[results.length - 1]) : '';
       const result = await transcribe({
         model: this.config.env.TRANSCRIBE_MODEL,
         audio: part.audio,
         providerOptions: {
-          openai: { timestampGranularities: ['segment'], ...(language ? { language } : {}) },
+          openai: { timestampGranularities: ['segment'], ...(detected ? { language: detected } : {}), ...(context ? { prompt: context } : {}) },
         },
       });
-      results.push(shiftResult(toTranscribeResult(result), part.offsetMs));
+      const piece = shiftResult(toTranscribeResult(result), part.offsetMs);
+      // Later parts are held to the language the first one heard.
+      detected ??= piece.language;
+      results.push(piece);
     }
     return joinResults(results);
   }
@@ -59,17 +68,42 @@ export function toTranscribeResult(result: {
 /** Moves a part's segments to where the part starts in the whole recording. */
 export function shiftResult(r: TranscribeResult, offsetMs: number): TranscribeResult {
   if (offsetMs === 0) return r;
-  return { ...r, segments: r.segments.map((s) => ({ ...s, startMs: s.startMs + offsetMs, endMs: s.endMs + offsetMs })) };
+  return {
+    ...r,
+    segments: r.segments.map((s) => ({ ...s, startMs: s.startMs + offsetMs, endMs: s.endMs + offsetMs })),
+    // A part's length becomes where it ends in the whole recording.
+    durationSec: r.durationSec !== null ? Math.round(r.durationSec + offsetMs / 1000) : null,
+  };
 }
 
-/** One transcript from consecutive parts: segments in order, the first language heard, durations added up. */
+/** About the last 200 characters a part ended with: the "prompt" that tells the next part what came before. */
+export function tailText(r: TranscribeResult, max = 200): string {
+  const text = r.segments.map((s) => s.text).join(' ').trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(-max);
+  return cut.slice(cut.indexOf(' ') + 1);
+}
+
+/**
+ * One transcript from overlapping parts (already shifted to their place in the recording).
+ * Where two parts overlap, a segment is kept from the later part only if most of it comes after
+ * what the earlier parts already covered, so the seam has no repeated lines.
+ */
 export function joinResults(results: readonly TranscribeResult[]): TranscribeResult {
   if (results.length === 1) return results[0];
-  const durations = results.map((r) => r.durationSec);
+  const segments: TranscribeResult['segments'] = [];
+  let coveredUntil = 0;
+  for (const r of results) {
+    for (const s of r.segments) {
+      if (segments.length > 0 && (s.startMs + s.endMs) / 2 < coveredUntil) continue;
+      segments.push(s);
+      coveredUntil = Math.max(coveredUntil, s.endMs);
+    }
+  }
   return {
-    segments: results.flatMap((r) => r.segments),
+    segments,
     language: results.find((r) => r.language)?.language ?? null,
-    durationSec: durations.every((d) => d !== null) ? durations.reduce<number>((a, d) => a + (d ?? 0), 0) : null,
+    durationSec: results[results.length - 1].durationSec,
   };
 }
 

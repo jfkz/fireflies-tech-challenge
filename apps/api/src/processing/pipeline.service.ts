@@ -10,6 +10,7 @@ import { summaryKey } from '../storage/keys';
 import { StorageService } from '../storage/storage.service';
 import { UsersRepository } from '../users/users.repository';
 import { displayNames, resolveSpeakerNames } from './speaker-names';
+import { Diarizer } from './diarizer';
 import { Summarizer } from './summarizer';
 import { Transcriber } from './transcriber';
 
@@ -29,6 +30,7 @@ export class PipelineService {
     private readonly jobs: JobsService,
     private readonly transcriber: Transcriber,
     private readonly summarizer: Summarizer,
+    private readonly diarizer: Diarizer,
   ) {}
 
   async transcribe(job: MeetingJob): Promise<'done' | 'stale'> {
@@ -42,7 +44,9 @@ export class PipelineService {
       language: meeting.language,
     });
     if (result.segments.length === 0) throw new UnrecoverableError('No speech was found in the audio');
-    await this.transcripts.store(meeting, result);
+    // The server's transcript has one voice; listen again to tell the people apart.
+    const segments = await this.diarizer.diarize({ audio, segments: result.segments });
+    await this.transcripts.store(meeting, { ...result, segments });
     const next = await this.meetings.transition(meeting.id, 'transcribing', { status: 'summarizing' });
     if (next) await this.jobs.summarize(next.id, next.attempts);
     return 'done';

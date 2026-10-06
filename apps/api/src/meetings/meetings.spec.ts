@@ -71,7 +71,8 @@ describe('canStart', () => {
     expect(canStart('recording', 'transcribing')).toBe(true);
     expect(canStart('failed', 'transcribing')).toBe(true);
     expect(canStart('ready', 'summarizing')).toBe(true);
-    expect(canStart('ready', 'transcribing')).toBe(false);
+    expect(canStart('ready', 'transcribing')).toBe(true);
+    expect(canStart('ready', 'recording' as never)).toBe(false);
     expect(canStart('summarizing', 'summarizing')).toBe(false);
     expect(canStart('transcribing', 'transcribing')).toBe(false);
   });
@@ -305,6 +306,17 @@ describe('MeetingsService', () => {
       repo.startRun.mockResolvedValue(null);
       await expect(service.complete(user(), meeting().id, {})).rejects.toBeInstanceOf(ConflictException);
     });
+  });
+
+  it('reprocesses a server-transcribed meeting from its audio, so voices are told apart', async () => {
+    const { repo, storage, jobs, service } = setup();
+    repo.findOwned.mockResolvedValue(meeting({ status: 'ready', attempts: 1, source: 'upload', audioKey: 'a.mp3' }));
+    repo.hasSegments.mockResolvedValue(true);
+    storage.head.mockResolvedValue({ size: 10 });
+    repo.startRun.mockResolvedValue(meeting({ status: 'transcribing', attempts: 2 }));
+    await service.reprocess(user(), meeting().id);
+    expect(repo.startRun).toHaveBeenCalledWith(meeting().id, 'ready', 'transcribing', expect.anything());
+    expect(jobs.transcribe).toHaveBeenCalledWith(meeting().id, 2);
   });
 
   it('reprocesses a ready meeting from its summary', async () => {

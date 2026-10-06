@@ -21,6 +21,7 @@ describe('status machine', () => {
   });
   it('allows reprocessing a ready or failed meeting', () => {
     expect(canTransition('ready', 'summarizing')).toBe(true);
+    expect(canTransition('ready', 'transcribing')).toBe(true);
     expect(canTransition('failed', 'transcribing')).toBe(true);
   });
   it('rejects going backwards', () => {

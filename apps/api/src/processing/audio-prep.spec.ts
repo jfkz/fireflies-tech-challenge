@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { prepareForTranscription } from './audio-prep';
+import { partWindows, prepareForTranscription } from './audio-prep';
 
 const hasFfmpeg = (() => {
   try {
@@ -25,28 +25,51 @@ function toneWav(seconds: number): Uint8Array {
   }
 }
 
+describe('partWindows', () => {
+  it('cuts back to back parts, each but the first starting a little early to overlap', () => {
+    expect(partWindows(50, 20, 5)).toEqual([
+      { start: 0, length: 20 },
+      { start: 15, length: 25 },
+      { start: 35, length: 15 },
+    ]);
+  });
+  it('folds a last sliver shorter than the overlap into the part before', () => {
+    expect(partWindows(42, 20, 5)).toEqual([
+      { start: 0, length: 20 },
+      { start: 15, length: 27 },
+    ]);
+    expect(partWindows(12, 20, 5)).toEqual([{ start: 0, length: 12 }]);
+  });
+});
+
+// Real ffmpeg runs: slow on a busy CI runner.
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('prepareForTranscription', () => {
-  it('passes small files through untouched', async () => {
+  it('passes small files it can’t read through untouched', async () => {
     const audio = new Uint8Array([1, 2, 3]);
     expect(await prepareForTranscription(audio, 'audio/webm')).toEqual([{ audio, mediaType: 'audio/webm', offsetMs: 0 }]);
   });
 
-  it.skipIf(!hasFfmpeg)('re-encodes a big file for speech so it fits', async () => {
-    const wav = toneWav(30); // ~5 MB of PCM
-    const parts = await prepareForTranscription(wav, 'audio/wav', { maxBytes: 1024 * 1024 });
+  it('refuses a big file it can’t read', async () => {
+    await expect(prepareForTranscription(new Uint8Array(2048), 'audio/webm', { maxBytes: 1024 })).rejects.toThrow('can’t be read');
+  });
+
+  it.skipIf(!hasFfmpeg)('keeps a short small recording as it is', async () => {
+    const wav = toneWav(2);
+    expect(await prepareForTranscription(wav, 'audio/wav')).toEqual([{ audio: wav, mediaType: 'audio/wav', offsetMs: 0 }]);
+  });
+
+  it.skipIf(!hasFfmpeg)('re-encodes a big but short recording for speech', async () => {
+    const parts = await prepareForTranscription(toneWav(30), 'audio/wav', { maxBytes: 1024 * 1024 });
     expect(parts).toHaveLength(1);
-    expect(parts[0].mediaType).toBe('audio/mpeg');
-    expect(parts[0].offsetMs).toBe(0);
+    expect(parts[0]).toMatchObject({ mediaType: 'audio/mpeg', offsetMs: 0 });
     expect(parts[0].audio.byteLength).toBeLessThan(200 * 1024);
   });
 
-  it.skipIf(!hasFfmpeg)('splits what is still too big into parts with their start times', async () => {
-    const wav = toneWav(30);
-    const parts = await prepareForTranscription(wav, 'audio/wav', { maxBytes: 50 * 1024, partSeconds: 10 });
-    expect(parts.length).toBeGreaterThanOrEqual(3);
-    expect(parts[0].offsetMs).toBe(0);
-    // Cut on MP3 frame boundaries: each part starts about 10 s after the previous one.
-    for (let i = 1; i < parts.length; i++) expect(Math.abs(parts[i].offsetMs - parts[i - 1].offsetMs - 10_000)).toBeLessThan(500);
+  it.skipIf(!hasFfmpeg)('cuts a long recording into overlapping parts, whatever its size', async () => {
+    const parts = await prepareForTranscription(toneWav(25), 'audio/wav', { partSeconds: 10, overlapSeconds: 2 });
+    expect(parts.map((p) => p.offsetMs)).toEqual([0, 8000, 18000]);
     expect(parts.every((p) => p.mediaType === 'audio/mpeg')).toBe(true);
   });
 });
