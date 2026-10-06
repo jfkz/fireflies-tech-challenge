@@ -50,10 +50,11 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,author \
-            --jq '[.[] | select(.author.login != "dependabot[bot]" and .author.login != "app/dependabot")] | length')
+          # Drafts never deploy, so they don't count (nor do Dependabot's PRs).
+          open=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,author,isDraft \
+            --jq '[.[] | select(.isDraft | not) | select(.author.login != "dependabot[bot]" and .author.login != "app/dependabot")] | length')
           if [ "$open" -gt 1 ]; then
-            echo "::error::$open PRs are open. Only one PR at a time deploys to dev; merge or close the others first."
+            echo "::error::$open ready PRs are open. Only one PR at a time deploys to dev; merge, close or mark the others as drafts first."
             exit 1
           fi
 

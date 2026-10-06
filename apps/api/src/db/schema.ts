@@ -133,7 +133,9 @@ export const segments = pgTable(
   ],
 );
 
-export const summaries = pgTable('summaries', {
+export const summaries = pgTable(
+  'summaries',
+  {
   meetingId: uuid('meeting_id')
     .primaryKey()
     .references(() => meetings.id, { onDelete: 'cascade' }),
@@ -148,8 +150,12 @@ export const summaries = pgTable('summaries', {
   model: text('model').notNull(),
   inputTokens: integer('input_tokens'),
   outputTokens: integer('output_tokens'),
+  /** Summary, key topics, decisions and action items, for search; written with the summary. */
+  search: tsvector('search'),
   createdAt: createdAt(),
-});
+  },
+  (t) => [index('summaries_search_idx').using('gin', t.search)],
+);
 
 /**
  * Action items, one row each, so tasks from every meeting can be listed in due-date order.

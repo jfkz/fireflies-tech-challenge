@@ -55,7 +55,10 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | # | Steps | Expected |
 |---|---|---|
 | 3.1 | Open `/meetings`. | Each row: date and duration, title, description, speaker chips with small heads, status chip, action-item count. |
-| 3.2 | Type “pricing” in search. | One request after you stop typing; matching meetings only. Type nonsense: “Nothing matches …”. Clear: full list. |
+| 3.2 | Type “pricing” in search. | One request after you stop typing; matching meetings only. Type nonsense: “No meetings matching …”. Clear: full list. |
+| 3.2a | Type the start of a word (“pric”), a name, an action item's words, then `"launch email"` and `pricing -draft`. | Results appear for partial words; meetings match on notes, action items, people and topics too; phrases and exclusions work. Each result shows a highlighted snippet: a transcript line with who and when (and “N mentions”), or the notes/title/people. |
+| 3.2b | Click a transcript snippet. | The meeting opens with “Find in transcript” filled in, the matching line in view and highlighted, the audio cued to that time (not playing). ↑/↓ step through the other matches. |
+| 3.2c | Press **/** on the list. | The search box gets focus (not while typing in another field). |
 | 3.3 | With more than 20 meetings, scroll to the bottom. | **Load more** appends the next page; disappears at the end. |
 | 3.4 | Start a browser recording (section 5) and return to the list. | Its chip animates (Transcribing/Summarizing) and changes to Ready by itself. |
 | 3.6 | Click a topic pill on a row, then a person in the filter bar, then the active pill again, then **Clear filters**. | The list narrows to that topic, then that topic and person; the URL shows `?topic=…&speaker=…`; clicking an active pill removes it; Clear brings everything back. Back button walks through the filters. |

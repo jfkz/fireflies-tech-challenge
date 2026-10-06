@@ -75,7 +75,7 @@ export class MeetingsService {
     const page = rows.slice(0, query.limit);
     const last = page[page.length - 1];
     return {
-      items: page.map((r) => toListItem(r, r.actionItemCount)),
+      items: page.map((r) => toListItem(r, r.actionItemCount, r.match)),
       nextCursor: rows.length > query.limit && last ? encodeCursor({ startedAt: last.startedAt, id: last.id }) : null,
     };
   }

@@ -1,16 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, getTableColumns, inArray, sql, type SQL } from 'drizzle-orm';
-import type { ActionItem, FacetCount, MeetingStatus, Segment } from '@boringtalks/shared';
+import type { ActionItem, FacetCount, MeetingStatus, SearchMatch, Segment } from '@boringtalks/shared';
 import type { MeetingCursor } from '../common/cursor';
+import { HIT_END, HIT_START, toTsQuery } from './search-query';
 import { InjectDb, type Database } from '../db/db.module';
 import { actionItems, meetings, segments, summaries, type MeetingRow, type SpeakerNameMap, type SummaryRow } from '../db/schema';
 
 export type MeetingWithCount = MeetingRow & { actionItemCount: number };
 export type NewMeeting = typeof meetings.$inferInsert;
 export type MeetingPatch = Partial<Omit<NewMeeting, 'id' | 'userId' | 'createdAt'>>;
-export type SummaryValues = Omit<typeof summaries.$inferInsert, 'meetingId' | 'createdAt' | 'legacyActionItems'> & { actionItems: ActionItem[] };
+export type SummaryValues = Omit<typeof summaries.$inferInsert, 'meetingId' | 'createdAt' | 'legacyActionItems' | 'search'> & { actionItems: ActionItem[] };
 /** A summary row with its action items, in order. */
-export type SummaryWithItems = Omit<SummaryRow, 'legacyActionItems'> & { actionItems: ActionItem[] };
+export type SummaryWithItems = Omit<SummaryRow, 'legacyActionItems' | 'search'> & { actionItems: ActionItem[] };
+
+/** Everything in a summary worth searching, as one text. */
+export function summaryDocument(v: Pick<SummaryValues, 'summary' | 'keyTopics' | 'decisions' | 'actionItems'>): string {
+  return [v.summary, ...v.keyTopics, ...v.decisions, ...v.actionItems.flatMap((a) => [a.text, a.owner ?? ''])].filter(Boolean).join('\n');
+}
+
+export type MeetingHit = MeetingWithCount & { match: SearchMatch | null };
 
 const ITEM_COLUMNS = {
   id: actionItems.id,
@@ -68,27 +76,33 @@ export class MeetingsRepository {
    * One page, newest first, with an optional full-text query over titles, descriptions and
    * transcripts, and optional filters by speaker, topic and start time.
    */
-  list(
+  async list(
     userId: string,
     opts: { cursor: MeetingCursor | null; limit: number; q?: string; speaker?: string; topic?: string; from?: Date; to?: Date },
-  ): Promise<MeetingWithCount[]> {
+  ): Promise<MeetingHit[]> {
     const where: SQL[] = [eq(meetings.userId, userId)];
     if (opts.cursor) {
       where.push(
         sql`(${meetings.startedAt}, ${meetings.id}) < (${opts.cursor.startedAt.toISOString()}::timestamptz, ${opts.cursor.id}::uuid)`,
       );
     }
-    if (opts.q) {
-      const query = sql`websearch_to_tsquery('simple', ${opts.q})`;
-      where.push(
-        sql`(${meetings.search} @@ ${query} or exists (select 1 from ${segments} where ${segments.meetingId} = ${meetings.id} and to_tsvector('simple', ${segments.text}) @@ ${query}))`,
-      );
+    const tsq = opts.q ? toTsQuery(opts.q) : null;
+    // A search with nothing searchable in it ("!!!") finds nothing rather than everything.
+    if (opts.q && !tsq) return [];
+    const query = sql`to_tsquery('simple', ${tsq})`;
+    if (tsq) {
+      where.push(sql`(
+        ${meetings.search} @@ ${query}
+        or to_tsvector('simple', array_to_string(${meetings.speakers} || ${meetings.topics}, ' ')) @@ ${query}
+        or exists (select 1 from ${summaries} where ${summaries.meetingId} = ${meetings.id} and ${summaries.search} @@ ${query})
+        or exists (select 1 from ${segments} where ${segments.meetingId} = ${meetings.id} and to_tsvector('simple', ${segments.text}) @@ ${query})
+      )`);
     }
     if (opts.speaker) where.push(sql`${meetings.speakers} @> array[${opts.speaker}]::text[]`);
     if (opts.topic) where.push(sql`${meetings.topics} @> array[${opts.topic}]::text[]`);
     if (opts.from) where.push(sql`${meetings.startedAt} >= ${opts.from.toISOString()}::timestamptz`);
     if (opts.to) where.push(sql`${meetings.startedAt} < ${opts.to.toISOString()}::timestamptz`);
-    return this.db
+    const rows = await this.db
       .select({
         ...getTableColumns(meetings),
         // Spelled out: inside a subquery Drizzle leaves column names unqualified, and "id" exists in both tables.
@@ -98,6 +112,68 @@ export class MeetingsRepository {
       .where(and(...where))
       .orderBy(desc(meetings.startedAt), desc(meetings.id))
       .limit(opts.limit);
+    if (!tsq) return rows.map((r) => ({ ...r, match: null }));
+    const matches = await this.searchMatches(
+      rows.map((r) => r.id),
+      tsq,
+    );
+    return rows.map((r) => ({ ...r, match: matches.get(r.id) ?? null }));
+  }
+
+  /**
+   * Why each meeting matched, for the result list: its first matching transcript line (with the
+   * speaker's display name and time, and how many lines match), else its notes, title or people.
+   */
+  private async searchMatches(ids: string[], tsq: string): Promise<Map<string, SearchMatch>> {
+    if (ids.length === 0) return new Map();
+    const opts = `StartSel=${HIT_START}, StopSel=${HIT_END}, MaxWords=22, MinWords=10, ShortWord=2, HighlightAll=false`;
+    const result = await this.db.execute<{
+      id: string;
+      seg_speaker: string | null;
+      seg_start: number | null;
+      seg_snippet: string | null;
+      hits: number;
+      notes_snippet: string | null;
+      title_hit: boolean;
+      title: string;
+      description: string | null;
+      people: string;
+    }>(sql`
+      with q as (select to_tsquery('simple', ${tsq}) as q)
+      select m.id, m.title, m.description,
+        coalesce(m.speaker_names -> hit.speaker ->> 'name', hit.speaker) as seg_speaker,
+        hit.start_ms as seg_start,
+        ts_headline('simple', hit.text, q.q, ${opts}) as seg_snippet,
+        (select count(*) from segments s where s.meeting_id = m.id and to_tsvector('simple', s.text) @@ q.q)::int as hits,
+        case when sm.search @@ q.q then ts_headline('simple', sm.summary, q.q, ${opts}) end as notes_snippet,
+        m.search @@ q.q as title_hit,
+        array_to_string(m.speakers || m.topics, ', ') as people
+      from meetings m
+      cross join q
+      left join summaries sm on sm.meeting_id = m.id
+      left join lateral (
+        select s.speaker, s.start_ms, s.text from segments s
+        where s.meeting_id = m.id and to_tsvector('simple', s.text) @@ q.q
+        order by s.idx limit 1
+      ) hit on true
+      where m.id in (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`);
+    const out = new Map<string, SearchMatch>();
+    for (const r of result.rows) {
+      const base = { speaker: null, startMs: null, hits: r.hits };
+      if (r.seg_snippet) out.set(r.id, { in: 'transcript', snippet: r.seg_snippet, speaker: r.seg_speaker, startMs: r.seg_start, hits: r.hits });
+      else if (r.notes_snippet) out.set(r.id, { ...base, in: 'notes', snippet: r.notes_snippet });
+      else if (r.title_hit) out.set(r.id, { ...base, in: 'title', snippet: await this.headline(`${r.title}. ${r.description ?? ''}`, tsq, opts) });
+      else out.set(r.id, { ...base, in: 'people', snippet: await this.headline(r.people, tsq, opts) });
+    }
+    return out;
+  }
+
+  private async headline(text: string, tsq: string, opts: string): Promise<string> {
+    const r = await this.db.execute<{ h: string }>(sql`select ts_headline('simple', ${text}, to_tsquery('simple', ${tsq}), ${opts}) as h`);
+    return r.rows[0]?.h ?? text;
   }
 
   /** The user's speakers and topics with the number of meetings each appears in, most frequent first. */
@@ -264,7 +340,7 @@ export class MeetingsRepository {
   async getSummary(meetingId: string): Promise<SummaryWithItems | null> {
     const [row] = await this.db.select().from(summaries).where(eq(summaries.meetingId, meetingId));
     if (!row) return null;
-    const { legacyActionItems: _legacy, ...summary } = row;
+    const { legacyActionItems: _legacy, search: _search, ...summary } = row;
     return { ...summary, actionItems: await this.getActionItems(meetingId) };
   }
 
@@ -275,7 +351,7 @@ export class MeetingsRepository {
   /** Stores a summary and replaces the meeting's action items, in one transaction. */
   async saveSummary(meetingId: string, { actionItems: items, ...values }: SummaryValues, patch: MeetingPatch): Promise<MeetingRow> {
     return this.db.transaction(async (tx) => {
-      const row = { meetingId, ...values, createdAt: new Date() };
+      const row = { meetingId, ...values, search: sql`to_tsvector('simple', ${summaryDocument({ ...values, actionItems: items })})`, createdAt: new Date() };
       await tx.insert(summaries).values(row).onConflictDoUpdate({ target: summaries.meetingId, set: row });
       const [meeting] = await tx
         .update(meetings)

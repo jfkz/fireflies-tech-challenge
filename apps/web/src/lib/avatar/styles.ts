@@ -1,5 +1,5 @@
 /**
- * Head styles ported from Talking Heads' `AvatarStyle` (AvatarView.swift).
+ * Head styles ported from the Mac app's `AvatarStyle` (AvatarView.swift).
  * Colours are the Swift RGB triples converted to hex.
  */
 export type HairCut = 'bob' | 'long' | 'short' | 'spiky';

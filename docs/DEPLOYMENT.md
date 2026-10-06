@@ -4,11 +4,11 @@
 
 | Event | Deploys to | Workflow |
 |---|---|---|
-| Ready (non-draft) pull request opened, pushed, reopened or marked ready | **dev** | `deploy.yml`, `macos.yml` |
-| Push to `main` (merge) | **production** | `deploy.yml`, `macos.yml` |
+| Ready (non-draft) pull request opened, pushed, reopened or marked ready | **dev** | `deploy.yml` |
+| Push to `main` (merge) | **production** | `deploy.yml` |
 | Any pull request or push | — (checks only) | `ci.yml` |
 
-Only one pull request may be open at a time (Dependabot excluded): all PRs share the dev
+Only one ready pull request may be open at a time (drafts and Dependabot excluded): all PRs share the dev
 environment, so the "One open PR" job fails a second one and nothing deploys. Pushing to an open,
 ready PR is shipping to dev.
 
@@ -20,9 +20,11 @@ Each deploy run:
 2. **Web → Vercel.** Production: `vercel deploy --prod`. Dev: a preview deployment aliased to
    `dev.boringtalks.lol`.
 3. **Smoke tests.** Playwright `smoke` suite against the deployed web + API.
-4. **DMG** (`macos.yml`, only when `apps/macos/**` changed): build on a `macos-26` runner, sign
-   (Developer ID when the secrets exist, ad-hoc otherwise), notarize, publish to R2 with
-   `latest.json`. The landing page's Download button reads it via `GET /downloads/latest`; links
+4. **Mac app.** `macos.yml` builds and tests it on a `macos-26` runner when `apps/macos/**` changes.
+   Releases run on a developer's Mac, so the signing key stays off CI: `apps/macos/scripts/release.sh
+   prod` (or `dev`) signs with Developer ID, builds the DMG, submits it for notarization and publishes
+   it to R2 with `latest.json`; once Apple accepts it, `release.sh staple prod` staples the ticket and
+   republishes it as notarized (`WAIT=1` does both in one go). The landing page's Download button reads it via `GET /downloads/latest`; links
    elsewhere (README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg.
 
 ## Infrastructure
@@ -36,6 +38,13 @@ Each deploy run:
 | Object storage | Cloudflare R2 bucket `boringtalks` | `prod/` | `dev/` |
 | DMGs | same bucket, `downloads/`, served at `download.boringtalks.lol` | `downloads/` → `/` | `downloads/dev/` → `/dev/` |
 | Auth | Firebase project `boringtalks-fe45f` (Email/Password, Google) | shared | shared |
+
+Google sign-in uses the site's own domain as Firebase's auth domain: `next.config.ts` proxies
+`/__/auth/*` to `boringtalks-fe45f.firebaseapp.com`, and the OAuth client
+"Web client (auto created by Google Service)" in Google Cloud lists
+`https://boringtalks.lol/__/auth/handler` and `https://dev.boringtalks.lol/__/auth/handler` as
+authorized redirect URIs. A new domain needs its handler added there first, or Google answers
+`redirect_uri_mismatch`.
 | AI | Vercel AI Gateway (team `jfkz0`) | key `boringtalks-worker-prod` | key `boringtalks-worker-dev` |
 | Email | Resend, domain `send.boringtalks.lol` | | allow-listed recipients only |
 | DNS | Cloudflare zone `boringtalks.lol`, all records DNS-only | | |
@@ -62,8 +71,7 @@ the public domain can only ever reach the `downloads/` folder, never meeting aud
 | `RAILWAY_TOKEN` | per environment (Railway project token for that environment) | deploy |
 | `VERCEL_TOKEN` | repository (team-scoped token; dev needs `vercel alias`) | deploy |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | repository (Object R/W on the `boringtalks` bucket) | DMG publish |
-| `DEVELOPER_ID_P12`, `DEVELOPER_ID_P12_PASSWORD` | repository, optional | DMG signing |
-| `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | repository, optional | notarization |
+| `DEVELOPER_ID_P12`, `DEVELOPER_ID_P12_PASSWORD`, `ASC_*` | repository, unused | kept from when CI signed the DMG; releases are local now |
 
 ## Manual deploys
 

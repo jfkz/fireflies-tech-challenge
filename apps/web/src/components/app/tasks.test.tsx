@@ -100,5 +100,6 @@ describe('CalendarView', () => {
     fireEvent.click(within(month).getByRole('button', { name: 'Previous month' }));
     expect(await screen.findByRole('region', { name: 'September 2026' })).toBeInTheDocument();
     await waitFor(() => expect(meetingStats).toHaveBeenCalledWith(expect.objectContaining({ from: '2026-09-01', to: '2026-10-01' }), expect.anything()));
-  });
+    // A year of day cells is slow to render under coverage instrumentation.
+  }, 20_000);
 });

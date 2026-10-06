@@ -1,6 +1,6 @@
 import AVFoundation
 
-// From Talking Heads' SpeechPipeline.swift: the status type and the resampler.
+// The speech pipeline's status type and the resampler.
 
 /// What a model is doing, for the menu and the download progress.
 struct PipelineStatus: Sendable, ExpressibleByStringLiteral {

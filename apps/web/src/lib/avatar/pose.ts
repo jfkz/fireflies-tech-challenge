@@ -36,7 +36,7 @@ export const RESTING_POSE: Pose = {
   emotions: { neutral: 1 },
 };
 
-/** A still pose, the way Talking Heads' MarketingArt draws its heads. */
+/** A still pose, the way the marketing art draws its heads. */
 export function stillPose(opts: Partial<Pose> & { emotion?: Emotion } = {}): Pose {
   const { emotion, ...rest } = opts;
   const mouth = rest.mouth ?? 0;

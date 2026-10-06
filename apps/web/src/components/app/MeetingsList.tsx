@@ -1,14 +1,15 @@
 'use client';
 
-import { formatDuration, type MeetingFacets, type MeetingListItem } from '@boringtalks/shared';
+import { formatDuration, formatTimestamp, type MeetingFacets, type MeetingListItem, type SearchMatch } from '@boringtalks/shared';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/avatar/Avatar';
 import { SpeechBubble } from '@/components/avatar/SpeechBubble';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { SpeakerChip } from '@/components/ui/SpeakerChip';
 import { StatusChip } from '@/components/ui/StatusChip';
+import { Marked } from '@/components/ui/Marked';
 import { TopicPill } from '@/components/ui/TopicPill';
 import { useMe, useMeetingFacets, useMeetings, type MeetingFilters } from '@/hooks/queries';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -16,6 +17,7 @@ import { stillPose } from '@/lib/avatar/pose';
 import { LISTENER } from '@/lib/avatar/styles';
 import { filtersFromParams, filtersToSearch, hasFilters } from '@/lib/filters';
 import { formatMeetingDate } from '@/lib/format';
+import { markedParts } from '@/lib/search';
 
 export function MeetingsList() {
   const params = useSearchParams();
@@ -40,6 +42,20 @@ export function MeetingsList() {
 
   const applyFilter = (next: MeetingFilters) => router.push(`${pathname}${filtersToSearch({ ...filters, q, ...next })}`, { scroll: false });
   const toggle = (key: 'speaker' | 'topic', value: string) => applyFilter({ [key]: filters[key] === value ? undefined : value });
+  // "/" jumps to the search box from anywhere on the page, like most search UIs.
+  const searchBox = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName));
+      if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        searchBox.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const clear = () => {
     setSearch('');
     router.push(pathname, { scroll: false });
@@ -62,7 +78,9 @@ export function MeetingsList() {
               id="meeting-search"
               type="search"
               className="field pl-11"
-              placeholder="Search titles and transcripts"
+              ref={searchBox}
+              placeholder="Search notes, people and transcripts"
+              title="Press / to search. Use quotes for a phrase and -word to leave a word out."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               autoComplete="off"
@@ -86,7 +104,7 @@ export function MeetingsList() {
           <>
             <ul className="sticker divide-y-2 divide-ink/10 overflow-hidden" aria-label="Meetings" aria-busy={list.isFetching}>
               {items.map((m) => (
-                <MeetingRow key={m.id} meeting={m} filters={filters} onToggle={toggle} />
+                <MeetingRow key={m.id} meeting={m} filters={filters} onToggle={toggle} q={q} />
               ))}
             </ul>
             {list.hasNextPage && (
@@ -187,7 +205,7 @@ function PillRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-export function MeetingRow({ meeting: m, filters = {}, onToggle }: { meeting: MeetingListItem; filters?: MeetingFilters; onToggle?: Toggle }) {
+export function MeetingRow({ meeting: m, filters = {}, onToggle, q }: { meeting: MeetingListItem; filters?: MeetingFilters; onToggle?: Toggle; q?: string }) {
   return (
     <li className="group relative flex flex-col gap-2 px-5 py-4 transition-colors focus-within:bg-sun-soft hover:bg-sun-soft/60 sm:flex-row sm:items-start sm:gap-6 sm:px-6">
       <div className="min-w-0 flex-1">
@@ -207,6 +225,7 @@ export function MeetingRow({ meeting: m, filters = {}, onToggle }: { meeting: Me
           </Link>
         </h2>
         {m.description && <p className="mt-1 line-clamp-2 leading-relaxed font-semibold text-ink-soft">{m.description}</p>}
+        {m.match && q && <MatchSnippet meetingId={m.id} match={m.match} q={q} />}
         {(m.speakers.length > 0 || m.topics.length > 0) && (
           <ul className="relative z-10 mt-2.5 flex flex-wrap items-center gap-1.5" aria-label="Speakers and topics">
             {m.speakers.slice(0, 6).map((s) => (
@@ -236,6 +255,31 @@ export function MeetingRow({ meeting: m, filters = {}, onToggle }: { meeting: Me
         )}
       </div>
     </li>
+  );
+}
+
+/** Why a meeting is in the search results; a transcript hit links straight to that moment. */
+function MatchSnippet({ meetingId, match, q }: { meetingId: string; match: SearchMatch; q: string }) {
+  const where = { transcript: 'Said', notes: 'In the notes', title: 'In the title', people: 'People and topics' }[match.in];
+  const href = `/meetings/${meetingId}?${new URLSearchParams({ q, ...(match.startMs !== null ? { t: String(match.startMs) } : {}) })}`;
+  return (
+    <Link
+      href={href}
+      className="relative z-10 mt-2 block rounded-xl border-2 border-ink/10 bg-white px-3 py-2 text-sm leading-relaxed font-semibold text-ink hover:border-ink/40"
+      data-testid="search-match"
+    >
+      <span className="mb-0.5 flex flex-wrap items-center gap-x-2 text-xs font-extrabold text-ink-soft">
+        {where}
+        {match.speaker && <span className="text-ink">{match.speaker}</span>}
+        {match.startMs !== null && <span className="tabular-nums">{formatTimestamp(match.startMs)}</span>}
+        {match.hits > 1 && <span>· {match.hits} mentions</span>}
+      </span>
+      <span className="line-clamp-2">
+        {match.in === 'transcript' ? '“' : ''}
+        <Marked parts={markedParts(match.snippet)} />
+        {match.in === 'transcript' ? '”' : ''}
+      </span>
+    </Link>
   );
 }
 

@@ -14,7 +14,7 @@ interface SoundState {
 
 const SoundContext = createContext<SoundState | null>(null);
 
-/** Sound settings for the talking heads, or null outside the landing page. */
+/** Sound settings for the landing page's heads, or null outside the landing page. */
 export function useSound(): SoundState | null {
   return use(SoundContext);
 }
@@ -76,7 +76,7 @@ export function SoundToggle() {
       type="button"
       onClick={toggle}
       aria-pressed={on}
-      aria-label={on ? 'Mute the talking heads' : 'Let the talking heads talk out loud'}
+      aria-label={on ? 'Mute the heads' : 'Let the heads talk out loud'}
       title={on ? 'Sound on' : 'Sound off'}
       data-testid="sound-toggle"
       className="motion-only fixed right-4 bottom-4 z-[60] flex items-center gap-2 rounded-full border-[2.5px] border-ink bg-white px-4 py-2.5 text-sm font-extrabold text-ink shadow-[3px_4px_0_0_var(--color-ink)] transition-transform hover:-translate-y-0.5 active:translate-y-0.5 sm:right-6 sm:bottom-6"

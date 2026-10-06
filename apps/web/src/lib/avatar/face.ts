@@ -1,4 +1,4 @@
-/** Port of Talking Heads' `Emotion` / `FaceShape` (Emotion.swift). */
+/** Port of the Mac app's `Emotion` / `FaceShape` (Emotion.swift). */
 export type Emotion = 'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'scared' | 'disgusted';
 
 export interface FaceShape {

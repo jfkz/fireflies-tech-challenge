@@ -1,4 +1,4 @@
-// Core Audio process tap + microphone capture, from Talking Heads.
+// Core Audio process tap + microphone capture.
 import AVFoundation
 import BoringTalksKit
 import AudioToolbox

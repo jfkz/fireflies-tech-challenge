@@ -93,7 +93,7 @@ src/
     upload.ts                content-type mapping, XHR PUT with progress, create → upload → complete
     recorder.ts              the recorder as a pure state machine
     connect.ts               /connect query validation, allowed redirects
-    avatar/                  port of the Talking Heads pose/face/style code
+    avatar/                  cartoon head pose/face/style code
     landing/story.ts         the landing's scroll beats as data
 ```
 
@@ -127,7 +127,7 @@ sections are `next/dynamic` chunks (still server-rendered).
 ## How the landing animation is built
 
 **The heads.** `components/avatar/Avatar.tsx` is a line-by-line SVG port of
-Talking Heads' `AvatarPainter` (AvatarView.swift): the same 200×200 design
+the Mac app's `AvatarPainter` (AvatarView.swift): the same 200×200 design
 space, shapes, the four hair cuts, beards, lashes, headphones and headset,
 the shirt badge, and the emotion faces from `Emotion.swift` (`FaceShape.blend`
 in `lib/avatar/face.ts`). It is a pure function of a `Pose`. `lib/avatar/pose.ts`

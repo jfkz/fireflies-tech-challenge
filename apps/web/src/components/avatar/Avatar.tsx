@@ -26,7 +26,7 @@ export interface AvatarProps {
 }
 
 /**
- * A cartoon head drawn in a 200×200 design space — an SVG port of Talking Heads'
+ * A cartoon head drawn in a 200×200 design space — an SVG port of the Mac app's
  * `AvatarPainter`. Pure: everything it shows comes from `pose`.
  */
 export function Avatar({ style, pose = RESTING_POSE, look = 0, lookY = 0, className, label, x, y, width, height }: AvatarProps) {

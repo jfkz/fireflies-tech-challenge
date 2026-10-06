@@ -16,9 +16,9 @@ anything. Without a Mac, use **Record in the browser** (or upload an audio file)
 
 | Path | What |
 |---|---|
-| [`apps/macos`](apps/macos) | Swift/SwiftUI menu-bar recorder. Captures the microphone ("You") and system audio (everyone else), transcribes on the Neural Engine with Parakeet, tells voices apart with WeSpeaker embeddings, uploads the transcript. Built on my own app Talking Heads. |
+| [`apps/macos`](apps/macos) | Swift/SwiftUI menu-bar recorder. Captures the microphone ("You") and system audio (everyone else), transcribes on the Neural Engine with Parakeet, tells voices apart with WeSpeaker embeddings, uploads the transcript. |
 | [`apps/api`](apps/api) | NestJS 11 API + BullMQ worker: auth, meetings, presigned R2 uploads, summarization with Claude Haiku 4.5 via the Vercel AI Gateway, Whisper fallback transcription, Resend emails. |
-| [`apps/web`](apps/web) | Next.js 16: a parallax landing page with the talking heads, and the dashboard (meetings, transcript synced to audio, action items, browser recorder, Mac sign-in). |
+| [`apps/web`](apps/web) | Next.js 16: a parallax landing page with cartoon heads, and the dashboard (meetings, transcript synced to audio, action items, browser recorder, Mac sign-in). |
 | [`packages/shared`](packages/shared) | zod schemas = the API contract, shared by API and web, mirrored by the Mac app. |
 | [`e2e`](e2e) | Playwright: UI suite against the Firebase Auth emulator, smoke suite for deployed environments. |
 | [`docs`](docs) | [Architecture](docs/ARCHITECTURE.md) · [Features](docs/FEATURES.md) · [QA flows](docs/QA.md) · [API](docs/API.md) · [Deployment](docs/DEPLOYMENT.md) · [Costs](docs/COSTS.md) · [Agent options](docs/AGENT.md) |
