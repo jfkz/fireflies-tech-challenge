@@ -13,7 +13,7 @@ COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY e2e/package.json e2e/
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --filter @boringtalks/api...
+RUN pnpm install --frozen-lockfile --filter @boringtalks/api...
 COPY packages/shared packages/shared
 COPY apps/api apps/api
 RUN pnpm --filter @boringtalks/shared build && pnpm --filter @boringtalks/api build
@@ -24,7 +24,7 @@ COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY e2e/package.json e2e/
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --prod --filter @boringtalks/api...
+RUN pnpm install --frozen-lockfile --prod --filter @boringtalks/api...
 
 FROM node:24-slim AS runtime
 ENV NODE_ENV=production
