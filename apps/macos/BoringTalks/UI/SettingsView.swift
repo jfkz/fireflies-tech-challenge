@@ -27,6 +27,9 @@ struct SettingsView: View {
             }
 
             Section("Audio") {
+                Toggle("Keep Bluetooth headsets in high quality", isOn: $preferences.avoidBluetoothMic)
+                Text("Recording with a Bluetooth headset's microphone switches the headset to call quality. With this on, “You” is recorded with the Mac's own microphone instead.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Upload meeting audio", isOn: $preferences.uploadAudio)
                 Text("Lets the dashboard play the meeting back. Without a local transcript the audio is uploaded anyway, so the server can transcribe it.")
                     .font(.caption).foregroundStyle(.secondary)

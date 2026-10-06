@@ -150,7 +150,7 @@ private struct RecordingPanel: View {
             .disabled(recorder.phase == .starting || recorder.phase == .finishing)
 
             VStack(spacing: 6) {
-                LevelRow(title: "You", systemImage: "mic.fill", meter: recorder.meter(.microphone), active: recorder.isRecording)
+                LevelRow(title: recorder.microphoneName.map { "You · \($0)" } ?? "You", systemImage: "mic.fill", meter: recorder.meter(.microphone), active: recorder.isRecording)
                 LevelRow(title: "Others", systemImage: "speaker.wave.2.fill", meter: recorder.meter(.system), active: recorder.isRecording)
             }
 
@@ -190,7 +190,13 @@ private struct RecordingPanel: View {
     }
 
     private func toggle() {
-        recorder.isRecording ? model.stopMeeting() : model.startMeeting()
+        // Run after SwiftUI has finished delivering the click: starting or stopping
+        // swaps this part of the menu (and can close the menu window), which must not
+        // happen while the button's gesture is still being dispatched.
+        let recording = recorder.isRecording
+        DispatchQueue.main.async { [model] in
+            recording ? model.stopMeeting() : model.startMeeting()
+        }
     }
 }
 
