@@ -186,6 +186,32 @@ describe('fakes', () => {
   });
 });
 
+describe('due dates', () => {
+  it('places common deadlines by rule (a range ends on its last day), else keeps the model’s date', () => {
+    const out = finalize(
+      {
+        ...draft,
+        actionItems: [
+          { text: 'Deliver the admin page', owner: 'Mike', due: 'today or tomorrow mid-day', dueDate: '2026-10-06' },
+          { text: 'Ship the analytics', owner: 'Mike', due: 'two days after the launch', dueDate: '2026-10-22' },
+          { text: 'No date', owner: null, due: null, dueDate: null },
+        ],
+      },
+      [],
+      new Date('2026-10-06T15:00:00Z'),
+    );
+    expect(out.actionItems.map((a) => a.dueDate)).toEqual(['2026-10-07', '2026-10-22', null]);
+  });
+
+  it('gives the model a calendar to count weekdays from', async () => {
+    const { model, calls } = mockModel();
+    await new GatewaySummarizer(model).summarize({ segments: [seg('You', 0, 1, 'x')], language: null, meetingDate: new Date('2026-10-06T15:00:00Z') });
+    const text = promptText(calls[0]);
+    expect(text).toContain('Calendar from the meeting day: Tue 2026-10-06, Wed 2026-10-07');
+    expect(text).toContain('ends on its LAST day');
+  });
+});
+
 describe('validDate', () => {
   it('keeps real calendar dates and drops everything else', () => {
     expect(validDate(' 2026-10-09 ')).toBe('2026-10-09');

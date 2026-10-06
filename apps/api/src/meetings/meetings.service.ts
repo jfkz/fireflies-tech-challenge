@@ -183,18 +183,23 @@ export class MeetingsService {
     return this.detail(await this.startProcessing(meeting, body.durationSec));
   }
 
-  /** Runs the pipeline again: from transcription if there is no transcript, else from the summary. */
+  /**
+   * Runs the pipeline again. A meeting the server transcribed (browser recording, upload) starts
+   * from its audio, so transcription improvements (telling voices apart) reach it; a Mac recording
+   * keeps its transcript and is summarized again.
+   */
   async reprocess(user: UserRow, id: string): Promise<MeetingDetail> {
-    return this.detail(await this.startProcessing(await this.owned(user, id)));
+    const meeting = await this.owned(user, id);
+    return this.detail(await this.startProcessing(meeting, undefined, meeting.source === 'browser' || meeting.source === 'upload'));
   }
 
-  private async startProcessing(meeting: MeetingRow, durationSec?: number): Promise<MeetingRow> {
+  private async startProcessing(meeting: MeetingRow, durationSec?: number, fromAudio = false): Promise<MeetingRow> {
     const audio = meeting.audioKey ? await this.storage.head(meeting.audioKey) : null;
     const hasTranscript = await this.repo.hasSegments(meeting.id);
     if (!hasTranscript && !audio) {
       throw new UnprocessableEntityException('Upload a transcript or an audio file first');
     }
-    const target = hasTranscript ? 'summarizing' : 'transcribing';
+    const target = hasTranscript && !(fromAudio && audio) ? 'summarizing' : 'transcribing';
     if (!canStart(meeting.status, target)) {
       throw new ConflictException(`A meeting that is ${meeting.status} cannot move to ${target}`);
     }

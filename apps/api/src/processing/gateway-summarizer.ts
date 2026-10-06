@@ -17,6 +17,7 @@ import {
   type SummaryDraft,
 } from './summary-prompt';
 import { Summarizer, type SummarizeInput, type SummaryResult } from './summarizer';
+import { resolveDueDate } from './due-date';
 import { normalizeTopics } from './topics';
 
 /** The model the summarizer calls: a gateway id like "anthropic/claude-haiku-4.5", or a mock in tests. */
@@ -55,7 +56,7 @@ export class GatewaySummarizer extends Summarizer {
       const body = notes.map((n, i) => `## Part ${i + 1}\n${n}`).join('\n\n');
       draft = await this.structured(summaryPrompt(body, language, true, context), usage);
     }
-    return { ...finalize(draft, knownTopics), model: this.modelName(), inputTokens: usage.input, outputTokens: usage.output };
+    return { ...finalize(draft, knownTopics, meetingDate), model: this.modelName(), inputTokens: usage.input, outputTokens: usage.output };
   }
 
   private async structured(prompt: string, usage: Usage): Promise<SummaryDraft> {
@@ -87,7 +88,11 @@ function addUsage(total: Usage, u: { inputTokens: number | undefined; outputToke
 }
 
 /** Enforces the limits the schema cannot: lengths, counts, non-generic title, stable action item ids. */
-export function finalize(draft: SummaryDraft, knownTopics: readonly string[] = []): Omit<SummaryResult, 'model' | 'inputTokens' | 'outputTokens'> {
+export function finalize(
+  draft: SummaryDraft,
+  knownTopics: readonly string[] = [],
+  meetingDate?: Date,
+): Omit<SummaryResult, 'model' | 'inputTokens' | 'outputTokens'> {
   const keyTopics = draft.keyTopics.map((t) => t.trim()).filter(Boolean).slice(0, 8);
   const title = isGenericTitle(draft.title) ? fallbackTitle({ keyTopics, summary: draft.summary }) : clamp(draft.title, TITLE_MAX);
   return {
@@ -105,7 +110,9 @@ export function finalize(draft: SummaryDraft, knownTopics: readonly string[] = [
         text: a.text.trim(),
         owner: a.owner?.trim() || null,
         due: a.due?.trim() || null,
-        dueDate: validDate(a.dueDate),
+        // Common phrases ("today or tomorrow", "before Friday", "the weekend") are placed by rule; the
+        // model's own date is the fallback for everything else.
+        dueDate: (meetingDate && resolveDueDate(a.due, meetingDate)) || validDate(a.dueDate),
         done: false,
       })),
     decisions: draft.decisions.map((d) => d.trim()).filter(Boolean),
