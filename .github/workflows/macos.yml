@@ -1,0 +1,99 @@
+name: macOS app
+
+# Every PR touching the app: build + unit tests (ad-hoc signed).
+# Ready PRs publish a DMG to download.boringtalks.lol/dev/, pushes to main to
+# download.boringtalks.lol/, which is what the landing page's Download button
+# points at. With the Developer ID secrets present the app is signed and
+# notarized; without them the DMG is ad-hoc signed and the landing page shows
+# the right-click → Open step.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths: [apps/macos/**, .github/workflows/macos.yml]
+  push:
+    branches: [main]
+    paths: [apps/macos/**, .github/workflows/macos.yml]
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: apps/macos
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - run: SIGN_IDENTITY=- scripts/test.sh
+
+  release:
+    name: DMG → ${{ github.event_name == 'push' && 'production' || 'dev' }}
+    needs: test
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    runs-on: macos-26
+    environment: ${{ github.event_name == 'push' && 'production' || 'dev' }}
+    defaults:
+      run:
+        working-directory: apps/macos
+    env:
+      DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+      DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: brew install xcodegen
+      - name: Import Developer ID certificate
+        if: env.DEVELOPER_ID_P12 != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$KEYCHAIN" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/developer-id.p12"
+          identity=$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -1)
+          echo "SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+      - name: Build
+        run: |
+          echo "SIGN_IDENTITY=${SIGN_IDENTITY:--}" >> "$GITHUB_ENV"
+          SIGN_IDENTITY="${SIGN_IDENTITY:--}" BUILD_NUMBER="${{ github.run_number }}" scripts/build.sh
+      - name: DMG
+        run: scripts/make-dmg.sh build/Release/BoringTalks.app build/BoringTalks.dmg
+      - name: Notarize
+        id: notarize
+        run: |
+          if [[ "$SIGN_IDENTITY" == "Developer ID Application"* ]] && scripts/notarize.sh build/BoringTalks.dmg; then
+            echo "notarized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "notarized=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish
+        env:
+          R2_ENDPOINT: https://924ba8ce0dcdcd4e131bebe3dc05b84c.r2.cloudflarestorage.com
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_DOWNLOADS_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_DOWNLOADS_SECRET_ACCESS_KEY }}
+          R2_DOWNLOADS_BUCKET: boringtalks-downloads
+          DOWNLOADS_BASE_URL: https://download.boringtalks.lol
+        run: |
+          version=$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' project.yml | head -1)
+          prefix=${{ github.event_name == 'push' && '""' || 'dev/' }}
+          scripts/publish.sh build/BoringTalks.dmg "$version" "${{ github.run_number }}" "${{ steps.notarize.outputs.notarized }}" "$prefix"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: BoringTalks-dmg
+          path: apps/macos/build/BoringTalks.dmg
+          retention-days: 14
