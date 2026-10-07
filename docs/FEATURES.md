@@ -244,6 +244,23 @@ Every dashboard route has `loading.tsx` and `error.tsx` (with a retry), plus
 root `error.tsx`, `global-error.tsx`, and a 404 page with a confused head looking
 around (“This page left the meeting early.”).
 
+### Version and updates
+
+**What.** Every footer (the dashboard's and the landing page's) shows the build: `v0.2.0 · abc1234`
+(the `apps/web` package version and the deployed commit; `dev` locally). Each deployment serves its
+own build at `GET /version.json` (uncached). An open tab checks it every 5 minutes while visible, and
+when it comes back into view (at most once a minute). When a different deployment is live, a dialog
+says “A new version is out” with **Reload now** / **Later**; **Later** leaves a “New version: reload”
+link next to the version in the footer and doesn't ask again for that build. While the browser
+recorder has a recording that hasn't reached the server yet (recording, recorded, uploading), or a
+file upload is running, the dialog waits until it has.
+
+**Where.** `lib/version.ts` (build info, hold-off), `app/version.json/route.ts`,
+`components/app/UpdatePrompt.tsx` (`UpdatePrompt`, mounted in the root layout; `VersionTag`),
+`next.config.ts` (`NEXT_PUBLIC_APP_VERSION`, `NEXT_PUBLIC_BUILD_COMMIT` from `GITHUB_SHA`).
+
+**Limits.** Local builds (`commit: dev`) never ask. A redeploy of the same commit doesn't count as new.
+
 ### API client
 
 `lib/api.ts`: one typed function per endpoint; sends `Authorization: Bearer <Firebase
@@ -294,6 +311,27 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 - **Limits:** if one permission is refused the other side is still recorded (with a warning
   in the menu); with both refused, Start fails with the reason. Without headphones the mic
   also hears the call (handled by echo removal, below).
+
+### Stop after silence
+
+- **What:** a meeting left recording after everyone has gone stops by itself. When nobody has
+  spoken for the set time (**Stop after silence** in Settings: never / 1–60 minutes, default 5),
+  the recording stops and uploads as usual, and a notification says so (“Nobody spoke for
+  5 minutes, so BoringTalks stopped recording. “Weekly sync” is uploading as usual.”); the menu
+  keeps the same note until dismissed. A minute before (half the time for limits under two
+  minutes) a notification “Still in a meeting?” and a countdown in the menu offer **Keep
+  recording**, which starts the count again. “Spoken” means the transcriber heard words on
+  either side, so typing, a fan or background music don't keep a finished meeting going; until
+  the speech model is loaded, any clear sound on the level meters counts instead.
+- **Where:** `BoringTalksKit/SilenceWatch.swift` (the rule, unit-tested),
+  `BoringTalks/Recording/MeetingRecorder.swift` (`checkSilence`, every half second),
+  `BoringTalks/App/AppModel.swift` (`stopForSilence`), `BoringTalks/App/Notifier.swift`,
+  `BoringTalks/UI/MenuContent.swift` (`SilenceWarning`).
+- **Limits:** notification permission is asked when the first meeting starts; without it the
+  stop is shown as an alert and the warning only in the menu. The trailing quiet stays in the
+  recording (and its duration). Any value can be set with
+  `defaults write games.cutthecheese.boringtalks silenceStopMinutes -int <minutes>`.
+  Noticing when a meeting *starts* is not built yet; ideas in [MEETING-START.md](MEETING-START.md).
 
 ### On-device transcription
 
@@ -358,7 +396,8 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 
 - **What:** speech model status and download progress (with retry), language (automatic by
   default), **Upload meeting audio** (on by default), **Keep recordings on this Mac**
-  (delete after upload / 1 / 7 / 30 days), show recordings in Finder, account and sign out,
+  (delete after upload / 1 / 7 / 30 days), **Stop after silence** (never / 1–60 minutes,
+  default 5), show recordings in Finder, account and sign out,
   API and dashboard URLs, version, quit.
 - **Where:** `BoringTalks/UI/SettingsView.swift`, `BoringTalks/App/Preferences.swift`.
 

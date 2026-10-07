@@ -42,6 +42,14 @@ struct SettingsView: View {
                     Text("7 days").tag(7)
                     Text("30 days").tag(30)
                 }
+                Picker("Stop after silence", selection: $preferences.silenceStopMinutes) {
+                    Text("Never").tag(0)
+                    ForEach(Self.silenceChoices(including: preferences.silenceStopMinutes), id: \.self) { minutes in
+                        Text(minutes == 1 ? "1 minute" : "\(minutes) minutes").tag(minutes)
+                    }
+                }
+                Text("A meeting left recording after everyone has gone stops by itself when nobody has spoken for this long, and uploads as usual. A minute before, BoringTalks asks if you're still there.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Button("Show recordings in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([model.folders.recordings])
                 }
@@ -71,6 +79,12 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The usual choices, plus a value set with `defaults write` that isn't one of them.
+    static func silenceChoices(including current: Int) -> [Int] {
+        let choices = [1, 2, 5, 10, 15, 30, 60]
+        return current > 0 && !choices.contains(current) ? (choices + [current]).sorted() : choices
     }
 
     static var version: String {

@@ -140,6 +140,15 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 7.5 | Type a name in **Your name** and Save. | Button says Saved; in the demo and other past meetings “You” becomes your first name (unless you renamed that speaker by hand); new meetings use it too. |
 | 7.4 | **Sign out**. | Lands on `/`; dashboard URLs now redirect to sign in. |
 
+### 7b. Version and updates
+
+| # | Steps | Expected |
+|---|---|---|
+| 7b.1 | Open `/` and `/meetings`; open `/version.json`. | Both footers show `v<version> · <7-char commit>`; `/version.json` returns the same build with `Cache-Control: no-store`. |
+| 7b.2 | Keep a dashboard tab open while a new commit deploys to the same environment, then wait 5 minutes (or switch to another tab and back after a minute). | “A new version is out” with the new build. **Reload now** reloads into it (the footer shows the new commit). |
+| 7b.3 | Repeat, but choose **Later**. | The dialog closes and doesn't come back for that build; the footer shows **New version: reload**, which reloads. |
+| 7b.4 | Start a browser recording on `/record` before the deploy lands. | No dialog while recording, after Stop or while uploading; it appears once the meeting is saved (or the take discarded). |
+
 ### 8. Errors
 
 | # | Steps | Expected |
@@ -152,7 +161,8 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 
 `BASE_URL=https://dev.boringtalks.lol API_URL=https://api.dev.boringtalks.lol pnpm --filter @boringtalks/e2e test:smoke`:
 landing renders with no console errors, `/signin` renders, `${API_URL}/health` is
-OK, `/downloads/latest` is a DMG or 404.
+OK, `/downloads/latest` is a DMG or 404, `/version.json` is uncached and (in CI) reports the
+deployed commit.
 
 ## BoringTalks for Mac — manual QA
 
@@ -214,6 +224,17 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | Click the meeting | The dashboard opens `…/meetings/<id>`: a meaningful title, summary, action items, the transcript with You / Speaker 1 / Speaker 2 and timestamps that match the audio player |
 | Settings → turn **Upload meeting audio** off, record another short meeting | The dashboard has the transcript but no audio player |
 | Record while Settings shows the model still downloading (fresh install), Stop after 1 minute | If the model became ready in time: normal transcript. If not: the meeting still uploads (with audio) and the server transcribes it |
+
+### 4b. Stop after silence
+
+| Step | Expected |
+|---|---|
+| Settings › **Stop after silence** = 1 minute. **Start meeting** (first time: allow notifications) and say a sentence, then stay quiet; type on the keyboard meanwhile | After 30 s of quiet a “Still in a meeting?” notification with **Keep recording**, and the menu shows “Nobody has spoken for a while. Stopping in 0:29.” with the same button; typing doesn't reset it |
+| Press **Keep recording** (in the notification or the menu) | The countdown disappears; the warning returns 30 s later if it stays quiet |
+| Keep quiet until it reaches 0 | The recording stops by itself; a “Recording stopped” notification names the meeting and says it is uploading; the menu shows the same note with **OK**; the meeting uploads and appears in Recent meetings |
+| Play a podcast through the speakers instead of staying quiet | No warning while people are talking |
+| Turn notifications off for BoringTalks in System Settings, repeat | No notifications; the countdown is in the menu, and the stop shows an alert |
+| **Stop after silence** = Never, stay quiet for 2 minutes | Nothing happens; the meeting keeps recording |
 
 ### 5. Offline upload, then reconnect
 

@@ -162,6 +162,19 @@ private struct RecordingPanel: View {
             if let error = model.recordError {
                 Text(error).font(.caption).foregroundStyle(.red)
             }
+            if recorder.isRecording, let stopsAt = recorder.silenceStopsAt {
+                SilenceWarning(stopsAt: stopsAt) { model.keepRecording() }
+            }
+            if let notice = model.autoStopNotice, recorder.phase == .idle {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(notice, systemImage: "moon.zzz.fill")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("OK") { model.dismissAutoStopNotice() }
+                        .buttonStyle(.borderless).font(.caption)
+                }
+            }
             if recorder.isRecording, recorder.waitingForModel {
                 Label("Recording. The speech model is still loading — the transcript catches up once it's ready.",
                       systemImage: "hourglass")
@@ -215,6 +228,30 @@ struct ModelProgress: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// "Nobody has spoken for a while. Stopping in 0:42" with a Keep recording button.
+private struct SilenceWarning: View {
+    let stopsAt: Date
+    let keep: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let left = max(0, Int(stopsAt.timeIntervalSince(context.date).rounded(.up)))
+                Label("Nobody has spoken for a while. Stopping in \(left / 60):\(String(format: "%02d", left % 60)).",
+                      systemImage: "moon.zzz")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button("Keep recording", action: keep)
+                .controlSize(.small)
+        }
+        .padding(8)
+        .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

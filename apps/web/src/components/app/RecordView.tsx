@@ -12,6 +12,7 @@ import { useRecorder } from '@/hooks/useRecorder';
 import { TALKER } from '@/lib/avatar/styles';
 import { formatBytes, formatClock } from '@/lib/format';
 import { AUDIO_ACCEPT, checkAudioFile, normalizeAudioType, submitAudio, type SubmitStage } from '@/lib/upload';
+import { holdUpdates } from '@/lib/version';
 
 const STAGE_LABEL: Record<SubmitStage, string> = {
   creating: 'Creating the meeting…',
@@ -78,6 +79,10 @@ function RecorderPanel() {
   useEffect(() => {
     if (s.kind === 'done') router.push(`/meetings/${s.meetingId}`);
   }, [s, router]);
+
+  // Never offer a reload over a recording that hasn't reached the server yet.
+  const unsaved = s.kind !== 'idle' && s.kind !== 'done' && !(s.kind === 'error' && !s.recorded);
+  useEffect(() => (unsaved ? holdUpdates() : undefined), [unsaved]);
 
   const talking = s.kind === 'recording' && rec.level > 0.12;
 
@@ -226,6 +231,7 @@ function UploadPanel() {
   const inputId = useId();
   const titleId = useId();
   const busy = state.kind === 'submitting';
+  useEffect(() => (busy ? holdUpdates() : undefined), [busy]);
 
   function choose(f: File | undefined | null) {
     setState({ kind: 'idle' });

@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if CommandLineTools.run(CommandLine.arguments, model: model) { return }
 
+        model.notifier.setUp()
         let liveWindow = LiveWindowController(model: model)
         model.onLiveWindowChange = { [weak liveWindow] visible in liveWindow?.setVisible(visible) }
         self.liveWindow = liveWindow

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { VersionTag } from '@/components/app/UpdatePrompt';
 import { Logo } from './Logo';
 
 export function SiteFooter() {
@@ -8,6 +9,7 @@ export function SiteFooter() {
         <div>
           <Logo tone="white" />
           <p className="mt-3 text-sm font-semibold text-white/70">This website could have been an email.</p>
+          <VersionTag className="mt-2 block text-white/45" />
         </div>
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-extrabold text-white/85">
           <Link href="/#download" className="hover:text-sun">

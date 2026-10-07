@@ -20,6 +20,7 @@ final class AppModel {
     let preferences: Preferences
     let models: SpeechModels
     let recorder: MeetingRecorder
+    let notifier = Notifier()
 
     private(set) var auth: Auth = .unknown
     private(set) var authError: String?
@@ -29,6 +30,8 @@ final class AppModel {
     private(set) var meetingsError: String?
     private(set) var uploads = UploadQueue.Snapshot()
     private(set) var recordError: String?
+    /// Why the last meeting stopped by itself (nobody spoke for a while), until dismissed.
+    private(set) var autoStopNotice: String?
     /// The live transcript window is showing.
     var liveWindowVisible = false
     /// Optional title for the next meeting.
@@ -60,6 +63,12 @@ final class AppModel {
         tokenSource.authenticator = authenticator
         queue = UploadQueue(api: api, store: FileUploadStore(url: folders.uploadQueue), recordings: folders.recordings,
                             keepAudioDays: preferences.keepAudioDays)
+        recorder.onSilenceWarning = { [weak self] left in
+            guard let self else { return }
+            if let left { notifier.warnSilence(stopsIn: left) } else { notifier.clearWarning() }
+        }
+        recorder.onSilence = { [weak self] limit in self?.stopForSilence(after: limit) }
+        notifier.onKeepRecording = { [weak self] in self?.keepRecording() }
     }
 
     // MARK: - Launch
@@ -200,9 +209,12 @@ final class AppModel {
 
     func startMeeting() {
         recordError = nil
+        autoStopNotice = nil
         Task {
             do {
                 recorder.avoidBluetoothMic = preferences.avoidBluetoothMic
+                recorder.silenceLimit = TimeInterval(preferences.silenceStopMinutes * 60)
+                if preferences.silenceStopMinutes > 0 { Task { await notifier.requestPermission() } }
                 try await recorder.start(title: titleDraft, language: preferences.languageCode, uploadAudio: preferences.uploadAudio)
             } catch {
                 recordError = error.localizedDescription
@@ -211,6 +223,7 @@ final class AppModel {
     }
 
     func stopMeeting() {
+        notifier.clearWarning()
         Task {
             guard let meeting = await recorder.stop() else {
                 recordError = "Nothing was recorded."
@@ -219,6 +232,35 @@ final class AppModel {
             titleDraft = ""
             await queue.enqueue(meeting)
         }
+    }
+
+    /// Nobody spoke for `limit` seconds: the meeting probably ended with the recording left on.
+    private func stopForSilence(after limit: TimeInterval) {
+        let quiet = SilenceWatch.describe(limit)
+        Task {
+            let meeting = await recorder.stop()
+            let name = meeting?.title.map { "“\($0)”" } ?? "The meeting"
+            let message: String
+            if let meeting {
+                titleDraft = ""
+                await queue.enqueue(meeting)
+                message = "Nobody spoke for \(quiet), so BoringTalks stopped recording. \(name) is uploading as usual."
+            } else {
+                message = "Nobody spoke for \(quiet), so BoringTalks stopped recording. Nothing was recorded."
+            }
+            autoStopNotice = message
+            notifier.recordingStopped(message)
+        }
+    }
+
+    /// The "Keep recording" button (in the menu or on the warning notification).
+    func keepRecording() {
+        recorder.keepRecording()
+        notifier.clearWarning()
+    }
+
+    func dismissAutoStopNotice() {
+        autoStopNotice = nil
     }
 
     // MARK: - Meetings

@@ -26,6 +26,11 @@ final class Preferences {
         didSet { defaults.set(avoidBluetoothMic, forKey: "avoidBluetoothMic") }
     }
 
+    /// Stop the recording when nobody has spoken for this many minutes; 0 never stops.
+    var silenceStopMinutes: Int {
+        didSet { defaults.set(silenceStopMinutes, forKey: "silenceStopMinutes") }
+    }
+
     @ObservationIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -34,6 +39,7 @@ final class Preferences {
         uploadAudio = defaults.object(forKey: "uploadAudio") as? Bool ?? true
         keepAudioDays = defaults.object(forKey: "keepAudioDays") as? Int ?? 7
         avoidBluetoothMic = defaults.object(forKey: "avoidBluetoothMic") as? Bool ?? true
+        silenceStopMinutes = max(0, defaults.object(forKey: "silenceStopMinutes") as? Int ?? 5)
     }
 
     var languageCode: String? { language.isEmpty ? nil : language }
