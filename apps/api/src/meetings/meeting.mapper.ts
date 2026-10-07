@@ -30,6 +30,7 @@ export function toDetail(
     ...toListItem(row, summary?.actionItems.length ?? 0),
     language: row.language,
     error: row.error,
+    bot: row.botId && row.botStatus ? { status: row.botStatus, meetingUrl: row.botMeetingUrl ?? '', joinAt: row.botJoinAt?.toISOString() ?? null } : null,
     summary: summary
       ? {
           summary: summary.summary,

@@ -20,6 +20,7 @@ import { decodeCursor, encodeCursor } from '../common/cursor';
 import { validationError } from '../common/zod.pipe';
 import type { MeetingRow, UserRow } from '../db/schema';
 import { JobsService } from '../queues/jobs.service';
+import { RecallClient } from '../recall/recall.client';
 import { audioKey, meetingPrefix } from '../storage/keys';
 import { StorageService, UPLOAD_URL_TTL_SEC } from '../storage/storage.service';
 import { displayNames, renameSpeakers } from '../processing/speaker-names';
@@ -58,6 +59,7 @@ export class MeetingsService {
     private readonly transcripts: TranscriptService,
     private readonly storage: StorageService,
     private readonly jobs: JobsService,
+    private readonly recall: RecallClient,
   ) {}
 
   async list(user: UserRow, query: ListMeetingsQuery): Promise<MeetingPage> {
@@ -149,6 +151,10 @@ export class MeetingsService {
 
   async remove(user: UserRow, id: string): Promise<void> {
     const meeting = await this.owned(user, id);
+    // A bot still in the call would keep recording a meeting that no longer exists.
+    if (meeting.botId && meeting.botStatus && !['left', 'done', 'failed'].includes(meeting.botStatus)) {
+      await this.recall.leaveCall(meeting.botId).catch(() => undefined);
+    }
     await this.storage.deletePrefix(meetingPrefix(meeting.userId, meeting.id));
     await this.repo.delete(meeting.id);
   }

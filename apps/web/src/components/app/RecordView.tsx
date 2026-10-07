@@ -7,6 +7,8 @@ import { useEffect, useId, useState, useSyncExternalStore, type ChangeEvent, typ
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ErrorNote } from '@/components/ui/ErrorNote';
+import { SendBotPanel } from './SendBotPanel';
+import { useMe } from '@/hooks/queries';
 import { useMicrophones } from '@/hooks/useMicrophones';
 import { useRecorder } from '@/hooks/useRecorder';
 import { TALKER } from '@/lib/avatar/styles';
@@ -21,6 +23,7 @@ const STAGE_LABEL: Record<SubmitStage, string> = {
 };
 
 export function RecordView() {
+  const me = useMe();
   return (
     <div>
       <h1 className="font-display text-4xl leading-none sm:text-5xl">New recording</h1>
@@ -32,6 +35,11 @@ export function RecordView() {
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <RecorderPanel />
         <UploadPanel />
+        {me.data?.meetingBot && (
+          <div className="lg:col-span-2">
+            <SendBotPanel />
+          </div>
+        )}
       </div>
     </div>
   );

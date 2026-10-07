@@ -84,6 +84,10 @@ Validated with zod at boot (`src/config/env.ts`); the process exits with a list 
 | `EMAIL_FROM` | | `BoringTalks <hello@send.boringtalks.lol>` |
 | `EMAIL_ALLOWLIST` | | comma list; when set, mail only these addresses (dev) |
 | `DIARIZE_MODEL` | | `google/gemini-3-flash`: hears server-transcribed audio to tell voices apart; empty = off |
+| `RECALL_API_KEY` | | Recall.ai key; empty turns meeting bots off |
+| `RECALL_BASE_URL` | | `https://us-west-2.recall.ai` (the account's region) |
+| `RECALL_WEBHOOK_SECRET` | | `whsec_…` to verify Recall's webhooks |
+| `RECALL_BOT_NAME` | | `BoringTalks Notetaker` |
 | `THROTTLE_LIMIT` | | `120` requests/min per user |
 
 ## Architecture

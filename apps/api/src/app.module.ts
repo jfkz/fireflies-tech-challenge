@@ -18,6 +18,8 @@ import { QueuesModule } from './queues/queues.module';
 import { REDIS, RedisModule } from './redis/redis.module';
 import { StorageModule } from './storage/storage.module';
 import { TasksModule } from './tasks/tasks.module';
+import { BotsModule } from './recall/bots.module';
+import { RecallModule } from './recall/recall.module';
 import { UsersModule } from './users/users.module';
 
 /** The HTTP API. Stateless: all state is in Postgres, Redis and R2, so it scales by replicas. */
@@ -41,6 +43,8 @@ import { UsersModule } from './users/users.module';
     DevicesModule,
     MeetingsModule,
     TasksModule,
+    RecallModule,
+    BotsModule,
     DownloadsModule,
     HealthModule,
   ],

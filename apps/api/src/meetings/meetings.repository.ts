@@ -282,6 +282,11 @@ export class MeetingsRepository {
     return result.rowCount ?? 0;
   }
 
+  async findByBotId(botId: string): Promise<MeetingRow | null> {
+    const [row] = await this.db.select().from(meetings).where(eq(meetings.botId, botId));
+    return row ?? null;
+  }
+
   async update(id: string, patch: MeetingPatch): Promise<MeetingRow | null> {
     const [row] = await this.db.update(meetings).set(patch).where(eq(meetings.id, id)).returning();
     return row ?? null;

@@ -1,6 +1,14 @@
 export const TRANSCRIBE_QUEUE = 'transcribe';
 export const SUMMARIZE_QUEUE = 'summarize';
 export const EMAIL_QUEUE = 'email';
+/** Fetches a finished meeting bot's transcript and audio from Recall.ai. */
+export const BOT_IMPORT_QUEUE = 'bot-import';
+
+/**
+ * Recall finishes the transcript a few minutes after the bot leaves, so the import retries
+ * once a minute for about 20 minutes before giving up.
+ */
+export const BOT_IMPORT_JOB_OPTIONS = { attempts: 20, backoff: { type: 'fixed', delay: 60_000 } } as const;
 
 export interface MeetingJob {
   meetingId: string;

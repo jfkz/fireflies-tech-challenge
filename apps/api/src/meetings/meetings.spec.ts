@@ -49,8 +49,9 @@ function setup() {
   };
   const jobs = { summarize: vi.fn(), transcribe: vi.fn() };
   const transcripts = new TranscriptService(repo as never, storage as never);
-  const service = new MeetingsService(repo as never, transcripts, storage as never, jobs as never);
-  return { repo, storage, jobs, service };
+  const recall = { leaveCall: vi.fn().mockResolvedValue(undefined) };
+  const service = new MeetingsService(repo as never, transcripts, storage as never, jobs as never, recall as never);
+  return { repo, storage, jobs, service, recall };
 }
 
 describe('mapper', () => {
@@ -223,6 +224,17 @@ describe('MeetingsService', () => {
     await service.remove(user(), meeting().id);
     expect(storage.deletePrefix).toHaveBeenCalledWith(`users/${user().id}/meetings/${meeting().id}/`);
     expect(repo.delete).toHaveBeenCalledWith(meeting().id);
+  });
+
+  it('calls a bot that is still in the call out before deleting', async () => {
+    const { repo, recall, service } = setup();
+    repo.findOwned.mockResolvedValue(meeting({ botId: 'b', botStatus: 'recording' }));
+    await service.remove(user(), meeting().id);
+    expect(recall.leaveCall).toHaveBeenCalledWith('b');
+    recall.leaveCall.mockClear();
+    repo.findOwned.mockResolvedValue(meeting({ botId: 'b', botStatus: 'done' }));
+    await service.remove(user(), meeting().id);
+    expect(recall.leaveCall).not.toHaveBeenCalled();
   });
 
   it('presigns uploads under the meeting prefix', async () => {

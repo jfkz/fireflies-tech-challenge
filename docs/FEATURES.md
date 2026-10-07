@@ -170,6 +170,23 @@ owner with chips (“Everyone” clears it); **Show done tasks** lists finished 
 **Limits.** 100 tasks per page with **Load more**. Meetings summarized before due dates existed
 show the deadline as said and sort under “No date” until reprocessed.
 
+### Meeting bots: send a notetaker to a call
+
+**What.** When the server has a Recall.ai key, **New recording** has **Send a notetaker to a call**
+(and the meeting list a **Send a notetaker** button): paste a Zoom, Google Meet, Microsoft Teams or
+Webex link, optionally a title and a time to join. A bot named “BoringTalks Notetaker” joins as a
+participant, so everyone in the call sees it. The meeting page shows where it is (on its way, in the
+waiting room and needs letting in, recording, left) with **Make it leave** / **Cancel the
+notetaker**. After the call, its transcript arrives with the participants' names as shown in the
+call, plus the audio, and the meeting gets the usual notes, names, topics and tasks.
+
+**Where.** API `src/recall/` (`RecallClient`, `BotsService` + webhook, `BotImportService` worker job);
+web `components/app/SendBotPanel.tsx`, `BotBanner` in `MeetingView.tsx`.
+
+**Limits.** Off without `RECALL_API_KEY`. A host can refuse or remove the bot, and some meetings need
+registration or a password the bot doesn't have; the meeting then shows why it failed. Recall bills
+per bot-hour (see `docs/AGENT.md`).
+
 ### Calendar `/calendar`
 
 **What.** Where your meeting time went, counted in your browser's time zone:

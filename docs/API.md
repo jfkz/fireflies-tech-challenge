@@ -246,6 +246,33 @@ Poll `GET /meetings/:id` until `status` is `ready` or `failed`.
 Runs the pipeline again: from transcription when there is no transcript, else from the summary.
 Allowed from `ready` and `failed`.
 
+## Meeting bots (Recall.ai)
+
+Only when the server has `RECALL_API_KEY`; `GET /me` says so with `"meetingBot": true`.
+
+### `POST /bots` (`SendBotRequest`) → `201 MeetingDetail`
+```json
+{ "meetingUrl": "https://meet.google.com/abc-defg-hij", "title": "Board call", "joinAt": "2026-10-07T09:00:00Z" }
+```
+Creates a meeting (`source: "bot"`, `status: "recording"`) and a Recall.ai bot, "BoringTalks
+Notetaker", that joins the link now or at `joinAt`. Zoom, Google Meet, Microsoft Teams and Webex
+links only (`400` otherwise). The meeting carries `"bot": { "status", "meetingUrl", "joinAt" }`, with status
+`scheduled` → `joining` → `waiting_room` → `in_call` → `recording` → `left` → `done` (or `failed`).
+`502` when Recall refuses the link or can't be reached (no meeting is left behind); `503` when
+bots aren't set up.
+
+### `POST /meetings/:id/bot/leave` → `MeetingDetail`
+Calls the bot out of the call (or cancels a scheduled one). What it recorded so far is still
+turned into notes. `409` if it already left. Deleting a meeting also calls its bot back.
+
+### `POST /integrations/recall/webhook` (public)
+Recall's bot status webhooks, verified with `RECALL_WEBHOOK_SECRET` (HMAC-SHA256 over
+`<id>.<timestamp>.<body>`, `webhook-*` or `svix-*` headers, 5 minutes tolerance; `401` otherwise).
+`bot.done` queues an import: the worker fetches the transcript (participants named as in the call)
+and the mixed MP3, stores both, and the meeting goes through the usual summary. Recall finishes the
+transcript a few minutes after the call; the import retries every minute for 20 minutes. `bot.fatal`
+marks the meeting failed with the reason in words ("Nobody let the bot in from the waiting room.").
+
 ## Tasks
 
 ### `GET /tasks?status=&owner=&cursor=&limit=` → `TaskPage`

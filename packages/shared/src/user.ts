@@ -6,6 +6,8 @@ export const Me = z.object({
   name: z.string().nullable(),
   emailOnReady: z.boolean(),
   createdAt: z.string().datetime(),
+  /** Whether this server can send a bot to meetings (Recall.ai is configured). */
+  meetingBot: z.boolean().optional(),
 });
 export type Me = z.infer<typeof Me>;
 

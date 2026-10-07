@@ -13,7 +13,7 @@ import { SpeakerChip, speakerColor } from '@/components/ui/SpeakerChip';
 import { Marked } from '@/components/ui/Marked';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { TopicPill } from '@/components/ui/TopicPill';
-import { useDeleteMeeting, useMeeting, useReprocessMeeting, useUpdateMeeting } from '@/hooks/queries';
+import { useDeleteMeeting, useLeaveBot, useMeeting, useReprocessMeeting, useUpdateMeeting } from '@/hooks/queries';
 import { useAudioSync } from '@/hooks/useAudioSync';
 import { ApiRequestError } from '@/lib/api';
 import { stillPose } from '@/lib/avatar/pose';
@@ -46,7 +46,7 @@ function MeetingDetailView({ meeting: m }: { meeting: MeetingDetail }) {
         <span aria-hidden>←</span> All meetings
       </Link>
       <Header meeting={m} />
-      {processing && <ProcessingBanner status={m.status} />}
+      {m.bot && m.status === 'recording' ? <BotBanner meeting={m} /> : processing && <ProcessingBanner status={m.status} />}
       {m.status === 'failed' && <FailedBanner meeting={m} />}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-start">
@@ -342,6 +342,50 @@ const PIPELINE: { status: MeetingStatus; label: string }[] = [
   { status: 'summarizing', label: 'Summarizing' },
   { status: 'ready', label: 'Ready' },
 ];
+
+/** What the meeting bot is doing, while it's on its way, in the call, or just left. */
+const BOT_LINE: Record<NonNullable<MeetingDetail['bot']>['status'], string> = {
+  scheduled: 'The notetaker will join at the time you picked.',
+  joining: 'The notetaker is joining the call…',
+  waiting_room: 'The notetaker is in the waiting room. Someone in the call needs to let “BoringTalks Notetaker” in.',
+  in_call: 'The notetaker is in the call and about to start recording.',
+  recording: 'The notetaker is in the call, recording.',
+  left: 'The notetaker left the call. The transcript arrives in a few minutes, then the notes.',
+  done: 'The notetaker left the call. The transcript arrives in a few minutes, then the notes.',
+  failed: 'The notetaker couldn’t record this meeting.',
+};
+
+function BotBanner({ meeting: m }: { meeting: MeetingDetail }) {
+  const leave = useLeaveBot(m.id);
+  const bot = m.bot!;
+  const inCall = ['joining', 'waiting_room', 'in_call', 'recording', 'scheduled'].includes(bot.status);
+  return (
+    <div className="sticker mt-6 flex flex-col items-center gap-4 overflow-hidden bg-call-light/50 p-5 sm:flex-row sm:p-6" role="status" aria-live="polite" data-testid="bot-banner">
+      <TalkingHead style={MEN[1]} talking={bot.status === 'recording'} look={-1} seed={11} className="h-24 w-24 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <SpeechBubble tail={false}>
+          {BOT_LINE[bot.status]}
+          {bot.status === 'scheduled' && bot.joinAt && <> ({new Date(bot.joinAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })})</>}
+        </SpeechBubble>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm font-bold text-ink-soft">
+          <a href={bot.meetingUrl} target="_blank" rel="noreferrer" className="truncate font-extrabold text-call-deep underline underline-offset-2">
+            Open the meeting
+          </a>
+          {inCall && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => leave.mutate()} disabled={leave.isPending}>
+              {leave.isPending ? 'Calling it back…' : bot.status === 'scheduled' ? 'Cancel the notetaker' : 'Make it leave'}
+            </button>
+          )}
+        </div>
+        {leave.isError && (
+          <div className="mt-3">
+            <ErrorNote>{leave.error.message}</ErrorNote>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function ProcessingBanner({ status }: { status: MeetingStatus }) {
   const order = ['recording', 'uploaded', 'transcribing', 'summarizing', 'ready'];

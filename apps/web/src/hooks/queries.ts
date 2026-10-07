@@ -181,6 +181,19 @@ export function applyUpdate(m: MeetingDetail, body: UpdateMeetingRequest): Meeti
   return next;
 }
 
+/** Sends a Recall.ai bot to a meeting link; resolves with the new meeting. */
+export function useSendBot() {
+  const { api } = useAuth();
+  const setMeeting = useSetMeeting();
+  return useMutation({ mutationFn: api.sendBot, onSuccess: setMeeting });
+}
+
+export function useLeaveBot(id: string) {
+  const { api } = useAuth();
+  const setMeeting = useSetMeeting();
+  return useMutation({ mutationFn: () => api.leaveBot(id), onSuccess: setMeeting });
+}
+
 export function useReprocessMeeting(id: string) {
   const { api } = useAuth();
   const setMeeting = useSetMeeting();

@@ -4,8 +4,10 @@ import { emailJobId, meetingJobId } from './queues';
 describe('JobsService', () => {
   it('uses deterministic job ids so duplicates collapse', async () => {
     const queue = () => ({ add: vi.fn() });
-    const [t, s, e] = [queue(), queue(), queue()];
-    const jobs = new JobsService(t as never, s as never, e as never);
+    const [t, s, e, b] = [queue(), queue(), queue(), queue()];
+    const jobs = new JobsService(t as never, s as never, e as never, b as never);
+    await jobs.importBot('m1', 0);
+    expect(b.add).toHaveBeenCalledWith('bot-import', { meetingId: 'm1', run: 0 }, expect.objectContaining({ jobId: 'm1_bot-import_0', attempts: 20 }));
     await jobs.transcribe('m1', 1);
     await jobs.summarize('m1', 2);
     await jobs.email({ type: 'meeting-ready', userId: 'u', meetingId: 'm1', run: 2 });

@@ -15,6 +15,7 @@ import {
   type CreateMeetingRequest,
   type ListMeetingsQuery,
   type ListTasksQuery,
+  type SendBotRequest,
   type MeetingStatsQuery,
   type UpdateMeetingRequest,
   type UpdateSettingsRequest,
@@ -121,6 +122,8 @@ export function createApiClient({ baseUrl, getToken, fetch: fetchImpl }: ApiClie
       request('POST', `/meetings/${encodeURIComponent(id)}/upload-url`, { schema: UploadUrlResponse, body }),
     completeMeeting: (id: string, body: CompleteMeetingRequest = {}) =>
       request('POST', `/meetings/${encodeURIComponent(id)}/complete`, { schema: MeetingDetail, body }),
+    sendBot: (body: SendBotRequest) => request('POST', '/bots', { schema: MeetingDetail, body }),
+    leaveBot: (id: string) => request('POST', `/meetings/${encodeURIComponent(id)}/bot/leave`, { schema: MeetingDetail, body: {} }),
     reprocessMeeting: (id: string) => request('POST', `/meetings/${encodeURIComponent(id)}/reprocess`, { schema: MeetingDetail, body: {} }),
 
     authorizeDevice: (body: AuthorizeDeviceRequest) => request('POST', '/devices/authorize', { schema: AuthorizeDeviceResponse, body }),
