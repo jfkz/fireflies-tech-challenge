@@ -30,8 +30,10 @@ final class AppModel {
     private(set) var meetingsError: String?
     private(set) var uploads = UploadQueue.Snapshot()
     private(set) var recordError: String?
-    /// Why the last meeting stopped by itself (nobody spoke for a while), until dismissed.
+    /// Why the last meeting stopped by itself (the call ended, nobody spoke), until dismissed.
     private(set) var autoStopNotice: String?
+    /// A call app has been using the microphone: the name of the app we're asking about.
+    private(set) var callOffer: String?
     /// The live transcript window is showing.
     var liveWindowVisible = false
     /// Optional title for the next meeting.
@@ -42,6 +44,9 @@ final class AppModel {
     @ObservationIgnored private let authenticator: DeviceAuthenticator
     @ObservationIgnored private let reachability = Reachability()
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    @ObservationIgnored private let micMonitor = MicUsageMonitor()
+    @ObservationIgnored private var callSignals = CallSignals()
+    @ObservationIgnored private var callTask: Task<Void, Never>?
     @ObservationIgnored var onLiveWindowChange: ((Bool) -> Void)?
     private static let log = Log.logger("app")
 
@@ -67,8 +72,11 @@ final class AppModel {
             guard let self else { return }
             if let left { notifier.warnSilence(stopsIn: left) } else { notifier.clearWarning() }
         }
-        recorder.onSilence = { [weak self] limit in self?.stopForSilence(after: limit) }
+        recorder.onAutoStop = { [weak self] reason in self?.stopByItself(reason) }
         notifier.onKeepRecording = { [weak self] in self?.keepRecording() }
+        notifier.onRecordCall = { [weak self] in self?.recordCall() }
+        notifier.onDeclineCall = { [weak self] in self?.declineCall() }
+        notifier.onIgnoreCallApp = { [weak self] app in self?.ignoreCallApp(app) }
     }
 
     // MARK: - Launch
@@ -95,6 +103,7 @@ final class AppModel {
         // Start downloading the speech model right away; it takes a while the first time.
         Task { await models.prepare() }
         startRefreshing()
+        startCallDetection()
     }
 
     private func receive(_ snapshot: UploadQueue.Snapshot) {
@@ -216,6 +225,8 @@ final class AppModel {
                 recorder.silenceLimit = TimeInterval(preferences.silenceStopMinutes * 60)
                 if preferences.silenceStopMinutes > 0 { Task { await notifier.requestPermission() } }
                 try await recorder.start(title: titleDraft, language: preferences.languageCode, uploadAudio: preferences.uploadAudio)
+                callSignals.recordingStarted(now: ProcessInfo.processInfo.systemUptime)
+                clearCallOffer()
             } catch {
                 recordError = error.localizedDescription
             }
@@ -225,7 +236,9 @@ final class AppModel {
     func stopMeeting() {
         notifier.clearWarning()
         Task {
-            guard let meeting = await recorder.stop() else {
+            let meeting = await recorder.stop()
+            callSignals.recordingStopped()
+            guard let meeting else {
                 recordError = "Nothing was recorded."
                 return
             }
@@ -234,19 +247,23 @@ final class AppModel {
         }
     }
 
-    /// Nobody spoke for `limit` seconds: the meeting probably ended with the recording left on.
-    private func stopForSilence(after limit: TimeInterval) {
-        let quiet = SilenceWatch.describe(limit)
+    /// The call ended or nobody spoke for a while: the meeting is over but the recording was left on.
+    private func stopByItself(_ reason: MeetingRecorder.AutoStopReason) {
+        let why = switch reason {
+        case .silence(let limit): "Nobody spoke for \(SilenceWatch.describe(limit))"
+        case .callEnded(let app): "The \(app) call ended"
+        }
         Task {
             let meeting = await recorder.stop()
+            callSignals.recordingStopped()
             let name = meeting?.title.map { "“\($0)”" } ?? "The meeting"
             let message: String
             if let meeting {
                 titleDraft = ""
                 await queue.enqueue(meeting)
-                message = "Nobody spoke for \(quiet), so BoringTalks stopped recording. \(name) is uploading as usual."
+                message = "\(why), so BoringTalks stopped recording. \(name) is uploading as usual."
             } else {
-                message = "Nobody spoke for \(quiet), so BoringTalks stopped recording. Nothing was recorded."
+                message = "\(why), so BoringTalks stopped recording. Nothing was recorded."
             }
             autoStopNotice = message
             notifier.recordingStopped(message)
@@ -261,6 +278,79 @@ final class AppModel {
 
     func dismissAutoStopNotice() {
         autoStopNotice = nil
+    }
+
+    // MARK: - Calls
+
+    /// Watches which apps use the microphone: offers to record a call, and tells the
+    /// recorder when the recorded call's app hangs up.
+    private func startCallDetection() {
+        micMonitor.onChange = { [weak self] in self?.evaluateCalls() }
+        micMonitor.start()
+        if preferences.offerToRecordCalls { Task { await notifier.requestPermission() } }
+        callTask = Task { [weak self] in
+            var ticks = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self else { return }
+                // The listeners report changes; a slow re-read covers any they miss.
+                ticks += 1
+                if ticks % 5 == 0 { self.micMonitor.refresh() }
+                self.evaluateCalls()
+            }
+        }
+    }
+
+    private func evaluateCalls() {
+        let extra = preferences.extraCallApps
+        let active = micMonitor.users.compactMap { CallApps.identify($0, extra: extra) }
+        var signedIn = false
+        if case .signedIn = auth { signedIn = true }
+        callSignals.offersEnabled = preferences.offerToRecordCalls && signedIn
+        callSignals.ignored = Set(preferences.ignoredCallApps)
+        let events = callSignals.update(active: active, now: ProcessInfo.processInfo.systemUptime,
+                                        isRecording: recorder.phase != .idle)
+        for event in events {
+            switch event {
+            case .offer(let app):
+                Self.log.notice("\(app, privacy: .public) is in a call; offering to record")
+                callOffer = app
+                notifier.offerToRecord(app: app)
+            case .withdraw:
+                clearCallOffer()
+            case .callEnded(let app):
+                if preferences.stopWhenCallEnds { recorder.callEnded(app: app) }
+            case .callResumed:
+                recorder.callResumed()
+            }
+        }
+    }
+
+    /// Record (from the menu or the notification).
+    func recordCall() {
+        clearCallOffer()
+        guard recorder.phase == .idle else { return }
+        startMeeting()
+    }
+
+    /// Not now: asked again for the next call.
+    func declineCall() {
+        callSignals.declineOffer()
+        clearCallOffer()
+    }
+
+    func ignoreCallApp(_ app: String) {
+        if !preferences.ignoredCallApps.contains(app) { preferences.ignoredCallApps.append(app) }
+        declineCall()
+    }
+
+    func askAgain(about app: String) {
+        preferences.ignoredCallApps.removeAll { $0 == app }
+    }
+
+    private func clearCallOffer() {
+        callOffer = nil
+        notifier.withdrawOffer()
     }
 
     // MARK: - Meetings

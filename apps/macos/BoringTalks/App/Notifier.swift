@@ -1,22 +1,45 @@
 import AppKit
 import UserNotifications
 
-/// System notifications for things that happen while the menu is closed: a quiet
-/// meeting about to stop (with a Keep recording button), and one that stopped.
-/// Without notification permission the stop is shown as an alert instead.
+/// System notifications for things that happen while the menu is closed: a call
+/// that started (Record it?), a quiet meeting about to stop (Keep recording), and a
+/// meeting that stopped by itself. Without notification permission the stop is shown
+/// as an alert instead, and the rest only in the menu.
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     /// The warning's "Keep recording" button was pressed.
     var onKeepRecording: (() -> Void)?
+    /// The call offer was answered: Record (also a click on the notification).
+    var onRecordCall: (() -> Void)?
+    /// …Not now (or the notification was dismissed).
+    var onDeclineCall: (() -> Void)?
+    /// …Never ask for this app (its name).
+    var onIgnoreCallApp: ((String) -> Void)?
 
     private var center: UNUserNotificationCenter { .current() }
 
     func setUp() {
         center.delegate = self
         let keep = UNNotificationAction(identifier: IDs.keepAction, title: "Keep recording")
+        let record = UNNotificationAction(identifier: IDs.recordAction, title: "Record")
+        let notNow = UNNotificationAction(identifier: IDs.notNowAction, title: "Not now")
+        let never = UNNotificationAction(identifier: IDs.neverAction, title: "Never for this app")
         center.setNotificationCategories([
             UNNotificationCategory(identifier: IDs.silenceCategory, actions: [keep], intentIdentifiers: []),
+            UNNotificationCategory(identifier: IDs.callCategory, actions: [record, notNow, never], intentIdentifiers: [],
+                                   options: [.customDismissAction]),
         ])
+    }
+
+    func offerToRecord(app: String) {
+        Task {
+            _ = await post(id: IDs.callOffer, category: IDs.callCategory, title: "\(app) is in a call. Record it?",
+                           body: "BoringTalks can write this meeting down. Choose Record to start.", userInfo: ["app": app])
+        }
+    }
+
+    func withdrawOffer() {
+        center.removeDeliveredNotifications(withIdentifiers: [IDs.callOffer])
     }
 
     /// Asks once (macOS remembers the answer); called when a meeting starts.
@@ -51,7 +74,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// False when notifications aren't allowed.
-    private func post(id: String, category: String?, title: String, body: String) async -> Bool {
+    private func post(id: String, category: String?, title: String, body: String, userInfo: [String: String] = [:]) async -> Bool {
         let status = await center.notificationSettings().authorizationStatus
         guard status == .authorized || status == .provisional else { return false }
         let content = UNMutableNotificationContent()
@@ -59,6 +82,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         content.body = body
         content.sound = .default
         if let category { content.categoryIdentifier = category }
+        content.userInfo = userInfo
         do {
             try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
             return true
@@ -75,8 +99,20 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        guard response.actionIdentifier == IDs.keepAction else { return }
-        await MainActor.run { onKeepRecording?() }
+        let action = response.actionIdentifier
+        let content = response.notification.request.content
+        let isCallOffer = content.categoryIdentifier == IDs.callCategory
+        let app = content.userInfo["app"] as? String
+        await MainActor.run {
+            switch action {
+            case IDs.keepAction: onKeepRecording?()
+            case IDs.recordAction: onRecordCall?()
+            case UNNotificationDefaultActionIdentifier where isCallOffer: onRecordCall?()
+            case IDs.notNowAction, UNNotificationDismissActionIdentifier where isCallOffer: onDeclineCall?()
+            case IDs.neverAction: if let app { onIgnoreCallApp?(app) }
+            default: break
+            }
+        }
     }
 }
 
@@ -85,4 +121,9 @@ private enum IDs {
     static let keepAction = "keep-recording"
     static let warning = "silence-warning"
     static let stopped = "silence-stopped"
+    static let callCategory = "call-started"
+    static let callOffer = "call-offer"
+    static let recordAction = "record-call"
+    static let notNowAction = "not-now"
+    static let neverAction = "never-for-app"
 }

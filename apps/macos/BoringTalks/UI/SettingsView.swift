@@ -55,6 +55,20 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Calls") {
+                Toggle("Offer to record when a call starts", isOn: $preferences.offerToRecordCalls)
+                Text("When Zoom, Teams, Webex, Slack, FaceTime or a browser has been using the microphone for a few seconds, BoringTalks asks whether to record. It only sees which app uses the microphone, never what it hears, and never records without asking.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Stop when the call ends", isOn: $preferences.stopWhenCallEnds)
+                Text("When the app of the call being recorded stops using the microphone, the recording stops 30 seconds after the others go quiet.")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(preferences.ignoredCallApps, id: \.self) { app in
+                    LabeledContent("Never asked for \(app)") {
+                        Button("Ask again") { model.askAgain(about: app) }
+                    }
+                }
+            }
+
             Section("Account") {
                 switch model.auth {
                 case .signedIn(let email):

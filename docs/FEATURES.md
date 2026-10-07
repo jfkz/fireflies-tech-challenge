@@ -331,7 +331,37 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   stop is shown as an alert and the warning only in the menu. The trailing quiet stays in the
   recording (and its duration). Any value can be set with
   `defaults write games.cutthecheese.boringtalks silenceStopMinutes -int <minutes>`.
-  Noticing when a meeting *starts* is not built yet; ideas in [MEETING-START.md](MEETING-START.md).
+
+### Offer to record a call, stop when it ends
+
+- **What:** when a call app has used the microphone for 5 s (a browser for 15 s, since browsers
+  also open it for voice notes and dictation), a notification asks “Zoom is in a call. Record
+  it?” with **Record** (clicking the notification does the same), **Not now** and **Never for
+  this app**. The menu shows the same question and the menu-bar icon turns into a phone, so it
+  works with notifications off. One question per call: **Not now** lasts until the app releases
+  the mic, and an unanswered question disappears when it does. It never records without asking.
+  Recognized: Zoom, Teams, Webex, Slack, FaceTime (and iPhone calls), Discord, Skype, WhatsApp,
+  Telegram, and Chrome, Brave, Arc, Edge, Firefox, Safari, Opera, Vivaldi.
+  **Stop when the call ends:** the recording, started from the question or by hand (it adopts
+  the call that holds the mic), stops once that app releases the microphone and the others have
+  been quiet for 30 s (“The Zoom call ended. Stopping in 0:30.” with **Keep recording** in the
+  menu; then the same “Recording stopped” notification as for silence). If the app takes the mic
+  back (a reconnect), nothing stops; others still talking (a browser that drops the mic on mute)
+  keep pushing the stop back. Stop after silence still applies when there is no call app (an
+  in-person meeting).
+- **How:** Core Audio's process objects (`kAudioHardwarePropertyProcessObjectList`,
+  `kAudioProcessPropertyIsRunningInput`, `kAudioProcessPropertyBundleID`), with listeners plus a
+  10 s re-read. It sees *which* app uses a microphone, never the audio, and needs no permission.
+- **Where:** `BoringTalks/Speech/MicUsageMonitor.swift`, `BoringTalksKit/CallSignals.swift`
+  (`CallApps`, `CallSignals`, `CallEndWatch`; unit-tested), `BoringTalks/App/AppModel.swift`
+  (Calls), `BoringTalks/App/Notifier.swift`, `BoringTalks/UI/MenuContent.swift`
+  (`CallOfferBanner`, `StopCountdown`). Settings › Calls: **Offer to record when a call starts**,
+  **Stop when the call ends** (both on), and the apps set to “never” with **Ask again**.
+- **Limits:** only while signed in. An app that isn't listed can be added with
+  `defaults write games.cutthecheese.boringtalks extraCallApps -array <bundle id>` (find it with
+  `--mic-users`). A browser holding the mic for something other than a call still gets asked
+  (after 15 s); the tab isn't looked at. Calendar titles and automatic recording without asking
+  are not built (see [MEETING-START.md](MEETING-START.md)).
 
 ### On-device transcription
 
@@ -397,7 +427,8 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 - **What:** speech model status and download progress (with retry), language (automatic by
   default), **Upload meeting audio** (on by default), **Keep recordings on this Mac**
   (delete after upload / 1 / 7 / 30 days), **Stop after silence** (never / 1–60 minutes,
-  default 5), show recordings in Finder, account and sign out,
+  default 5), show recordings in Finder, **Calls** (offer to record, stop when the call ends,
+  apps never asked about), account and sign out,
   API and dashboard URLs, version, quit.
 - **Where:** `BoringTalks/UI/SettingsView.swift`, `BoringTalks/App/Preferences.swift`.
 
@@ -418,7 +449,8 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 
 - `--transcribe <file> [--speakers] [--mic <file>] [--language xx] [--realtime]` prints the
   transcript JSON it would upload; `--icon <appiconset>` renders the icon; `--demo` and
-  `--show-menu` show the live window and the menu for screenshots.
+  `--show-menu` show the live window and the menu for screenshots; `--mic-users [seconds]` prints
+  which apps use a microphone (and which call app each counts as) whenever that changes.
 - **Where:** `BoringTalks/Recording/FileTranscriber.swift`, `BoringTalks/App/BoringTalksApp.swift`,
   `BoringTalks/Avatar/AppIconArt.swift`.
 

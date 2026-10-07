@@ -1,7 +1,13 @@
-# Ideas: notice when a meeting starts (Mac app)
+# Noticing when a meeting starts (Mac app)
 
-Not built. This is the other half of [Stop after silence](FEATURES.md#stop-after-silence): the Mac app
-notices that a call has begun and offers to record it, so nobody has to remember to press Start.
+The other half of [Stop after silence](FEATURES.md#stop-after-silence): the Mac app notices that a
+call has begun and offers to record it, so nobody has to remember to press Start.
+
+**Status.** Built: signal 1 (another app opens the microphone), asking with Record / Not now /
+Never for this app, the debounce, "ask once per call", and stopping when the call's app hangs up.
+See [Offer to record a call, stop when it ends](FEATURES.md#offer-to-record-a-call-stop-when-it-ends).
+Not built: the calendar (2), the browser tab (3), "Record automatically" and per-app "always
+record". The rest of this page is the original design note, kept for those.
 
 ## What tells us a call has started
 

@@ -24,13 +24,26 @@ final class MeetingRecorder {
     @ObservationIgnored var avoidBluetoothMic = true
     /// Quiet this long (seconds) stops the meeting; 0 never does. Read when a meeting starts.
     @ObservationIgnored var silenceLimit: TimeInterval = 300
-    /// Nobody has spoken for a while: the recording stops at this moment unless someone keeps it going.
-    private(set) var silenceStopsAt: Date?
-    /// The quiet began to count down (once per quiet spell), with the seconds left;
-    /// nil when someone spoke again before the stop.
+
+    enum AutoStopReason: Equatable {
+        /// Nobody spoke for this many seconds.
+        case silence(TimeInterval)
+        /// The app holding the call released the microphone.
+        case callEnded(app: String)
+    }
+
+    struct PendingStop: Equatable {
+        var reason: AutoStopReason
+        var at: Date
+    }
+
+    /// The recording stops by itself at this moment unless someone keeps it going.
+    private(set) var pendingStop: PendingStop?
+    /// The silence countdown began (once per quiet spell), with the seconds left; nil
+    /// when it was called off (someone spoke, or the call-end countdown took over).
     @ObservationIgnored var onSilenceWarning: (@MainActor (TimeInterval?) -> Void)?
-    /// The quiet reached the limit (seconds). The owner stops the meeting.
-    @ObservationIgnored var onSilence: (@MainActor (TimeInterval) -> Void)?
+    /// Time to stop. The owner stops the meeting.
+    @ObservationIgnored var onAutoStop: (@MainActor (AutoStopReason) -> Void)?
     let live = LiveTranscript()
 
     @ObservationIgnored private let models: SpeechModels
@@ -52,9 +65,11 @@ final class MeetingRecorder {
     @ObservationIgnored private var attached: Set<AudioChannel> = []
     @ObservationIgnored private var attaching: Task<Void, Never>?
     @ObservationIgnored private var silence = SilenceWatch(limit: 0)
-    /// Meeting-clock seconds when the transcript last heard someone.
-    @ObservationIgnored private var lastSpeech: TimeInterval = 0
-    @ObservationIgnored private var silenceReported = false
+    @ObservationIgnored private var callEnd = CallEndWatch()
+    @ObservationIgnored private var endedCallApp: String?
+    /// Meeting-clock seconds when the transcript last heard someone, per side.
+    @ObservationIgnored private var lastSpeech: [AudioChannel: TimeInterval] = [:]
+    @ObservationIgnored private var autoStopReported = false
     /// Meters for the menu while nothing records.
     @ObservationIgnored private let idleMeters: [AudioChannel: LevelMeter] = [.microphone: LevelMeter(), .system: LevelMeter()]
     private static let log = Log.logger("recorder")
@@ -91,9 +106,11 @@ final class MeetingRecorder {
         live.reset()
         registry = VoiceRegistry()
         silence = SilenceWatch(limit: silenceLimit)
-        lastSpeech = 0
-        silenceReported = false
-        silenceStopsAt = nil
+        callEnd = CallEndWatch()
+        endedCallApp = nil
+        lastSpeech = [:]
+        autoStopReported = false
+        pendingStop = nil
         let id = UUID()
         let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         meeting = (id, trimmedTitle?.isEmpty == false ? trimmedTitle : nil, language, uploadAudio)
@@ -114,7 +131,7 @@ final class MeetingRecorder {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .milliseconds(500))
                     self?.channels.values.forEach { $0.catchUp() }
-                    self?.checkSilence()
+                    self?.checkAutoStop()
                 }
             }
             let micStarted = await startMic()
@@ -303,7 +320,9 @@ final class MeetingRecorder {
         let pending = kinds.filter { !attached.contains($0) }
         // Until now the meters said when someone was heard; the transcriber starts on the
         // backlog, so carry that over rather than count the wait as quiet.
-        lastSpeech = max(lastSpeech, meterActivity(of: pending))
+        for kind in pending {
+            lastSpeech[kind] = max(lastSpeech[kind] ?? 0, meterActivity(of: [kind]))
+        }
         attached.formUnion(pending)
         let language = meeting?.language
         let previous = attaching
@@ -327,49 +346,110 @@ final class MeetingRecorder {
         let endMs = event.end * 1000 / SpeechFormat.rate
         live.receive(text: event.text, isFinal: event.isFinal, channel: channel, voice: event.speaker?.voice, startMs: startMs)
         if !event.text.isEmpty {
-            lastSpeech = max(lastSpeech, Double(event.end) / Double(SpeechFormat.rate))
+            lastSpeech[channel] = max(lastSpeech[channel] ?? 0, Double(event.end) / Double(SpeechFormat.rate))
         }
         guard event.isFinal, !event.text.isEmpty else { return }
         records.append(PhraseRecord(channel: channel, voice: event.speaker?.voice, startMs: startMs, endMs: endMs, text: event.text))
     }
 
-    // MARK: - Silence
+    // MARK: - Stopping by itself
 
-    /// Someone is still there: the quiet starts counting again from now.
+    /// Someone is still there: the quiet starts counting again from now, and a call-end
+    /// countdown is called off.
     func keepRecording() {
         guard phase == .recording else { return }
-        silence.keepRecording(at: ProcessInfo.processInfo.systemUptime - clockStart)
-        silenceStopsAt = nil
+        silence.keepRecording(at: clockNow)
+        callEnd.cancel()
+        endedCallApp = nil
+        setPendingStop(nil)
     }
 
+    /// The app holding the call released the microphone: stop once the other side has
+    /// been quiet for a little while.
+    func callEnded(app: String) {
+        guard phase == .recording else { return }
+        Self.log.notice("\(app, privacy: .public) released the microphone")
+        endedCallApp = app
+        callEnd.callEnded(at: clockNow)
+    }
+
+    /// …and took it back (a reconnect or a device switch).
+    func callResumed() {
+        guard endedCallApp != nil else { return }
+        callEnd.cancel()
+        endedCallApp = nil
+        if case .callEnded = pendingStop?.reason { setPendingStop(nil) }
+    }
+
+    private var clockNow: TimeInterval { ProcessInfo.processInfo.systemUptime - clockStart }
+
     /// Called every half second while recording.
-    private func checkSilence() {
-        guard phase == .recording, silence.isOn, !silenceReported else { return }
-        let now = ProcessInfo.processInfo.systemUptime - clockStart
-        let unheard = channels.keys.filter { !attached.contains($0) }
-        let lastActivity = max(lastSpeech, meterActivity(of: unheard))
+    private func checkAutoStop() {
+        guard phase == .recording, !autoStopReported else { return }
+        let now = clockNow
+        if let app = endedCallApp {
+            switch callEnd.verdict(lastOthers: othersActivity(now: now), now: now) {
+            case .stop:
+                return report(.callEnded(app: app))
+            case .stopping(let left):
+                return setPendingStop(PendingStop(reason: .callEnded(app: app), at: Date().addingTimeInterval(left)))
+            case .recording:
+                break
+            }
+        }
+        guard silence.isOn else { return setPendingStop(nil) }
+        let lastActivity = activity(of: Array(channels.keys), now: now)
         switch silence.verdict(lastActivity: lastActivity, now: now) {
         case .listening:
-            guard silenceStopsAt != nil else { return }
-            silenceStopsAt = nil
-            onSilenceWarning?(nil)
+            setPendingStop(nil)
         case .warning(let left):
-            guard silenceStopsAt == nil else { return }
-            silenceStopsAt = Date().addingTimeInterval(left)
+            if case .silence = pendingStop?.reason { return }
             Self.log.notice("quiet for \(Int(self.silence.quiet(lastActivity: lastActivity, now: now)), privacy: .public) s; stopping in \(Int(left), privacy: .public) s")
-            onSilenceWarning?(left)
+            setPendingStop(PendingStop(reason: .silence(silence.limit), at: Date().addingTimeInterval(left)))
         case .stop:
-            silenceReported = true
-            silenceStopsAt = nil
-            Self.log.notice("quiet for \(Int(self.silence.limit), privacy: .public) s; stopping the meeting")
-            onSilence?(silence.limit)
+            report(.silence(silence.limit))
         }
     }
 
-    /// When the meters of channels without a transcriber last heard a sound
-    /// (meeting clock). Their words aren't known yet, so any clear sound counts.
+    private func report(_ reason: AutoStopReason) {
+        autoStopReported = true
+        setPendingStop(nil)
+        Self.log.notice("stopping by itself: \(String(describing: reason), privacy: .public)")
+        onAutoStop?(reason)
+    }
+
+    /// Updates the countdown the menu shows; tells the owner when a silence warning starts or ends.
+    private func setPendingStop(_ new: PendingStop?) {
+        let old = pendingStop
+        // The call-end countdown moves each time the others speak; skip sub-second jitter.
+        if let old, let new, old.reason == new.reason, abs(old.at.timeIntervalSince(new.at)) < 1 { return }
+        guard old != new else { return }
+        pendingStop = new
+        let wasSilence = if case .silence = old?.reason { true } else { false }
+        let isSilence = if case .silence = new?.reason { true } else { false }
+        if isSilence, !wasSilence, let new {
+            onSilenceWarning?(new.at.timeIntervalSinceNow)
+        } else if wasSilence, !isSilence {
+            onSilenceWarning?(nil)
+        }
+    }
+
+    /// When someone was last heard on any of `kinds` (meeting clock): from the transcript,
+    /// or from the level meter while that side has no transcriber yet.
+    private func activity(of kinds: [AudioChannel], now: TimeInterval) -> TimeInterval {
+        kinds.map { kind in
+            attached.contains(kind) ? lastSpeech[kind] ?? 0 : meterActivity(of: [kind])
+        }.max() ?? 0
+    }
+
+    /// The other side, or everyone when system audio isn't recorded.
+    private func othersActivity(now: TimeInterval) -> TimeInterval {
+        activity(of: channels[.system] != nil ? [.system] : Array(channels.keys), now: now)
+    }
+
+    /// When the meters of `kinds` last heard a clear sound (meeting clock).
     private func meterActivity(of kinds: [AudioChannel]) -> TimeInterval {
-        let now = ProcessInfo.processInfo.systemUptime - clockStart
+        let now = clockNow
         return kinds.compactMap { channels[$0] }.map { now - $0.meter.snapshot().sinceSound }.max() ?? 0
     }
 
@@ -397,7 +477,8 @@ final class MeetingRecorder {
         meeting = nil
         startedAt = nil
         waitingForModel = false
-        silenceStopsAt = nil
+        pendingStop = nil
+        endedCallApp = nil
         microphoneName = nil
         restarts = [:]
         attached = []

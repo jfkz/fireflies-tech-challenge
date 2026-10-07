@@ -236,6 +236,23 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | Turn notifications off for BoringTalks in System Settings, repeat | No notifications; the countdown is in the menu, and the stop shows an alert |
 | **Stop after silence** = Never, stay quiet for 2 minutes | Nothing happens; the meeting keeps recording |
 
+### 4c. Calls: offer to record, stop when the call ends
+
+| Step | Expected |
+|---|---|
+| `BoringTalks --mic-users 60`, then join a Zoom (or Meet in Chrome) test call and leave it | Lines like `us.zoom.xos → Zoom` appear when it joins and “nobody is using a microphone” when it leaves |
+| Signed in, not recording: join a Zoom call | After ~5 s a notification “Zoom is in a call. Record it?”; the menu shows the same with **Record** / **Not now** / **Never for Zoom**, and the menu-bar icon is a phone |
+| **Record** | Recording starts; the question disappears |
+| Leave the call (Zoom releases the mic) and stay quiet | The menu shows “The Zoom call ended. Stopping in 0:30.”; at 0:00 it stops, a “Recording stopped” notification says “The Zoom call ended…”, and the meeting uploads |
+| Record a call, then switch Zoom's microphone in its settings (it releases and retakes the mic) | No stop; the countdown, if it showed, goes away |
+| Join a call and answer **Not now** | Not asked again during that call; asked again for the next one |
+| Join and leave within a few seconds without answering | The notification disappears by itself |
+| **Never for Zoom**, then join again | No question; Settings › Calls lists Zoom with **Ask again** |
+| Join a Meet call in Chrome | Asked after ~15 s, as “Chrome is in a call” |
+| Start a meeting by hand, then join a Zoom call, then leave it | The recording adopts the call and stops 30 s after leaving |
+| Turn off **Offer to record when a call starts** / **Stop when the call ends** | No question / the recording keeps going after the call (until Stop after silence) |
+| Signed out, join a call | No question |
+
 ### 5. Offline upload, then reconnect
 
 | Step | Expected |
