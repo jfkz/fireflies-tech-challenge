@@ -39,6 +39,9 @@ function setup() {
     speakerLabels: vi.fn(),
     saveSpeakerNames: vi.fn(),
     dailyStats: vi.fn(),
+    chainMeetings: vi.fn().mockResolvedValue([]),
+    joinChain: vi.fn(),
+    leaveChain: vi.fn(),
   };
   const storage = {
     presignPut: vi.fn().mockResolvedValue('https://r2/put'),
@@ -215,6 +218,56 @@ describe('MeetingsService', () => {
     expect(d.speakers).toEqual(['Mia']);
     expect(d.segments[0].speaker).toBe('Mia');
     await expect(service.update(user(), m.id, { speakers: { Nobody: 'X' } })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  describe('chains', () => {
+    const chainId = '55555555-5555-4555-8555-555555555555';
+    const other = meeting({ id: '66666666-6666-4666-8666-666666666666', title: 'Earlier' });
+    const refs = [
+      { id: other.id, title: 'Earlier', startedAt: '2026-10-01T10:00:00.000Z' },
+      { id: meeting().id, title: 'Now', startedAt: '2026-10-06T14:05:00.000Z' },
+    ];
+
+    it('shows the chain a meeting is in, with why it was linked', async () => {
+      const { repo, service } = setup();
+      repo.findOwned.mockResolvedValue(meeting({ chainId, chainReason: 'Same admin page work' }));
+      repo.chainMeetings.mockResolvedValue(refs);
+      const d = await service.get(user(), meeting().id);
+      expect(repo.chainMeetings).toHaveBeenCalledWith(user().id, chainId);
+      expect(d.chain).toEqual({ id: chainId, meetings: refs, reason: 'Same admin page work' });
+    });
+
+    it('shows no chain when there is none or the others are gone', async () => {
+      const { repo, service } = setup();
+      repo.findOwned.mockResolvedValue(meeting());
+      expect((await service.get(user(), meeting().id)).chain).toBeNull();
+      repo.findOwned.mockResolvedValue(meeting({ chainId }));
+      repo.chainMeetings.mockResolvedValue(refs.slice(1));
+      expect((await service.get(user(), meeting().id)).chain).toBeNull();
+    });
+
+    it("links by hand to another of the user's meetings, and unlinks", async () => {
+      const { repo, service } = setup();
+      repo.findOwned.mockImplementation(async (_u: string, id: string) => (id === other.id ? other : meeting()));
+      repo.joinChain.mockResolvedValue(meeting({ chainId, chainLocked: true }));
+      repo.chainMeetings.mockResolvedValue(refs);
+      const linked = await service.update(user(), meeting().id, { chain: { with: other.id } });
+      expect(repo.joinChain).toHaveBeenCalledWith(meeting().id, other.id, { reason: null, locked: true });
+      expect(linked.chain?.meetings).toHaveLength(2);
+
+      repo.leaveChain.mockResolvedValue(meeting({ chainLocked: true }));
+      const unlinked = await service.update(user(), meeting().id, { chain: null });
+      expect(repo.leaveChain).toHaveBeenCalledWith(meeting().id);
+      expect(unlinked.chain).toBeNull();
+    });
+
+    it("refuses to chain a meeting to itself or to someone else's meeting", async () => {
+      const { repo, service } = setup();
+      repo.findOwned.mockImplementation(async (_u: string, id: string) => (id === meeting().id ? meeting() : null));
+      await expect(service.update(user(), meeting().id, { chain: { with: meeting().id } })).rejects.toThrow();
+      await expect(service.update(user(), meeting().id, { chain: { with: other.id } })).rejects.toBeInstanceOf(NotFoundException);
+      expect(repo.joinChain).not.toHaveBeenCalled();
+    });
   });
 
   it('deletes storage objects with the meeting', async () => {

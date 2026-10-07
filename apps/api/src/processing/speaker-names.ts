@@ -52,12 +52,12 @@ export function resolveSpeakerNames(
 ): SpeakerNameMap {
   const out: SpeakerNameMap = {};
   const taken = new Set<string>();
-  const claim = (label: string, name: string, by: 'ai' | 'user') => {
+  const claim = (label: string, name: string, by: 'ai' | 'user', role = false) => {
     let unique = name;
     // A person may give two labels the same name on purpose (one voice split in two); a guess never does.
     for (let n = 2; by === 'ai' && taken.has(unique.toLocaleLowerCase()); n++) unique = `${name} ${n}`;
     taken.add(unique.toLocaleLowerCase());
-    if (unique !== label || by === 'user') out[label] = { name: unique, by };
+    if (unique !== label || by === 'user') out[label] = role ? { name: unique, by, role: true } : { name: unique, by };
   };
 
   // Names the user chose, and labels that are already names, come first and are never renamed.
@@ -70,10 +70,12 @@ export function resolveSpeakerNames(
     if (Object.hasOwn(out, label) || !isPlaceholderLabel(label)) continue;
     const guess = guesses.find((g) => g.label.trim().toLowerCase() === label.toLowerCase());
     const owner = /^you$/i.test(label) ? firstName(ownerName) : null;
-    const name = owner ?? clean(guess?.name, NAME_MAX);
+    const guessed = clean(guess?.name, NAME_MAX);
+    // The account holder recognized among numbered speakers: called what "You" would be called.
+    const name = owner ?? (guessed && ownerName && guessed.toLocaleLowerCase() === ownerName.trim().toLocaleLowerCase() ? firstName(ownerName) : guessed);
     const role = clean(guess?.role, ROLE_MAX);
     if (name) claim(label, name, 'ai');
-    else if (role) claim(label, capitalize(role), 'ai');
+    else if (role) claim(label, capitalize(role), 'ai', true);
   }
   return out;
 }

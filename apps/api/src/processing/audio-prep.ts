@@ -21,12 +21,16 @@ export interface AudioPart {
   mediaType: string;
   /** Where this part starts in the original recording. */
   offsetMs: number;
+  /** How long it is, when known. */
+  durationMs?: number;
 }
 
 export interface PrepareOptions {
   maxBytes?: number;
   partSeconds?: number;
   overlapSeconds?: number;
+  /** Re-encode even a small file (for APIs that take MP3 but not every container). */
+  encode?: boolean;
 }
 
 /**
@@ -49,13 +53,14 @@ export async function prepareForTranscription(audio: Uint8Array, mediaType: stri
       if (audio.byteLength <= maxBytes) return [{ audio, mediaType, offsetMs: 0 }];
       throw new Error('This recording can’t be read; try uploading it as MP3, M4A or WAV.');
     }
-    if (audio.byteLength <= maxBytes && duration <= partSeconds) return [{ audio, mediaType, offsetMs: 0 }];
+    const durationMs = Math.round(duration * 1000);
+    if (!opts.encode && audio.byteLength <= maxBytes && duration <= partSeconds) return [{ audio, mediaType, offsetMs: 0, durationMs }];
 
     const speech = ['-vn', '-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '24k'];
     if (duration <= partSeconds) {
       const out = join(dir, 'speech.mp3');
       await ffmpeg(['-i', input, ...speech, out]);
-      return [{ audio: await readFile(out), mediaType: 'audio/mpeg', offsetMs: 0 }];
+      return [{ audio: await readFile(out), mediaType: 'audio/mpeg', offsetMs: 0, durationMs }];
     }
 
     const parts: AudioPart[] = [];
@@ -63,7 +68,7 @@ export async function prepareForTranscription(audio: Uint8Array, mediaType: stri
       const out = join(dir, `part-${parts.length}.mp3`);
       // -ss before -i seeks fast; re-encoding makes each part start cleanly on its own.
       await ffmpeg(['-ss', start.toFixed(3), '-t', length.toFixed(3), '-i', input, ...speech, out]);
-      parts.push({ audio: await readFile(out), mediaType: 'audio/mpeg', offsetMs: Math.round(start * 1000) });
+      parts.push({ audio: await readFile(out), mediaType: 'audio/mpeg', offsetMs: Math.round(start * 1000), durationMs: Math.round(length * 1000) });
     }
     return parts;
   } finally {

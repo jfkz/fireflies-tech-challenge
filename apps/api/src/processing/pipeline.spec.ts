@@ -19,7 +19,15 @@ const result: SummaryResult = {
 };
 
 function setup() {
-  const meetings = { findById: vi.fn(), transition: vi.fn(), getSegments: vi.fn(), saveSummary: vi.fn(), topTopics: vi.fn().mockResolvedValue([]) };
+  const meetings = {
+    findById: vi.fn(),
+    transition: vi.fn(),
+    getSegments: vi.fn(),
+    saveSummary: vi.fn().mockImplementation(async (id: string) => meeting({ id, status: 'ready' })),
+    topTopics: vi.fn().mockResolvedValue([]),
+    chainCandidates: vi.fn().mockResolvedValue([]),
+    joinChain: vi.fn(),
+  };
   const transcripts = { store: vi.fn() };
   const storage = { getBytes: vi.fn().mockResolvedValue(new Uint8Array(3)), putJson: vi.fn() };
   const users = { findById: vi.fn().mockResolvedValue(user()) };
@@ -27,6 +35,7 @@ function setup() {
   const transcriber = { transcribe: vi.fn() };
   const summarizer = { summarize: vi.fn().mockResolvedValue(result) };
   const diarizer = { diarize: vi.fn(async ({ segments }: { segments: unknown[] }) => segments) };
+  const chains = { link: vi.fn().mockResolvedValue(null) };
   const pipeline = new PipelineService(
     meetings as never,
     transcripts as never,
@@ -36,8 +45,9 @@ function setup() {
     transcriber as never,
     summarizer as never,
     diarizer as never,
+    chains as never,
   );
-  return { meetings, transcripts, storage, users, jobs, transcriber, summarizer, diarizer, pipeline };
+  return { meetings, transcripts, storage, users, jobs, transcriber, summarizer, diarizer, chains, pipeline };
 }
 
 describe('PipelineService.transcribe', () => {
@@ -65,6 +75,17 @@ describe('PipelineService.transcribe', () => {
     expect(t.transcripts.store.mock.calls[0][1].segments.map((s: { speaker: string }) => s.speaker)).toEqual(['Speaker 1', 'Speaker 2']);
   });
 
+  it('keeps the speakers of a model that told them apart itself', async () => {
+    const t = setup();
+    const m = meeting({ status: 'transcribing', attempts: 1, audioKey: 'a.m4a' });
+    t.meetings.findById.mockResolvedValue(m);
+    const segments = [seg('Speaker 1', 0, 1, 'hi'), seg('Speaker 2', 1, 2, 'hello')];
+    t.transcriber.transcribe.mockResolvedValue({ segments, language: 'en', durationSec: 2, diarized: true });
+    await t.pipeline.transcribe({ meetingId: m.id, run: 1 });
+    expect(t.diarizer.diarize).not.toHaveBeenCalled();
+    expect(t.transcripts.store.mock.calls[0][1].segments).toEqual(segments);
+  });
+
   it('skips stale or deleted meetings', async () => {
     const t = setup();
     t.meetings.findById.mockResolvedValueOnce(null);
@@ -81,6 +102,56 @@ describe('PipelineService.transcribe', () => {
     t.meetings.findById.mockResolvedValue(meeting({ status: 'transcribing', attempts: 1, audioKey: 'a' }));
     t.transcriber.transcribe.mockResolvedValue({ segments: [], language: null, durationSec: null });
     await expect(t.pipeline.transcribe({ meetingId: 'x', run: 1 })).rejects.toThrow('No speech');
+  });
+});
+
+describe('PipelineService.summarize: chains', () => {
+  const earlier = { id: '33333333-3333-4333-8333-333333333333', title: 'Admin page plan', description: null, startedAt: new Date('2026-10-01T10:00:00Z'), speakers: ['Gat'], topics: ['Launch'], chainId: null };
+
+  function ready(t: ReturnType<typeof setup>, overrides = {}) {
+    const m = meeting({ status: 'summarizing', attempts: 1, ...overrides });
+    t.meetings.findById.mockResolvedValue(m);
+    t.meetings.getSegments.mockResolvedValue([seg('You', 0, 1, 'hi')]);
+    t.meetings.saveSummary.mockResolvedValue({ ...m, status: 'ready' });
+    return m;
+  }
+
+  it('links a meeting that continues another one into its chain', async () => {
+    const t = setup();
+    const m = ready(t);
+    t.meetings.chainCandidates.mockResolvedValue([earlier]);
+    t.chains.link.mockResolvedValue({ meetingId: earlier.id, reason: 'Follows up on the admin page plan' });
+    await t.pipeline.summarize({ meetingId: m.id, run: 1 });
+    expect(t.meetings.chainCandidates).toHaveBeenCalledWith(m.userId, m.id, m.startedAt, 20);
+    expect(t.chains.link).toHaveBeenCalledWith({ meeting: expect.objectContaining({ id: m.id, summary: 'Summary.' }), candidates: [earlier] });
+    expect(t.meetings.joinChain).toHaveBeenCalledWith(m.id, earlier.id, { reason: 'Follows up on the admin page plan', locked: false });
+  });
+
+  it('leaves chained, hand-linked and lonely meetings alone, and never fails the meeting over it', async () => {
+    const chained = setup();
+    ready(chained, { chainId: '44444444-4444-4444-8444-444444444444' });
+    await chained.pipeline.summarize({ meetingId: 'x', run: 1 });
+    const locked = setup();
+    ready(locked, { chainLocked: true });
+    await locked.pipeline.summarize({ meetingId: 'x', run: 1 });
+    for (const t of [chained, locked]) expect(t.meetings.chainCandidates).not.toHaveBeenCalled();
+
+    const alone = setup();
+    ready(alone);
+    await alone.pipeline.summarize({ meetingId: 'x', run: 1 });
+    expect(alone.chains.link).not.toHaveBeenCalled();
+
+    const unrelated = setup();
+    ready(unrelated);
+    unrelated.meetings.chainCandidates.mockResolvedValue([earlier]);
+    await unrelated.pipeline.summarize({ meetingId: 'x', run: 1 });
+    expect(unrelated.meetings.joinChain).not.toHaveBeenCalled();
+
+    const broken = setup();
+    ready(broken);
+    broken.meetings.chainCandidates.mockResolvedValue([earlier]);
+    broken.chains.link.mockRejectedValue(new Error('gateway down'));
+    await expect(broken.pipeline.summarize({ meetingId: 'x', run: 1 })).resolves.toBe('done');
   });
 });
 

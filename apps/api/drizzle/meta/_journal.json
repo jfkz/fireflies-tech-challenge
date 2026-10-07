@@ -36,6 +36,13 @@
       "when": 1791313060146,
       "tag": "0004_search",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791381657535,
+      "tag": "0005_meeting_chains",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AppConfig } from '../config/config.module';
 import { MeetingsModule } from '../meetings/meetings.module';
 import { UsersModule } from '../users/users.module';
+import { ChainLinker, FakeChainLinker, GatewayChainLinker } from './chain-linker';
 import { FakeSummarizer, FakeTranscriber } from './fake-ai';
 import { GatewaySummarizer, SUMMARY_LANGUAGE_MODEL } from './gateway-summarizer';
 import { GatewayTranscriber } from './gateway-transcriber';
@@ -15,6 +16,13 @@ import { Transcriber } from './transcriber';
 @Module({
   imports: [MeetingsModule, UsersModule],
   providers: [
+    GatewayChainLinker,
+    FakeChainLinker,
+    {
+      provide: ChainLinker,
+      inject: [AppConfig, GatewayChainLinker, FakeChainLinker],
+      useFactory: (c: AppConfig, real: GatewayChainLinker, fake: FakeChainLinker) => (c.env.AI_FAKE ? fake : real),
+    },
     PipelineService,
     TranscribeProcessor,
     SummarizeProcessor,

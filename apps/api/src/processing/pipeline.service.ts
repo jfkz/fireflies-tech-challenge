@@ -10,6 +10,7 @@ import { summaryKey } from '../storage/keys';
 import { StorageService } from '../storage/storage.service';
 import { UsersRepository } from '../users/users.repository';
 import { displayNames, resolveSpeakerNames } from './speaker-names';
+import { ChainLinker, linkIntoChain } from './chain-linker';
 import { Diarizer } from './diarizer';
 import { Summarizer } from './summarizer';
 import { Transcriber } from './transcriber';
@@ -31,6 +32,7 @@ export class PipelineService {
     private readonly transcriber: Transcriber,
     private readonly summarizer: Summarizer,
     private readonly diarizer: Diarizer,
+    private readonly chains: ChainLinker,
   ) {}
 
   async transcribe(job: MeetingJob): Promise<'done' | 'stale'> {
@@ -44,8 +46,8 @@ export class PipelineService {
       language: meeting.language,
     });
     if (result.segments.length === 0) throw new UnrecoverableError('No speech was found in the audio');
-    // The server's transcript has one voice; listen again to tell the people apart.
-    const segments = await this.diarizer.diarize({ audio, segments: result.segments });
+    // A model that doesn't tell voices apart gives one; then listen again to tell the people apart.
+    const segments = result.diarized ? result.segments : await this.diarizer.diarize({ audio, segments: result.segments });
     await this.transcripts.store(meeting, { ...result, segments });
     const next = await this.meetings.transition(meeting.id, 'transcribing', { status: 'summarizing' });
     if (next) await this.jobs.summarize(next.id, next.attempts);
@@ -70,7 +72,7 @@ export class PipelineService {
     const speakerNames = resolveSpeakerNames(labels, result.speakers, ownerName, meeting.speakerNames);
     const names = displayNames(speakerNames);
     const { title, description, model, inputTokens, outputTokens, topics, speakers: _guesses, actionItems, ...rest } = result;
-    await this.meetings.saveSummary(
+    const saved = await this.meetings.saveSummary(
       meeting.id,
       { ...rest, actionItems: actionItems.map((a) => ({ ...a, owner: a.owner && speakerName(a.owner, names) })), model, inputTokens, outputTokens },
       {
@@ -84,11 +86,25 @@ export class PipelineService {
       },
     );
     this.logger.log({ meetingId: meeting.id, model, inputTokens, outputTokens, named: Object.keys(speakerNames).length }, 'meeting summarized');
+    await this.linkChain(saved, result.summary);
 
     if (user?.emailOnReady) {
       await this.jobs.email({ type: 'meeting-ready', userId: user.id, meetingId: meeting.id, run: job.run });
     }
     return 'done';
+  }
+
+  /**
+   * Links a meeting that continues another one (the same recurring meeting, a follow-up on the same
+   * work) into that meeting's chain. Best effort: the meeting is ready either way.
+   */
+  private async linkChain(meeting: MeetingRow, summary: string): Promise<void> {
+    try {
+      const link = await linkIntoChain(this.meetings, this.chains, meeting, summary);
+      if (link) this.logger.log({ meetingId: meeting.id, with: link.meetingId }, 'meeting linked into a chain');
+    } catch (err) {
+      this.logger.warn({ meetingId: meeting.id, err: (err as Error).message }, 'chain linking failed');
+    }
   }
 
   /** Called when a job has used up its retries: the meeting shows the error instead of spinning forever. */

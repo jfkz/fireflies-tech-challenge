@@ -83,6 +83,10 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 4.12 | Record a call where people use each other's names (“Thanks, Priya”, “Tom, can you…”). | Speakers show as Priya and Tom, not Speaker 1/2; someone only mentioned (“ask Sam”) is not given to anyone; your side shows your first name (Settings → Your name). Action item owners use the names. |
 | 4.13 | **Rename speakers** → change one name → **Save names**; then Reprocess. | Chips, transcript and action item owners update at once; the name you typed survives the reprocess. Clicking a speaker or topic chip opens the filtered list. |
 | 4.11 | Phone width. | Sections stack; transcript below the summary; no overflow. |
+| 4.14 | Open the middle one of three meetings recorded on one day. | Under **All meetings**: **← Previous that day**, “2 of 3 that day”, **Next that day →** (“today” if it's today); hovering shows the target's title. Press **[** and **]**: the earlier / later meeting opens. Type `[` in Find in transcript: nothing happens. The last meeting of the day has Next greyed out; a day with one meeting shows no day buttons. |
+| 4.15 | Record a follow-up of an earlier meeting (same project, “as we said last week…”), wait for Ready. | A **Chain · 2 of 2** strip with the reason, **← Previous in chain** to the earlier meeting (which shows the chain too); **{** / **}** step through it; **Show all 2** lists both, this one highlighted. |
+| 4.16 | **Remove from chain** → Cancel, then again → **Remove from chain**. | An in-page dialog; confirming removes the strip here and from the other meetings; reprocessing doesn't link it again. |
+| 4.17 | Click a named speaker chip (e.g. Maya), then “Speaker 2”. | Maya's person page opens; “Speaker 2” opens the meeting list filtered by it. |
 
 ### 4b. Tasks `/tasks`
 
@@ -103,6 +107,20 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 4c.3 | ‹ and › in the month view, then **Today**. | Other months load with their numbers; Today returns to this month and is disabled there. |
 | 4c.4 | Record a meeting late in the evening, check its day. | It counts for the day it happened where you are, not in UTC. |
 | 4c.5 | Phone width. | Cards two per row; the heatmap scrolls sideways and starts at the latest weeks; month cells show counts. |
+
+### 4d. People `/people`
+
+| # | Steps | Expected |
+|---|---|---|
+| 4d.1 | Open **People** from the top bar (between Tasks and Calendar). | “You spent … in meetings in the last 30 days, with N people …”; everyone with a name, most time together first, each with a bar, “… together · N meetings · talks N%”, last met, open tasks. You, “Speaker 2” and “Others” are not listed. |
+| 4d.2 | Switch to **90 days**, **All time**, back to **30 days**; reload; press Back. | The list and numbers change; the URL shows `?days=90` / `?days=all` / nothing; reload keeps the period; Back walks through them. |
+| 4d.3 | New account (only the demo meeting, speakers unnamed). | “Nobody in the last 30 days” with how people get names and **Show all time**. |
+| 4d.4 | Open a person. | Cards for time together, meetings (since …), their talk time and last met; topics (each opens the filtered list); open tasks (tick one: ticked at once, struck through; the Tasks page agrees); every meeting together with date, length and their talk time. |
+| 4d.5 | **Rename or merge** → a new name → **Save**. | The URL becomes `/people/<new name>`; meetings, transcripts, tasks and the list show the new name. |
+| 4d.6 | Rename someone to the name of another person in the list. | They become one person: the page shows the combined meetings and time; the list has one row fewer. |
+| 4d.7 | Open `/people/Nobody%20Here`. | “No one called Nobody Here” with **See everyone**. |
+| 4d.8 | On `/meetings`, click Maya in the filter bar. | **Time with Maya →** next to Clear filters opens her page. |
+| 4d.9 | Phone width. | People is in the scrolling bottom nav; rows and cards fit without overflow. |
 
 ### 5. Browser recorder and upload `/record`
 

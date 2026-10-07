@@ -90,6 +90,14 @@ describe('GatewaySummarizer', () => {
     expect(result.speakers).toEqual([{ label: 'Speaker 1', name: 'Dana', role: null }]);
   });
 
+  it('without a "You" (server transcript) says the person recording is one of the speakers, unknown which', async () => {
+    const { model, calls } = mockModel();
+    await new GatewaySummarizer(model).summarize({ segments: [seg('Speaker 1', 0, 1000, 'Hi.'), seg('Speaker 2', 1000, 2000, 'Hey.')], language: null, ownerName: 'Ann Lee' });
+    const text = promptText(calls[0]);
+    expect(text).not.toContain('Speaker \\"You\\" is Ann');
+    expect(text).toContain("Ann Lee recorded this meeting and is probably one of the speakers, but the transcript doesn't say which");
+  });
+
   it('falls back to key topics when the model gives no tags', async () => {
     const { model } = mockModel({ ...draft, topics: [], speakers: [] });
     const result = await new GatewaySummarizer(model).summarize({ segments: [seg('You', 0, 1, 'x')], language: null });

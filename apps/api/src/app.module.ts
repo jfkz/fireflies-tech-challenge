@@ -14,6 +14,7 @@ import { DevicesModule } from './devices/devices.module';
 import { DownloadsModule } from './downloads/downloads.module';
 import { HealthModule } from './health/health.module';
 import { MeetingsModule } from './meetings/meetings.module';
+import { PeopleModule } from './people/people.module';
 import { QueuesModule } from './queues/queues.module';
 import { REDIS, RedisModule } from './redis/redis.module';
 import { StorageModule } from './storage/storage.module';
@@ -41,6 +42,7 @@ import { UsersModule } from './users/users.module';
     DevicesModule,
     MeetingsModule,
     TasksModule,
+    PeopleModule,
     DownloadsModule,
     HealthModule,
   ],

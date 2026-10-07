@@ -1,4 +1,4 @@
-import { applySpeakerNames, type MeetingDetail, type MeetingListItem, type SearchMatch, type Segment } from '@boringtalks/shared';
+import { applySpeakerNames, type MeetingChain, type MeetingDetail, type MeetingListItem, type SearchMatch, type Segment } from '@boringtalks/shared';
 import type { MeetingRow } from '../db/schema';
 import { displayNames } from '../processing/speaker-names';
 import type { SummaryWithItems } from './meetings.repository';
@@ -25,6 +25,7 @@ export function toDetail(
   summary: SummaryWithItems | null,
   segments: Segment[],
   audioUrl: string | null,
+  chain: MeetingChain | null = null,
 ): MeetingDetail {
   return {
     ...toListItem(row, summary?.actionItems.length ?? 0),
@@ -42,6 +43,7 @@ export function toDetail(
     // Segments are stored with their raw labels; clients see the display names.
     segments: applySpeakerNames(segments, displayNames(row.speakerNames)),
     audioUrl,
+    chain,
   };
 }
 

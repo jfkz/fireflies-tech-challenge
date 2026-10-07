@@ -11,7 +11,7 @@ pages, October 2026.
 
 | Item | Mac recording | Browser recording / upload |
 |---|---|---|
-| Transcription | **$0** (Parakeet on the Neural Engine) | $0.36 (`openai/whisper-1`, $0.006/min) |
+| Transcription | **$0** (Parakeet on the Neural Engine) | $0.10 (`microsoft/mai-transcribe-2`, with speakers) |
 | Title + summary + action items | ~$0.02 (`anthropic/claude-haiku-4.5`: ~13k tokens in at $1/M, ~1k out at $5/M) | ~$0.02 |
 | Upload to the server | a few KB of JSON (+14 MB audio if kept) | 14–60 MB audio |
 | Audio storage | $0.0002/month (14 MB at $0.015/GB-month) | same |

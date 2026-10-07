@@ -49,8 +49,9 @@ export const EnvSchema = z
 
     AI_GATEWAY_API_KEY: z.string().optional(),
     SUMMARY_MODEL: z.string().default('anthropic/claude-haiku-4.5'),
-    TRANSCRIBE_MODEL: z.string().default('openai/whisper-1'),
-    /** Hears server-transcribed recordings to tell voices apart; empty turns it off. */
+    /** MAI-Transcribe 2 also says who speaks each phrase; a Whisper-style model gives one voice and the Diarizer below listens again. */
+    TRANSCRIBE_MODEL: z.string().default('microsoft/mai-transcribe-2'),
+    /** Hears a recording to tell voices apart when the transcription model can't; empty turns it off. */
     DIARIZE_MODEL: z.string().default('google/gemini-3-flash'),
     AI_FAKE: flag,
     SUMMARIZE_CONCURRENCY: z.coerce.number().int().positive().default(4),

@@ -104,12 +104,34 @@ export const MeetingListItem = z.object({
 });
 export type MeetingListItem = z.infer<typeof MeetingListItem>;
 
+/** Another meeting, as a link: in the same chain, or the same day. */
+export const MeetingRef = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  startedAt: z.string().datetime(),
+});
+export type MeetingRef = z.infer<typeof MeetingRef>;
+
+/**
+ * Related meetings linked into one chain (a recurring sync, follow-ups on one project), oldest first.
+ * Linked by the summarizer when a meeting continues an earlier one, or by hand.
+ */
+export const MeetingChain = z.object({
+  id: z.string().uuid(),
+  meetings: z.array(MeetingRef).min(2),
+  /** Why this meeting was linked ("Follows up on the admin page plan"); null when linked by hand. */
+  reason: z.string().nullable(),
+});
+export type MeetingChain = z.infer<typeof MeetingChain>;
+
 export const MeetingDetail = MeetingListItem.extend({
   language: z.string().nullable(),
   error: z.string().nullable(),
   summary: MeetingSummary.omit({ title: true, description: true }).nullable(),
   segments: z.array(Segment),
   audioUrl: z.string().url().nullable(),
+  /** The chain this meeting is part of, or null. */
+  chain: MeetingChain.nullable().optional(),
 });
 export type MeetingDetail = z.infer<typeof MeetingDetail>;
 
@@ -173,8 +195,12 @@ export const UpdateMeetingRequest = z
       .record(SpeakerName, SpeakerName)
       .refine((r) => Object.keys(r).length > 0 && Object.keys(r).length <= 20, { message: 'Rename 1 to 20 speakers at a time' })
       .optional(),
+    /** null takes the meeting out of its chain (and it won't be linked again by itself); `with` links it to that meeting's chain. */
+    chain: z.union([z.null(), z.object({ with: z.string().uuid() })]).optional(),
   })
-  .refine((v) => v.title !== undefined || v.actionItem !== undefined || v.speakers !== undefined, { message: 'Nothing to update' });
+  .refine((v) => v.title !== undefined || v.actionItem !== undefined || v.speakers !== undefined || v.chain !== undefined, {
+    message: 'Nothing to update',
+  });
 export type UpdateMeetingRequest = z.infer<typeof UpdateMeetingRequest>;
 
 export const ListMeetingsQuery = z

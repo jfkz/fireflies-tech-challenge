@@ -67,6 +67,7 @@ describe('AppShell', () => {
     await waitFor(() => expect(me).toHaveBeenCalled());
     expect(screen.getAllByRole('link', { name: 'Meetings' })[0]).toHaveAttribute('aria-current', 'page');
     expect(screen.getByText('me@example.com')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'People' })[0]).toHaveAttribute('href', '/people');
   });
 });
 
@@ -200,6 +201,19 @@ describe('MeetingsList', () => {
     expect(snippet).toHaveAttribute('href', `/meetings/${a.id}?q=pric&t=247000`);
   });
 
+  it('links a named person to their page while filtered by them, not a speaker label', async () => {
+    nav.search = new URLSearchParams('speaker=Maya');
+    const listMeetings = vi.fn(async () => page([meeting({ speakers: ['You', 'Maya'] })]));
+    const { unmount } = renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), listMeetings: listMeetings as never }) }) });
+    expect(await screen.findByRole('link', { name: 'Time with Maya →' })).toHaveAttribute('href', '/people/Maya');
+    unmount();
+    nav.search = new URLSearchParams('speaker=Speaker+2');
+    renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), listMeetings: listMeetings as never }) }) });
+    expect(await screen.findByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
+    await screen.findByRole('link', { name: /Pricing review/ });
+    expect(screen.queryByRole('link', { name: /Time with/ })).toBeNull();
+  });
+
   it('says what was filtered when nothing matches', async () => {
     nav.search = new URLSearchParams('speaker=Maya&topic=Hiring');
     renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), listMeetings: vi.fn(async () => page([])) }) }) });
@@ -273,7 +287,7 @@ describe('MeetingView', () => {
     await waitFor(() => expect(btn.closest('li')).toHaveAttribute('data-active', 'true'));
   });
 
-  it('links speakers and topics to the filtered list, and renames speakers', async () => {
+  it('links speaker labels and topics to the filtered list, and renames speakers', async () => {
     const m = meeting({ speakers: ['You', 'Speaker 1'], topics: ['Pricing'] });
     const api = setup(m, { updateMeeting: vi.fn(async () => ({ ...m, speakers: ['You', 'Maya'] })) });
     const chips = await screen.findByRole('list', { name: 'Speakers and topics' });

@@ -16,11 +16,19 @@ describe('resolveSpeakerNames', () => {
     );
     expect(displayNames(map)).toEqual({ You: 'Mikhail', 'Speaker 1': 'Maya', 'Speaker 2': 'Recruiter' });
     expect(map['Speaker 1'].by).toBe('ai');
+    // A role isn't a person to follow across meetings.
+    expect(map['Speaker 2'].role).toBe(true);
+    expect(map['Speaker 1'].role).toBeUndefined();
   });
 
   it('keeps "You" without an account name unless the conversation names them', () => {
     expect(resolveSpeakerNames(['You'], [], null)).toEqual({});
     expect(displayNames(resolveSpeakerNames(['You'], [{ label: 'You', name: 'Sam', role: null }], null))).toEqual({ You: 'Sam' });
+  });
+
+  it('calls the account holder found among numbered speakers by their first name', () => {
+    const map = resolveSpeakerNames(['Speaker 1', 'Speaker 2'], [{ label: 'Speaker 2', name: 'Mikhail Pershin', role: null }], 'Mikhail Pershin');
+    expect(displayNames(map)).toEqual({ 'Speaker 2': 'Mikhail' });
   });
 
   it('rejects answers that are not names', () => {

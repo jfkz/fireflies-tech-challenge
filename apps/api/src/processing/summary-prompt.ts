@@ -63,6 +63,11 @@ Rules:
 export interface PromptContext {
   /** Account name of the person recording (speaker "You"), when known. */
   ownerName?: string | null;
+  /**
+   * The transcript has a "You" (the Mac app's microphone). Server transcripts don't: the person
+   * recording is one of the numbered speakers, and which one isn't known.
+   */
+  hasYou?: boolean;
   /** Tags the user's other meetings already have, most used first. */
   knownTopics?: readonly string[];
   /** When the meeting took place, so deadlines like "Friday" can become dates. */
@@ -82,13 +87,18 @@ export function calendarFrom(start: Date, days: number): string {
   }).join(', ');
 }
 
-function contextLines({ ownerName, knownTopics, meetingDate }: PromptContext): string {
+function contextLines({ ownerName, hasYou = true, knownTopics, meetingDate }: PromptContext): string {
   const lines: string[] = [];
   if (meetingDate) {
     lines.push(`The meeting took place on ${DATE_LINE.format(meetingDate)} (${meetingDate.toISOString().slice(0, 10)}).`);
     lines.push(`Calendar from the meeting day: ${calendarFrom(meetingDate, 21)}.`);
   }
-  if (ownerName) lines.push(`Speaker "You" is ${ownerName}; do not give that name to anyone else.`);
+  if (ownerName && hasYou) lines.push(`Speaker "You" is ${ownerName}; do not give that name to anyone else.`);
+  if (ownerName && !hasYou) {
+    lines.push(
+      `${ownerName} recorded this meeting and is probably one of the speakers, but the transcript doesn't say which. Give a speaker that name only if the conversation shows it is them (they are addressed by it and answer, or introduce themselves); otherwise null.`,
+    );
+  }
   if (knownTopics?.length) lines.push(`Reuse one of these existing topic tags when it fits: ${knownTopics.map((t) => JSON.stringify(t)).join(', ')}.`);
   return lines.length ? `${lines.join('\n')}\n` : '';
 }

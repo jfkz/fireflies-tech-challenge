@@ -4,12 +4,14 @@ import {
   CreateMeetingRequest,
   ListMeetingsQuery,
   MAX_AUDIO_BYTES,
+  MeetingChain,
   Segment,
   TranscriptUpload,
   UpdateMeetingRequest,
   UploadUrlRequest,
 } from './meeting';
 import { AuthorizeDeviceRequest, DeviceTokenRequest } from './device';
+import { PeopleQuery, RenamePersonRequest } from './people';
 
 describe('status machine', () => {
   it('lets a Mac recording skip transcription', () => {
@@ -87,5 +89,29 @@ describe('filters and renames', () => {
     expect(UpdateMeetingRequest.safeParse({ speakers: { 'Speaker 1': 'Maya' } }).success).toBe(true);
     expect(UpdateMeetingRequest.safeParse({ speakers: {} }).success).toBe(false);
     expect(UpdateMeetingRequest.safeParse({ speakers: { 'Speaker 1': '  ' } }).success).toBe(false);
+  });
+});
+
+describe('chains and people', () => {
+  const ref = (n: number) => ({ id: `0000000${n}-0000-4000-8000-000000000000`, title: `M${n}`, startedAt: '2026-10-06T10:00:00.000Z' });
+
+  it('takes a chain of two or more meetings', () => {
+    expect(MeetingChain.parse({ id: ref(9).id, meetings: [ref(1), ref(2)], reason: null }).meetings).toHaveLength(2);
+    expect(MeetingChain.safeParse({ id: ref(9).id, meetings: [ref(1)], reason: null }).success).toBe(false);
+  });
+
+  it('links or unlinks a meeting with PATCH, and nothing else is an update', () => {
+    expect(UpdateMeetingRequest.parse({ chain: null })).toEqual({ chain: null });
+    expect(UpdateMeetingRequest.parse({ chain: { with: ref(1).id } })).toEqual({ chain: { with: ref(1).id } });
+    expect(UpdateMeetingRequest.safeParse({ chain: { with: 'nope' } }).success).toBe(false);
+    expect(UpdateMeetingRequest.safeParse({}).success).toBe(false);
+  });
+
+  it('reads the people period and a rename', () => {
+    expect(PeopleQuery.parse({ days: '30' })).toEqual({ days: 30 });
+    expect(PeopleQuery.parse({})).toEqual({});
+    expect(PeopleQuery.safeParse({ days: '0' }).success).toBe(false);
+    expect(RenamePersonRequest.safeParse({ name: '  ' }).success).toBe(false);
+    expect(RenamePersonRequest.parse({ name: ' Maya ' })).toEqual({ name: 'Maya' });
   });
 });

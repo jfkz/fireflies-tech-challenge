@@ -4,11 +4,53 @@ import { AppConfig } from '../config/config.module';
 import { prepareForTranscription } from './audio-prep';
 import { SERVER_SPEAKER, Transcriber, type TranscribeInput, type TranscribeResult } from './transcriber';
 
-/** Whisper through the Vercel AI Gateway (`openai/whisper-1` by default), same key as the summarizer. */
+/** Transcription models that tell the speakers apart themselves (a speaker per phrase). */
+export function diarizesItself(model: string): boolean {
+  return model.startsWith('microsoft/mai-transcribe');
+}
+
+/**
+ * A diarizing model hears up to this much in one request, so one meeting keeps one set of speaker
+ * numbers (an hour of 24 kbps speech is ~11 MB; the gateway took it in ~17 s).
+ */
+export const DIARIZED_PART_SECONDS = 60 * 60;
+/** Parts of longer meetings share this much audio, enough to match the speakers across the cut. */
+export const DIARIZED_OVERLAP_SECONDS = 90;
+
+/**
+ * Speech to text through the Vercel AI Gateway, same key as the summarizer. MAI-Transcribe 2
+ * (the default) also says who speaks each phrase; Whisper-style models give one voice.
+ */
 @Injectable()
 export class GatewayTranscriber extends Transcriber {
   constructor(private readonly config: AppConfig) {
     super();
+  }
+
+  async transcribe(input: TranscribeInput): Promise<TranscribeResult> {
+    return diarizesItself(this.config.env.TRANSCRIBE_MODEL) ? this.transcribeDiarized(input) : this.transcribeWhisper(input);
+  }
+
+  /**
+   * MP3 parts of up to an hour (Azure refuses some containers, such as AAC in M4A), each
+   * transcribed with diarization; the parts' speakers are matched where they overlap.
+   */
+  private async transcribeDiarized({ audio, mediaType }: TranscribeInput): Promise<TranscribeResult> {
+    const parts = await prepareForTranscription(audio, mediaType, {
+      encode: true,
+      partSeconds: DIARIZED_PART_SECONDS,
+      overlapSeconds: DIARIZED_OVERLAP_SECONDS,
+    });
+    const results: TranscribeResult[] = [];
+    for (const [index, part] of parts.entries()) {
+      const result = await transcribe({
+        model: this.config.env.TRANSCRIBE_MODEL,
+        audio: part.audio,
+        providerOptions: { azure: { diarization: { enabled: true } } },
+      });
+      results.push(shiftResult(fromPhrases(result, `${index}`, part.durationMs), part.offsetMs));
+    }
+    return joinDiarized(results);
   }
 
   /**
@@ -16,7 +58,7 @@ export class GatewayTranscriber extends Transcriber {
    * most 25 MB a request). Parts go in order, each told how the previous one ended so names and
    * spelling carry over the cut, and their transcripts are stitched into one.
    */
-  async transcribe({ audio, mediaType, language }: TranscribeInput): Promise<TranscribeResult> {
+  private async transcribeWhisper({ audio, mediaType, language }: TranscribeInput): Promise<TranscribeResult> {
     const parts = await prepareForTranscription(audio, mediaType);
     const results: TranscribeResult[] = [];
     let detected = language;
@@ -36,6 +78,144 @@ export class GatewayTranscriber extends Transcriber {
     }
     return joinResults(results);
   }
+}
+
+interface Phrase {
+  text: string;
+  offsetMilliseconds: number;
+  durationMilliseconds: number;
+  locale?: string;
+  speaker?: number;
+}
+
+function phrasesOf(providerMetadata: unknown): Phrase[] | null {
+  const phrases = (providerMetadata as { azure?: { phrases?: unknown } } | undefined)?.azure?.phrases;
+  if (!Array.isArray(phrases)) return null;
+  return phrases.filter(
+    (p): p is Phrase => typeof p?.text === 'string' && typeof p.offsetMilliseconds === 'number' && typeof p.durationMilliseconds === 'number',
+  );
+}
+
+/**
+ * One part from a diarizing model: a segment per phrase (a phrase ends where its speaker stops),
+ * labelled `<part>:<speaker>` until `joinDiarized` names them. Without speaker numbers (diarization
+ * off or unsupported) it falls back to the plain segments.
+ */
+export function fromPhrases(
+  result: { text: string; segments: Array<{ text: string; startSecond: number; endSecond: number }>; language: string | undefined; durationInSeconds: number | undefined; providerMetadata?: unknown },
+  part: string,
+  partDurationMs?: number,
+): TranscribeResult {
+  const phrases = phrasesOf(result.providerMetadata);
+  if (!phrases || phrases.length === 0 || phrases.some((p) => typeof p.speaker !== 'number')) {
+    return { ...toTranscribeResult(result), diarized: false };
+  }
+  const segments = phrases
+    .map((p) => ({
+      speaker: `${part}:${p.speaker}`,
+      startMs: Math.round(p.offsetMilliseconds),
+      endMs: Math.round(p.offsetMilliseconds + Math.max(0, p.durationMilliseconds)),
+      text: p.text.trim(),
+    }))
+    .filter((s) => s.text.length > 0 && !isSilenceHallucination(s.text));
+  const durationSec = result.durationInSeconds ?? (partDurationMs !== undefined ? partDurationMs / 1000 : null);
+  return {
+    segments: segments.length > 0 && segments.every((s) => isFillerOnly(s.text)) ? [] : segments,
+    language: result.language ?? mainLanguage(phrases),
+    durationSec: durationSec !== null ? Math.round(durationSec) : null,
+    diarized: true,
+  };
+}
+
+/** The language spoken longest ("en-US" → "en"); a stray "Okay." heard as German doesn't count. */
+export function mainLanguage(phrases: readonly Pick<Phrase, 'locale' | 'durationMilliseconds'>[]): string | null {
+  const spoken = new Map<string, number>();
+  for (const p of phrases) {
+    const code = p.locale?.split('-')[0]?.toLowerCase();
+    if (code) spoken.set(code, (spoken.get(code) ?? 0) + p.durationMilliseconds);
+  }
+  return [...spoken].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
+/**
+ * Diarized parts (shifted into place) as one transcript. Each part numbers its own speakers, so
+ * in the overlap every speaker of the later part is matched to the earlier speaker it overlaps
+ * most; one who never speaks in the overlap becomes a new speaker. The overlap's lines are kept
+ * once (as in `joinResults`), and the speakers are named "Speaker 1…N" by first appearance.
+ */
+export function joinDiarized(results: readonly TranscribeResult[]): TranscribeResult {
+  const ids = new Map<string, string>();
+  let next = 0;
+  const merged: TranscribeResult['segments'] = [];
+  let coveredUntil = 0;
+  for (const r of results) {
+    if (merged.length > 0) {
+      const votes = new Map<string, Map<string, number>>();
+      for (const s of r.segments) {
+        if (s.startMs >= coveredUntil) continue;
+        for (const m of merged) {
+          const shared = Math.min(s.endMs, m.endMs) - Math.max(s.startMs, m.startMs);
+          if (shared <= 0) continue;
+          const tally = votes.get(s.speaker) ?? new Map<string, number>();
+          tally.set(m.speaker, (tally.get(m.speaker) ?? 0) + shared);
+          votes.set(s.speaker, tally);
+        }
+      }
+      // Strongest matches first, and no two speakers of this part become the same person.
+      const taken = new Set<string>();
+      const pairs = [...votes].flatMap(([raw, tally]) => [...tally].map(([id, ms]) => ({ raw, id, ms }))).sort((a, b) => b.ms - a.ms);
+      for (const { raw, id } of pairs) {
+        if (ids.has(raw) || taken.has(id)) continue;
+        ids.set(raw, id);
+        taken.add(id);
+      }
+    }
+    for (const s of r.segments) {
+      if (!ids.has(s.speaker)) ids.set(s.speaker, `v${next++}`);
+      if (merged.length > 0 && (s.startMs + s.endMs) / 2 < coveredUntil) continue;
+      merged.push({ ...s, speaker: ids.get(s.speaker)! });
+      coveredUntil = Math.max(coveredUntil, s.endMs);
+    }
+  }
+  const names = new Map<string, string>();
+  const segments = absorbStraySpeakers(merged).map((s) => {
+    if (!names.has(s.speaker)) names.set(s.speaker, `Speaker ${names.size + 1}`);
+    return { ...s, speaker: names.get(s.speaker)! };
+  });
+  const last = results[results.length - 1];
+  return {
+    segments,
+    language: results.find((r) => r.language)?.language ?? null,
+    durationSec: last?.durationSec ?? null,
+    diarized: results.every((r) => r.diarized),
+  };
+}
+
+/** A "speaker" heard this little is a diarization slip (one "Yeah." clustered on its own), not a person. */
+const STRAY_MAX_MS = 2_000;
+const STRAY_MAX_SEGMENTS = 2;
+
+/** Gives a stray speaker's lines to whoever speaks nearest in time, when there are real speakers to give them to. */
+export function absorbStraySpeakers<T extends { speaker: string; startMs: number; endMs: number }>(segments: readonly T[]): T[] {
+  const totals = new Map<string, { ms: number; count: number }>();
+  for (const s of segments) {
+    const t = totals.get(s.speaker) ?? { ms: 0, count: 0 };
+    totals.set(s.speaker, { ms: t.ms + (s.endMs - s.startMs), count: t.count + 1 });
+  }
+  const stray = new Set([...totals].filter(([, t]) => t.ms < STRAY_MAX_MS && t.count <= STRAY_MAX_SEGMENTS).map(([speaker]) => speaker));
+  if (stray.size === 0 || stray.size === totals.size) return [...segments];
+  return segments.map((s, i) => {
+    if (!stray.has(s.speaker)) return s;
+    let best: T | undefined;
+    let gap = Infinity;
+    for (let j = 0; j < segments.length; j++) {
+      const o = segments[j];
+      if (j === i || stray.has(o.speaker)) continue;
+      const d = o.endMs <= s.startMs ? s.startMs - o.endMs : o.startMs >= s.endMs ? o.startMs - s.endMs : 0;
+      if (d < gap) [best, gap] = [o, d];
+    }
+    return best ? { ...s, speaker: best.speaker } : s;
+  });
 }
 
 export function toTranscribeResult(result: {

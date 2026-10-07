@@ -38,7 +38,7 @@ export class GatewaySummarizer extends Summarizer {
   }
 
   async summarize({ segments, language, ownerName, knownTopics = [], meetingDate }: SummarizeInput): Promise<SummaryResult> {
-    const context = { ownerName, knownTopics, meetingDate };
+    const context = { ownerName, hasYou: segments.some((s) => /^you$/i.test(s.speaker)), knownTopics, meetingDate };
     const merged = mergeSegments(segments);
     const transcript = transcriptText(merged);
     const usage: Usage = { input: 0, output: 0 };

@@ -13,7 +13,7 @@ import { SpeakerChip, speakerColor } from '@/components/ui/SpeakerChip';
 import { Marked } from '@/components/ui/Marked';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { TopicPill } from '@/components/ui/TopicPill';
-import { useDeleteMeeting, useMeeting, useReprocessMeeting, useUpdateMeeting } from '@/hooks/queries';
+import { useDeleteMeeting, useMe, useMeeting, useReprocessMeeting, useUpdateMeeting } from '@/hooks/queries';
 import { useAudioSync } from '@/hooks/useAudioSync';
 import { ApiRequestError } from '@/lib/api';
 import { stillPose } from '@/lib/avatar/pose';
@@ -21,9 +21,11 @@ import { LISTENER, MEN } from '@/lib/avatar/styles';
 import { meetingsHref } from '@/lib/filters';
 import { formatDay, todayKey } from '@/lib/dates';
 import { formatMeetingDate } from '@/lib/format';
+import { isPersonName, personHref } from '@/lib/people';
 import { hasMatch, highlightParts, searchTerms } from '@/lib/search';
 import { summaryToMarkdown } from '@/lib/markdown';
 import { isProcessing, STATUS_QUIP } from '@/lib/status';
+import { MeetingNav } from './MeetingNav';
 
 export function MeetingView({ id }: { id: string }) {
   const meeting = useMeeting(id);
@@ -42,9 +44,7 @@ function MeetingDetailView({ meeting: m }: { meeting: MeetingDetail }) {
 
   return (
     <article>
-      <Link href="/meetings" className="inline-flex items-center gap-1.5 rounded-full text-sm font-extrabold text-ink-soft hover:text-ink">
-        <span aria-hidden>←</span> All meetings
-      </Link>
+      <MeetingNav meeting={m} />
       <Header meeting={m} />
       {processing && <ProcessingBanner status={m.status} />}
       {m.status === 'failed' && <FailedBanner meeting={m} />}
@@ -190,20 +190,27 @@ function Header({ meeting: m }: { meeting: MeetingDetail }) {
   );
 }
 
-/** Speaker chips and topic pills that open the meeting list filtered by them, plus renaming speakers. */
+/**
+ * Speaker chips and topic pills, plus renaming speakers. A named person opens their page; a label
+ * like "Speaker 2" (or you) and a topic open the meeting list filtered by it.
+ */
 function SpeakersAndTopics({ meeting: m }: { meeting: MeetingDetail }) {
   const [renaming, setRenaming] = useState(false);
+  const me = useMe();
   if (m.speakers.length === 0 && m.topics.length === 0) return null;
   return (
     <div className="mt-3">
       <ul className="flex flex-wrap items-center gap-1.5" aria-label="Speakers and topics">
-        {m.speakers.map((s) => (
-          <li key={`s:${s}`}>
-            <Link href={meetingsHref({ speaker: s })} className="rounded-full" title={`All meetings with ${s}`}>
-              <SpeakerChip name={s} size="md" />
-            </Link>
-          </li>
-        ))}
+        {m.speakers.map((s) => {
+          const person = isPersonName(s, me.data?.name);
+          return (
+            <li key={`s:${s}`}>
+              <Link href={person ? personHref(s) : meetingsHref({ speaker: s })} className="rounded-full" title={person ? `${s}: time together, topics, tasks` : `All meetings with ${s}`}>
+                <SpeakerChip name={s} size="md" />
+              </Link>
+            </li>
+          );
+        })}
         {m.topics.map((t) => (
           <li key={`t:${t}`}>
             <Link href={meetingsHref({ topic: t })} className="rounded-full" title={`All meetings about ${t}`}>

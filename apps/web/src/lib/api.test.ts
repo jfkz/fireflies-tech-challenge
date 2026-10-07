@@ -85,6 +85,35 @@ describe('api client', () => {
     expect(fetch.mock.calls[0][0]).toBe('https://api.test/devices/a%2Fb');
   });
 
+  describe('people', () => {
+    const summary = { name: 'Maya Chen', meetingCount: 2, togetherSec: 3600, talkSec: 1200, lastMetAt: '2026-10-05T10:00:00.000Z', openTasks: 1 };
+    const detail = { ...summary, meetings: [], topics: [{ value: 'Pricing', count: 2 }], tasks: [] };
+
+    it('lists people for a period, or all time without days', async () => {
+      const { api, fetch } = setup(() => Promise.resolve(json({ since: '2026-09-07T00:00:00.000Z', meetingSec: 7200, people: [summary] })));
+      await expect(api.listPeople(30)).resolves.toMatchObject({ meetingSec: 7200, people: [{ name: 'Maya Chen' }] });
+      await api.listPeople();
+      expect(fetch.mock.calls.map((c) => c[0])).toEqual(['https://api.test/people?days=30', 'https://api.test/people']);
+    });
+
+    it('gets and renames a person by their encoded name', async () => {
+      const { api, fetch } = setup(() => Promise.resolve(json(detail)));
+      await expect(api.getPerson('Maya Chen')).resolves.toMatchObject({ topics: [{ value: 'Pricing' }] });
+      await api.renamePerson('Maya Chen', 'Maya');
+      expect(fetch.mock.calls[0][0]).toBe('https://api.test/people/Maya%20Chen');
+      const [url, init] = fetch.mock.calls[1];
+      expect(url).toBe('https://api.test/people/Maya%20Chen');
+      expect(init).toMatchObject({ method: 'PATCH', body: '{"name":"Maya"}' });
+    });
+
+    it('takes a meeting out of its chain, or links it to another one', async () => {
+      const { api, fetch } = setup(() => Promise.resolve(json({ statusCode: 404, message: 'x' }, 404)));
+      await api.updateMeeting('m1', { chain: null }).catch(() => {});
+      await api.updateMeeting('m1', { chain: { with: '00000000-0000-4000-8000-000000000002' } }).catch(() => {});
+      expect(fetch.mock.calls.map((c) => c[1].body)).toEqual(['{"chain":null}', '{"chain":{"with":"00000000-0000-4000-8000-000000000002"}}']);
+    });
+  });
+
   describe('latestDownload', () => {
     const latest = { version: '1.0', build: '3', url: 'https://d.test/a.dmg', sizeBytes: 10, minimumOs: '26.0', notarized: true, publishedAt: '2026-10-01T10:00:00.000Z' };
 

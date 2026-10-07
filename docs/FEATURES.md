@@ -114,7 +114,8 @@ list, a filter bar offers the most frequent people and topics (`GET /meetings/fa
 highlights the active ones, and has **Clear filters**. Filters and the search text
 live in the URL (`/meetings?speaker=Maya&topic=Pricing&q=…`), so a filtered view can
 be bookmarked or shared; typing replaces the URL, clicking a pill adds a history entry.
-The empty result says what was filtered (“No meetings with Maya about Pricing.”).
+The empty result says what was filtered (“No meetings with Maya about Pricing.”). Filtered by a
+named person (not “Speaker 2”, “Others” or you), the bar also links **Time with Maya →** to their page.
 
 **Where.** `components/app/MeetingsList.tsx` (`FilterBar`, `MeetingRow`), `lib/filters.ts`,
 `components/ui/TopicPill.tsx`, `hooks/queries.ts` (`useMeetings`, `useMeetingFacets`).
@@ -125,9 +126,22 @@ account and its demo meeting on first visit.
 ### Meeting page `/meetings/[id]`
 
 **What.**
+- Navigation bar at the top (a `nav` landmark, “Meeting navigation”): **All meetings**, and when
+  other meetings happened on the same day where you are, **← Previous that day** / **Next that
+  day →** (“today” for today's meetings) with “2 of 3 that day”; the target's title is in the
+  link's tooltip and accessible name, and the end of the day is greyed out. The day's meetings
+  come from `GET /meetings?from=<local midnight>&to=<next midnight>&limit=100`, sorted by start.
+- Chains: a meeting the summarizer linked to earlier ones (or that was linked by hand) shows
+  **Chain · 2 of 4**, why it was linked (“Follows up on the admin page plan”), **← Previous in
+  chain** / **Next in chain →**, **Show all 4** (the whole chain in order, linked, this one
+  highlighted), and **Remove from chain** with a confirmation dialog (`PATCH {chain: null}`; the
+  meeting isn't linked again by itself).
+- Keyboard: **[** / **]** previous / next meeting that day, **{** / **}** previous / next in the
+  chain; ignored while typing in a field, with a modifier held, or with a dialog open.
 - Header: title (rename inline: pencil, Enter saves, Escape cancels), date,
-  duration, status, description, speakers by name and topic tags. Each chip opens
-  the meeting list filtered by that person or topic. **Rename speakers** opens one
+  duration, status, description, speakers by name and topic tags. A named speaker's
+  chip opens their person page; “Speaker 2”, “Others”, you, and topic tags open the
+  meeting list filtered by them. **Rename speakers** opens one
   field per speaker; only changed names are saved, and they stick through reprocessing.
   Giving two voices the same name makes them one person.
 - While processing: a banner with a waiting head, a status-specific line and the
@@ -147,8 +161,9 @@ account and its demo meeting on first visit.
 - **Copy summary as Markdown**.
 - **Delete** with an in-page confirmation dialog (`<dialog>`), never `window.confirm`.
 
-**Where.** `components/app/MeetingView.tsx`, `hooks/useAudioSync.ts`, `lib/markdown.ts`,
-`lib/status.ts`.
+**Where.** `components/app/MeetingView.tsx`, `components/app/MeetingNav.tsx`, `lib/meeting-nav.ts`
+(local day range, day and chain neighbours), `hooks/useAudioSync.ts`, `lib/markdown.ts`,
+`lib/status.ts`, `hooks/queries.ts` (`useSameDayMeetings`).
 
 **Limits.** Unknown or foreign meeting ids show a friendly “This meeting isn’t
 here”. Presigned audio URLs expire server-side; reloading the page fetches a new one.
@@ -169,6 +184,32 @@ owner with chips (“Everyone” clears it); **Show done tasks** lists finished 
 
 **Limits.** 100 tasks per page with **Load more**. Meetings summarized before due dates existed
 show the deadline as said and sort under “No date” until reprocessed.
+
+### People `/people`
+
+**What.** Who you spend your meeting time with. **30 days** (default) / **90 days** / **All time**,
+kept in the URL (`/people?days=90`, `?days=all`). A line sums up the period: “You spent 10 h in
+meetings in the last 30 days, with 6 people who have names. Most of it with Maya: 4 h 10 min.”
+Then everyone, most time together first; each row has their head, a bar as long as their time
+together relative to the top person, “4 h 10 min together · 6 meetings · talks 38%” (their talk
+time over the time together), when you last met (“3 days ago”), and their open tasks. A row opens
+the person. With nobody yet: why (people appear once speakers have names, from the summary or
+**Rename speakers**) and **Show all time**.
+
+*Person `/people/<name>`.* Their name and head, cards for time together, meetings (since when),
+their talk time (and its share) and when you last met. **Rename or merge** renames them in every
+meeting; typing someone else's name merges the two, and the page moves to the new name. Topics of
+your meetings with them (each opens the filtered list), their open tasks (tick them off like on
+Tasks; links go to the action item in its meeting), and every meeting together with its date,
+length and how long they talked. An unknown name shows “No one called …”.
+
+**Where.** `components/app/PeopleView.tsx`, `components/app/PersonView.tsx`, `lib/people.ts`
+(who counts as a person, periods, “last met”), `hooks/queries.ts` (`usePeople`, `usePerson`,
+`useRenamePerson`); API `GET /people?days=`, `GET /people/:name`, `PATCH /people/:name`.
+
+**Limits.** A person is a speaker name, matched in any case; unnamed voices, roles the summary gave
+(“Recruiter”) and you aren't people. Time together isn't added up across people (two of them in
+one meeting would count it twice), so the summary names the top person instead.
 
 ### Calendar `/calendar`
 
@@ -475,6 +516,26 @@ Firebase ID tokens are verified against Google's public keys; the first request 
 seeds a ready demo meeting (no AI call) and queues a welcome email. Mac devices get revocable
 `btd_…` tokens through the PKCE link; the dashboard lists and revokes them.
 
+### Chains of related meetings
+After the summary, the summary model (`processing/chain-linker.ts`) sees the meeting and up to 20 of
+the user's other finished meetings within 45 days (title, description, people, topics), and says
+whether it is the same recurring meeting or a follow-up on the same work, with one sentence why.
+If so it joins that meeting's chain (`meetings.chain_id`, `chain_reason`; migration 0005). A broad
+topic or one shared person isn't enough. Linking or unlinking by hand (`PATCH /meetings/:id
+{ chain }`) sets `chain_locked`, so the summarizer leaves it alone after that, also on reprocess.
+A chain left with one meeting (unlinked or deleted) ends. Best effort: a failed link never fails the
+meeting. `node dist/link-chains.js [--user <uuid>]` links meetings summarized before chains existed.
+Limits: one chain per meeting; demo meetings never chain.
+
+### People across meetings
+`GET /people`, `GET /people/:name`, `PATCH /people/:name` (`src/people/`): a person is a speaker name,
+case-insensitive, across the user's finished meetings. Time together adds up their meetings' lengths;
+talk time adds up their segments. Unnamed voices, roles (`speaker_names` entries marked `role`), the
+account holder and the demo meeting are left out. A rename applies to every meeting (as a name typed
+by hand) and to their action items; renaming to another person's name merges them. Limits: two
+different people with the same name are one person until one is renamed; roles named before this
+release aren't marked, so they count as people until the meeting is reprocessed.
+
 ### Uploads
 Audio goes from the client straight to R2 with a presigned PUT (15 min, 200 MB cap) and plays back
 through a presigned GET. Transcripts are stored raw in R2 (`transcript.json`, source of truth) and
@@ -482,18 +543,26 @@ as rows for search. `POST /meetings` honours `Idempotency-Key`, so a client retr
 duplicate.
 
 ### Processing pipeline (worker)
-- **Transcribe** (browser recordings and uploads only): Whisper through the AI Gateway, with
-  segment timestamps (`processing/audio-prep.ts`, `gateway-transcriber.ts`):
-  - Audio over 24 MB is re-encoded for speech with ffmpeg (mono, 16 kHz, 24 kbps MP3: about 11 MB
-    an hour). The API takes at most 25 MB a request.
-  - Recordings over 20 minutes are cut into 20-minute parts that overlap by 5 s. Each part gets the
-    end of the previous part's text as context, so names and spelling carry over the cut.
-  - The stitched transcript drops the overlap's repeated lines.
-- **Tell voices apart** (server-transcribed audio): Whisper hears one voice, so an audio model
-  (`DIARIZE_MODEL`, Gemini 3 Flash through the AI Gateway) listens to the recording with the
-  numbered transcript and says which voice speaks each line. Long recordings go in parts, each told
-  the voices heard before. The lines become Speaker 1, 2, 3, and the summarizer names them as
-  usual. If this fails, the meeting keeps one speaker rather than failing (`processing/diarizer.ts`).
+- **Transcribe and tell voices apart** (browser recordings and uploads only): MAI-Transcribe 2
+  (`TRANSCRIBE_MODEL`, `microsoft/mai-transcribe-2` through the AI Gateway, $0.10 an hour) with
+  diarization: one phrase per speaker turn, each with its speaker (`processing/gateway-transcriber.ts`
+  `transcribeDiarized`, `fromPhrases`, `joinDiarized`):
+  - The audio is always re-encoded for speech with ffmpeg (mono, 16 kHz, 24 kbps MP3; Azure refuses
+    AAC in M4A). Up to an hour goes in one request (~11 MB, ~20 s), so a meeting keeps one set of
+    speakers; longer ones are cut into hour parts that overlap by 90 s, and each part's speakers are
+    matched to the earlier part's by who speaks in the overlap.
+  - Phrases become segments labelled Speaker 1, 2, 3 by first appearance; the language is the one
+    spoken longest. The summarizer then names them as usual.
+  - Chosen against the old Whisper + Gemini Flash line labelling on a 13-minute two-person upload:
+    Whisper's 10-second lines often held both people (“Yeah. Cool. All right, anything else? No,
+    that's fine.”), so a line's single label was wrong for half of it, and in the silent last two
+    minutes Whisper wrote “Bye.” every 30 s. MAI split the turns, agreed with on-device voice
+    separation 86% of the time (Whisper + Gemini: 78%), and was right in the disputed turns.
+- **Whisper fallback:** with a model that doesn't diarize (`TRANSCRIBE_MODEL=openai/whisper-1`),
+  audio over 24 MB is compressed, recordings over 20 minutes go in 20-minute parts that overlap by
+  5 s with the previous text as context, and an audio model (`DIARIZE_MODEL`, Gemini 3 Flash)
+  listens to the recording with the numbered transcript and says which voice speaks each line. If
+  that fails, the meeting keeps one speaker rather than failing (`processing/diarizer.ts`).
   **Reprocess** on a browser or upload meeting starts again from its audio, so older ones get voices too.
 - **Summarize:** Claude Haiku 4.5 through the AI Gateway with structured output: a specific title,
   one-line description, summary, key topics, 1–4 reusable topic tags, action items (owner, due date),
