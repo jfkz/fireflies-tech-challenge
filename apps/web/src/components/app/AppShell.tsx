@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { VersionTag } from '@/components/app/UpdatePrompt';
 import { Logo } from '@/components/brand/Logo';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useMe } from '@/hooks/queries';
@@ -47,6 +48,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
       </header>
       <main className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-10">{children}</main>
+      <footer className="mx-auto max-w-[1200px] px-4 pb-6 text-right sm:px-6">
+        <VersionTag className="text-ink-soft/70" />
+      </footer>
     </div>
   );
 }

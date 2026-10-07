@@ -11,7 +11,7 @@ struct BoringTalksApp: App {
         MenuBarExtra {
             MenuContent(model: delegate.model)
         } label: {
-            MenuBarLabel(recorder: delegate.model.recorder)
+            MenuBarLabel(model: delegate.model, recorder: delegate.model.recorder)
         }
         .menuBarExtraStyle(.window)
 
@@ -22,11 +22,18 @@ struct BoringTalksApp: App {
 }
 
 private struct MenuBarLabel: View {
+    let model: AppModel
     let recorder: MeetingRecorder
 
     var body: some View {
-        Image(systemName: recorder.isRecording ? "record.circle.fill" : "bubble.left.and.text.bubble.right")
-            .accessibilityLabel(recorder.isRecording ? "BoringTalks — recording" : "BoringTalks")
+        if recorder.isRecording {
+            Image(systemName: "record.circle.fill").accessibilityLabel("BoringTalks — recording")
+        } else if let app = model.callOffer {
+            // A call started: visible even with notifications off.
+            Image(systemName: "phone.circle.fill").accessibilityLabel("BoringTalks — \(app) is in a call")
+        } else {
+            Image(systemName: "bubble.left.and.text.bubble.right").accessibilityLabel("BoringTalks")
+        }
     }
 }
 
@@ -48,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if CommandLineTools.run(CommandLine.arguments, model: model) { return }
 
+        model.notifier.setUp()
         let liveWindow = LiveWindowController(model: model)
         model.onLiveWindowChange = { [weak liveWindow] visible in liveWindow?.setVisible(visible) }
         self.liveWindow = liveWindow
@@ -133,6 +141,13 @@ enum CommandLineTools {
             ListenTest.run(seconds: seconds)
             return true
         }
+        if let index = arguments.firstIndex(of: "--mic-users") {
+            // `--mic-users [seconds]`: prints the apps using a microphone whenever that changes,
+            // and which call app each one counts as (for adding apps to CallApps).
+            let seconds = index + 1 < arguments.count ? Double(arguments[index + 1]) ?? 30 : 30
+            MicUsersTool.run(seconds: seconds, extra: model.preferences.extraCallApps)
+            return true
+        }
         if let options = FileTranscriber.Options(arguments: arguments) {
             Task {
                 let status = await FileTranscriber.run(options, models: model.models)
@@ -195,5 +210,22 @@ enum ListenTest {
             }
             exit(0)
         }
+    }
+}
+
+/// `--mic-users`: what the call detection sees.
+@MainActor
+enum MicUsersTool {
+    private static let monitor = MicUsageMonitor()
+
+    static func run(seconds: Double, extra: [String]) {
+        let print = {
+            let users = monitor.users.sorted().map { id in "\(id) → \(CallApps.identify(id, extra: extra)?.name ?? "not a call app")" }
+            FileHandle.standardOutput.write(Data("\(Date().formatted(date: .omitted, time: .standard)) \(users.isEmpty ? "nobody is using a microphone" : users.joined(separator: ", "))\n".utf8))
+        }
+        monitor.onChange = print
+        monitor.start()
+        if monitor.users.isEmpty { print() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { exit(0) }
     }
 }

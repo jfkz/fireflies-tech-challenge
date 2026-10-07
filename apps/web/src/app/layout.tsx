@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Bagel_Fat_One, Nunito } from 'next/font/google';
+import { UpdatePrompt } from '@/components/app/UpdatePrompt';
 import { Providers } from '@/components/providers/Providers';
 import { env } from '@/lib/env';
 import { DESCRIPTION, SITE_NAME } from '@/lib/landing/seo';
@@ -44,7 +45,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${bagel.variable} ${nunito.variable}`} data-scroll-behavior="smooth">
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <UpdatePrompt />
+        </Providers>
       </body>
     </html>
   );

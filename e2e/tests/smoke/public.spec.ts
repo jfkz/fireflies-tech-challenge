@@ -34,3 +34,13 @@ test('latest download is a DMG or not published yet', async ({ request }) => {
     expect(latest.url).toMatch(/\.dmg$/);
   }
 });
+
+test('web reports the deployed build', async ({ request }) => {
+  const res = await request.get('/version.json');
+  expect(res.ok()).toBe(true);
+  expect(res.headers()['cache-control']).toBe('no-store');
+  const build = (await res.json()) as { version: string; commit: string };
+  expect(build.version).toMatch(/^\d+\.\d+\.\d+/);
+  // CI deploys with GITHUB_SHA, so open tabs on the old deployment see a different commit.
+  if (process.env.GITHUB_SHA) expect(build.commit).toBe(process.env.GITHUB_SHA.slice(0, 7));
+});

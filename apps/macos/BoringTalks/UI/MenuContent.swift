@@ -162,6 +162,24 @@ private struct RecordingPanel: View {
             if let error = model.recordError {
                 Text(error).font(.caption).foregroundStyle(.red)
             }
+            if recorder.isRecording, let pending = recorder.pendingStop {
+                StopCountdown(pending: pending) { model.keepRecording() }
+            }
+            if let app = model.callOffer, recorder.phase == .idle {
+                CallOfferBanner(app: app, record: model.recordCall, notNow: model.declineCall) {
+                    model.ignoreCallApp(app)
+                }
+            }
+            if let notice = model.autoStopNotice, recorder.phase == .idle {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(notice, systemImage: "moon.zzz.fill")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("OK") { model.dismissAutoStopNotice() }
+                        .buttonStyle(.borderless).font(.caption)
+                }
+            }
             if recorder.isRecording, recorder.waitingForModel {
                 Label("Recording. The speech model is still loading — the transcript catches up once it's ready.",
                       systemImage: "hourglass")
@@ -215,6 +233,70 @@ struct ModelProgress: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+/// "Nobody has spoken for a while. Stopping in 0:42" (or "The Zoom call ended…")
+/// with a Keep recording button.
+private struct StopCountdown: View {
+    let pending: MeetingRecorder.PendingStop
+    let keep: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let left = max(0, Int(pending.at.timeIntervalSince(context.date).rounded(.up)))
+                Label("\(why) Stopping in \(left / 60):\(String(format: "%02d", left % 60)).", systemImage: icon)
+                    .font(.caption)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button("Keep recording", action: keep)
+                .controlSize(.small)
+        }
+        .padding(8)
+        .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var why: String {
+        switch pending.reason {
+        case .silence: "Nobody has spoken for a while."
+        case .callEnded(let app): "The \(app) call ended."
+        }
+    }
+
+    private var icon: String {
+        if case .callEnded = pending.reason { "phone.down" } else { "moon.zzz" }
+    }
+}
+
+/// "Zoom is in a call. Record it?" — shown with the notification, or instead of it
+/// when notifications are off.
+private struct CallOfferBanner: View {
+    let app: String
+    let record: () -> Void
+    let notNow: () -> Void
+    let never: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("\(app) is in a call. Record it?", systemImage: "phone.fill")
+                .font(.callout.weight(.semibold))
+            HStack {
+                Button("Record", action: record)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                Button("Not now", action: notNow)
+                    .controlSize(.small)
+                Spacer()
+                Button("Never for \(app)", action: never)
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+            }
+        }
+        .padding(8)
+        .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

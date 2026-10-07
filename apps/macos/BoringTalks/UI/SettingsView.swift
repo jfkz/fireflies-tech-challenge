@@ -42,8 +42,30 @@ struct SettingsView: View {
                     Text("7 days").tag(7)
                     Text("30 days").tag(30)
                 }
+                Picker("Stop after silence", selection: $preferences.silenceStopMinutes) {
+                    Text("Never").tag(0)
+                    ForEach(Self.silenceChoices(including: preferences.silenceStopMinutes), id: \.self) { minutes in
+                        Text(minutes == 1 ? "1 minute" : "\(minutes) minutes").tag(minutes)
+                    }
+                }
+                Text("A meeting left recording after everyone has gone stops by itself when nobody has spoken for this long, and uploads as usual. A minute before, BoringTalks asks if you're still there.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Button("Show recordings in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([model.folders.recordings])
+                }
+            }
+
+            Section("Calls") {
+                Toggle("Offer to record when a call starts", isOn: $preferences.offerToRecordCalls)
+                Text("When Zoom, Teams, Webex, Slack, FaceTime or a browser has been using the microphone for a few seconds, BoringTalks asks whether to record. It only sees which app uses the microphone, never what it hears, and never records without asking.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Stop when the call ends", isOn: $preferences.stopWhenCallEnds)
+                Text("When the app of the call being recorded stops using the microphone, the recording stops 30 seconds after the others go quiet.")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(preferences.ignoredCallApps, id: \.self) { app in
+                    LabeledContent("Never asked for \(app)") {
+                        Button("Ask again") { model.askAgain(about: app) }
+                    }
                 }
             }
 
@@ -71,6 +93,12 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The usual choices, plus a value set with `defaults write` that isn't one of them.
+    static func silenceChoices(including current: Int) -> [Int] {
+        let choices = [1, 2, 5, 10, 15, 30, 60]
+        return current > 0 && !choices.contains(current) ? (choices + [current]).sorted() : choices
     }
 
     static var version: String {
