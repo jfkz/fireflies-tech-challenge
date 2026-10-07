@@ -11,6 +11,7 @@ import { useMe } from '@/hooks/queries';
 const LINKS = [
   { href: '/meetings', label: 'Meetings' },
   { href: '/tasks', label: 'Tasks' },
+  { href: '/people', label: 'People' },
   { href: '/calendar', label: 'Calendar' },
   { href: '/record', label: 'Record' },
   { href: '/settings', label: 'Settings' },

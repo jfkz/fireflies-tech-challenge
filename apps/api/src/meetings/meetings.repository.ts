@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, getTableColumns, inArray, sql, type SQL } from 'drizzle-orm';
-import type { ActionItem, FacetCount, MeetingStatus, SearchMatch, Segment } from '@boringtalks/shared';
+import { and, asc, desc, eq, getTableColumns, inArray, ne, sql, type SQL } from 'drizzle-orm';
+import type { ActionItem, FacetCount, MeetingRef, MeetingStatus, SearchMatch, Segment } from '@boringtalks/shared';
 import type { MeetingCursor } from '../common/cursor';
 import { HIT_END, HIT_START, toTsQuery } from './search-query';
 import { InjectDb, type Database } from '../db/db.module';
@@ -19,6 +20,14 @@ export function summaryDocument(v: Pick<SummaryValues, 'summary' | 'keyTopics' |
 }
 
 export type MeetingHit = MeetingWithCount & { match: SearchMatch | null };
+
+/** A meeting the chain linker may connect another one to. */
+export type ChainCandidateRow = Pick<MeetingRow, 'id' | 'title' | 'description' | 'startedAt' | 'speakers' | 'topics' | 'chainId'>;
+
+/** How far apart (days) two meetings of one chain may be, for the summarizer to link them. */
+export const CHAIN_WINDOW_DAYS = 45;
+
+type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 const ITEM_COLUMNS = {
   id: actionItems.id,
@@ -308,7 +317,83 @@ export class MeetingsRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await this.db.delete(meetings).where(eq(meetings.id, id));
+    await this.db.transaction(async (tx) => {
+      const [gone] = await tx.delete(meetings).where(eq(meetings.id, id)).returning({ chainId: meetings.chainId });
+      if (gone?.chainId) await dissolveIfAlone(tx, gone.chainId);
+    });
+  }
+
+  // ---- chains
+
+  /** The user's other finished meetings within CHAIN_WINDOW_DAYS of `around`, nearest first, not taken out of a chain by hand. */
+  async chainCandidates(userId: string, meetingId: string, around: Date, limit: number): Promise<ChainCandidateRow[]> {
+    const at = around.toISOString();
+    return this.db
+      .select({
+        id: meetings.id,
+        title: meetings.title,
+        description: meetings.description,
+        startedAt: meetings.startedAt,
+        speakers: meetings.speakers,
+        topics: meetings.topics,
+        chainId: meetings.chainId,
+      })
+      .from(meetings)
+      .where(
+        and(
+          eq(meetings.userId, userId),
+          ne(meetings.id, meetingId),
+          eq(meetings.status, 'ready'),
+          ne(meetings.source, 'demo'),
+          eq(meetings.chainLocked, false),
+          sql`${meetings.startedAt} between ${at}::timestamptz - make_interval(days => ${CHAIN_WINDOW_DAYS}) and ${at}::timestamptz + make_interval(days => ${CHAIN_WINDOW_DAYS})`,
+        ),
+      )
+      .orderBy(sql`abs(extract(epoch from ${meetings.startedAt} - ${at}::timestamptz))`)
+      .limit(limit);
+  }
+
+  /** The meetings of a chain, oldest first. */
+  async chainMeetings(userId: string, chainId: string): Promise<MeetingRef[]> {
+    const rows = await this.db
+      .select({ id: meetings.id, title: meetings.title, startedAt: meetings.startedAt })
+      .from(meetings)
+      .where(and(eq(meetings.userId, userId), eq(meetings.chainId, chainId)))
+      .orderBy(asc(meetings.startedAt), asc(meetings.id));
+    return rows.map((r) => ({ ...r, startedAt: r.startedAt.toISOString() }));
+  }
+
+  /**
+   * Puts a meeting in the chain of `targetId` (starting one with the target when it has none),
+   * leaving the chain it was in. `locked` marks a choice the user made, which the summarizer keeps.
+   */
+  async joinChain(meetingId: string, targetId: string, opts: { reason: string | null; locked: boolean }): Promise<MeetingRow> {
+    return this.db.transaction(async (tx) => {
+      const [target] = await tx.select({ chainId: meetings.chainId }).from(meetings).where(eq(meetings.id, targetId)).for('update');
+      let chainId = target?.chainId ?? null;
+      if (!chainId) {
+        chainId = randomUUID();
+        await tx.update(meetings).set({ chainId, chainReason: null }).where(eq(meetings.id, targetId));
+      }
+      const [before] = await tx.select({ chainId: meetings.chainId }).from(meetings).where(eq(meetings.id, meetingId)).for('update');
+      const [row] = await tx
+        .update(meetings)
+        .set({ chainId, chainReason: opts.reason, ...(opts.locked ? { chainLocked: true } : {}) })
+        .where(eq(meetings.id, meetingId))
+        .returning();
+      if (before?.chainId && before.chainId !== chainId) await dissolveIfAlone(tx, before.chainId);
+      return row;
+    });
+  }
+
+  /** Takes a meeting out of its chain for good (the summarizer won't link it again); a chain left with one meeting ends. */
+  async leaveChain(meetingId: string): Promise<MeetingRow> {
+    return this.db.transaction(async (tx) => {
+      const [before] = await tx.select({ chainId: meetings.chainId }).from(meetings).where(eq(meetings.id, meetingId)).for('update');
+      const [row] = await tx.update(meetings).set({ chainId: null, chainReason: null, chainLocked: true }).where(eq(meetings.id, meetingId)).returning();
+      if (before?.chainId) await dissolveIfAlone(tx, before.chainId);
+      return row;
+    });
   }
 
   async getSegments(meetingId: string): Promise<Segment[]> {
@@ -377,4 +462,10 @@ export class MeetingsRepository {
       .returning({ id: actionItems.id });
     return rows.length > 0;
   }
+}
+
+/** A chain needs two meetings; the last one left on its own leaves it. */
+async function dissolveIfAlone(tx: Tx, chainId: string): Promise<void> {
+  const left = await tx.select({ id: meetings.id }).from(meetings).where(eq(meetings.chainId, chainId)).limit(2);
+  if (left.length === 1) await tx.update(meetings).set({ chainId: null, chainReason: null }).where(eq(meetings.id, left[0].id));
 }

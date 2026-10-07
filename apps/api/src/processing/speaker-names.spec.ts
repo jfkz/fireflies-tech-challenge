@@ -16,6 +16,9 @@ describe('resolveSpeakerNames', () => {
     );
     expect(displayNames(map)).toEqual({ You: 'Mikhail', 'Speaker 1': 'Maya', 'Speaker 2': 'Recruiter' });
     expect(map['Speaker 1'].by).toBe('ai');
+    // A role isn't a person to follow across meetings.
+    expect(map['Speaker 2'].role).toBe(true);
+    expect(map['Speaker 1'].role).toBeUndefined();
   });
 
   it('keeps "You" without an account name unless the conversation names them', () => {

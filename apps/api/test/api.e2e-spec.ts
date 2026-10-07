@@ -345,3 +345,67 @@ describe('pagination and search', () => {
     expect(none.items).toEqual([]);
   });
 });
+
+describe('chains and people across meetings', () => {
+  async function macMeeting(token: string, durationSec: number): Promise<MeetingDetail> {
+    const created = await createMeeting(token);
+    await h.http.put(`/meetings/${created.id}/transcript`).set(bearer(token)).send({ segments, language: 'en' }).expect(204);
+    await h.http.post(`/meetings/${created.id}/complete`).set(bearer(token)).send({ durationSec }).expect(200);
+    return waitForStatus(token, created.id, 'ready');
+  }
+
+  it('links a follow-up into a chain, and lets the user unlink and relink it', async () => {
+    const token = emulatorToken('chain-user', 'chain@example.com');
+    const first = await macMeeting(token, 600);
+    expect(first.chain).toBeNull();
+    // Same people and topic: the (fake) linker puts the second meeting in a chain with the first.
+    const second = await macMeeting(token, 900);
+    expect(second.chain?.meetings.map((m) => m.id)).toEqual([first.id, second.id]);
+    expect(second.chain?.reason).toMatch(/Same people and topic/);
+    const firstNow = (await h.http.get(`/meetings/${first.id}`).set(bearer(token)).expect(200)).body as MeetingDetail;
+    expect(firstNow.chain?.id).toBe(second.chain?.id);
+
+    // Out of the chain: a chain of one ends, and a reprocess doesn't link it again.
+    const unlinked = await h.http.patch(`/meetings/${second.id}`).set(bearer(token)).send({ chain: null }).expect(200);
+    expect(unlinked.body.chain).toBeNull();
+    expect(((await h.http.get(`/meetings/${first.id}`).set(bearer(token))).body as MeetingDetail).chain).toBeNull();
+    await h.http.post(`/meetings/${second.id}/reprocess`).set(bearer(token)).expect(200);
+    expect((await waitForStatus(token, second.id, 'ready')).chain).toBeNull();
+
+    // Back in by hand.
+    const relinked = await h.http.patch(`/meetings/${second.id}`).set(bearer(token)).send({ chain: { with: first.id } }).expect(200);
+    expect((relinked.body as MeetingDetail).chain?.meetings.map((m) => m.id)).toEqual([first.id, second.id]);
+    expect((relinked.body as MeetingDetail).chain?.reason).toBeNull();
+    await h.http.patch(`/meetings/${second.id}`).set(bearer(token)).send({ chain: { with: second.id } }).expect(400);
+    const stranger = await createMeeting(emulatorToken('chain-stranger', 'stranger@example.com'));
+    await h.http.patch(`/meetings/${second.id}`).set(bearer(token)).send({ chain: { with: stranger.id } }).expect(404);
+
+    // Deleting one of two meetings ends the chain.
+    await h.http.delete(`/meetings/${first.id}`).set(bearer(token)).expect(204);
+    expect(((await h.http.get(`/meetings/${second.id}`).set(bearer(token))).body as MeetingDetail).chain).toBeNull();
+  });
+
+  it('follows a person across meetings, ranks time together and renames them everywhere', async () => {
+    const token = emulatorToken('people-user', 'people@example.com');
+    const a = await macMeeting(token, 600);
+    const b = await macMeeting(token, 1200);
+
+    const list = (await h.http.get('/people').set(bearer(token)).expect(200)).body;
+    // "You" is the account holder, and the demo meeting's people don't count.
+    expect(list.people).toEqual([{ name: 'Maya', meetingCount: 2, togetherSec: 1800, talkSec: 5, lastMetAt: expect.any(String), openTasks: 0 }]);
+    expect(list.meetingSec).toBe(1800);
+    expect((await h.http.get('/people').query({ days: 30 }).set(bearer(token)).expect(200)).body.since).toEqual(expect.any(String));
+    await h.http.get('/people').query({ days: 0 }).set(bearer(token)).expect(400);
+
+    const maya = (await h.http.get('/people/maya').set(bearer(token)).expect(200)).body;
+    expect(maya.meetings.map((m: { id: string }) => m.id).sort()).toEqual([a.id, b.id].sort());
+    expect(maya.topics).toEqual([{ value: 'Testing', count: 2 }]);
+    await h.http.get('/people/Nobody').set(bearer(token)).expect(404);
+
+    const renamed = (await h.http.patch('/people/Maya').set(bearer(token)).send({ name: 'Maya Lin' }).expect(200)).body;
+    expect(renamed).toMatchObject({ name: 'Maya Lin', meetingCount: 2 });
+    expect(((await h.http.get(`/meetings/${a.id}`).set(bearer(token))).body as MeetingDetail).speakers).toEqual(['You', 'Maya Lin']);
+    await h.http.get('/people/Maya').set(bearer(token)).expect(404);
+    await h.http.patch('/people/Maya%20Lin').set(bearer(token)).send({ name: '' }).expect(400);
+  });
+});

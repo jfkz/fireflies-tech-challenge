@@ -1,8 +1,9 @@
 'use client';
 
-import type { ListTasksQuery, MeetingDetail, MeetingPage, MeetingStatsQuery, TaskItem, TaskPage, UpdateMeetingRequest } from '@boringtalks/shared';
+import type { ListTasksQuery, MeetingDetail, MeetingPage, MeetingStatsQuery, PersonDetail, TaskItem, TaskPage, UpdateMeetingRequest } from '@boringtalks/shared';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { publicApi, useAuth } from '@/components/providers/AuthProvider';
+import { localDayRange } from '@/lib/meeting-nav';
 import { isProcessing, meetingPollInterval } from '@/lib/status';
 
 /** Query keys, scoped by user so two accounts never share a cache entry. */
@@ -18,6 +19,15 @@ export const keys = {
   /** Lists and facets together: what changes when a meeting does. */
   allMeetings: (uid: string | undefined) => ['meetings', uid] as const,
   meeting: (uid: string | undefined, id: string) => ['meeting', uid, id] as const,
+  /** Every meeting page (a chain change shows on all of its meetings). */
+  allMeetingDetails: (uid: string | undefined) => ['meeting', uid] as const,
+  /** The meetings of one local day, for "previous / next today"; under `allMeetings`, so it refreshes with them. */
+  day: (uid: string | undefined, from: string) => ['meetings', uid, 'day', from] as const,
+  people: (uid: string | undefined, days: number | null) => ['people', uid, days] as const,
+  allPeople: (uid: string | undefined) => ['people', uid] as const,
+  /** By lower-cased name: the API matches names in any case. */
+  person: (uid: string | undefined, name: string) => ['person', uid, name.toLocaleLowerCase()] as const,
+  allPersons: (uid: string | undefined) => ['person', uid] as const,
   devices: (uid: string | undefined) => ['devices', uid] as const,
   latestDownload: ['latest-download'] as const,
 };
@@ -61,12 +71,14 @@ export function useTasks(status: TaskStatus = 'open', owner?: string, enabled = 
 export function useToggleTask() {
   const { api, user } = useAuth();
   const qc = useQueryClient();
-  const setDone = (id: string, meetingId: string, done: boolean) =>
+  const setDone = (id: string, meetingId: string, done: boolean) => {
+    const tick = (t: TaskItem) => (t.id === id && t.meeting.id === meetingId ? { ...t, done } : t);
     qc.setQueriesData<InfiniteData<TaskPage>>({ queryKey: keys.allTasks(user?.uid) }, (data) =>
-      data
-        ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map((t) => (t.id === id && t.meeting.id === meetingId ? { ...t, done } : t)) })) }
-        : data,
+      data ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map(tick) })) } : data,
     );
+    // A person page lists their tasks too.
+    qc.setQueriesData<PersonDetail>({ queryKey: keys.allPersons(user?.uid) }, (p) => (p ? { ...p, tasks: p.tasks.map(tick) } : p));
+  };
   return useMutation({
     mutationFn: (t: Pick<TaskItem, 'id' | 'meeting'> & { done: boolean }) => api.updateMeeting(t.meeting.id, { actionItem: { id: t.id, done: t.done } }),
     onMutate: async (t) => {
@@ -75,7 +87,11 @@ export function useToggleTask() {
     },
     onError: (_e, t) => setDone(t.id, t.meeting.id, !t.done),
     onSuccess: (m) => qc.setQueryData(keys.meeting(user?.uid, m.id), m),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.allTasks(user?.uid) }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.allPeople(user?.uid) });
+      void qc.invalidateQueries({ queryKey: keys.allPersons(user?.uid) });
+      return qc.invalidateQueries({ queryKey: keys.allTasks(user?.uid) });
+    },
   });
 }
 
@@ -133,6 +149,9 @@ function useSetMeeting() {
     qc.setQueryData(keys.meeting(user?.uid, m.id), m);
     void qc.invalidateQueries({ queryKey: keys.allMeetings(user?.uid) });
     void qc.invalidateQueries({ queryKey: keys.allTasks(user?.uid) });
+    // Names, talk time and open tasks on the people pages come from meetings.
+    void qc.invalidateQueries({ queryKey: keys.allPeople(user?.uid) });
+    void qc.invalidateQueries({ queryKey: keys.allPersons(user?.uid) });
   };
 }
 
@@ -153,7 +172,11 @@ export function useUpdateMeeting(id: string) {
     onError: (_err, _body, ctx) => {
       if (ctx?.previous) qc.setQueryData(key, ctx.previous);
     },
-    onSuccess: setMeeting,
+    onSuccess: (m, body) => {
+      setMeeting(m);
+      // The other meetings of the chain list this one too.
+      if (body.chain !== undefined) void qc.invalidateQueries({ queryKey: keys.allMeetingDetails(user?.uid), predicate: (q) => q.queryKey[2] !== m.id });
+    },
   });
 }
 
@@ -179,6 +202,52 @@ export function applyUpdate(m: MeetingDetail, body: UpdateMeetingRequest): Meeti
     };
   }
   return next;
+}
+
+/** The meetings on the same local day as `startedAt`, for stepping through a day. */
+export function useSameDayMeetings(startedAt: string) {
+  const { api, user } = useAuth();
+  const { from, to } = localDayRange(startedAt);
+  return useQuery({
+    queryKey: keys.day(user?.uid, from),
+    queryFn: ({ signal }) => api.listMeetings({ from, to, limit: 100 }, signal),
+    enabled: !!user,
+    select: (page) => page.items,
+  });
+}
+
+/** Everyone the user meets in the last `days` days (all time when null), most time together first. */
+export function usePeople(days: number | null, ready = true) {
+  const { api, user } = useAuth();
+  return useQuery({
+    queryKey: keys.people(user?.uid, days),
+    queryFn: ({ signal }) => api.listPeople(days ?? undefined, signal),
+    enabled: !!user && ready,
+  });
+}
+
+export function usePerson(name: string) {
+  const { api, user } = useAuth();
+  return useQuery({ queryKey: keys.person(user?.uid, name), queryFn: ({ signal }) => api.getPerson(name, signal), enabled: !!user && !!name });
+}
+
+/** Renames a person everywhere (or merges them into someone who already has the new name). */
+export function useRenamePerson() {
+  const { api, user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, newName }: { name: string; newName: string }) => api.renamePerson(name, newName),
+    onSuccess: (person, { name }) => {
+      qc.removeQueries({ queryKey: keys.person(user?.uid, name), exact: true });
+      qc.setQueryData(keys.person(user?.uid, person.name), person);
+      void qc.invalidateQueries({ queryKey: keys.allPeople(user?.uid) });
+      // Whoever they were merged into, and every meeting, list and task that shows the name.
+      void qc.invalidateQueries({ queryKey: keys.allPersons(user?.uid), predicate: (q) => q.queryKey[2] !== person.name.toLocaleLowerCase() });
+      void qc.invalidateQueries({ queryKey: keys.allMeetings(user?.uid) });
+      void qc.invalidateQueries({ queryKey: keys.allMeetingDetails(user?.uid) });
+      void qc.invalidateQueries({ queryKey: keys.allTasks(user?.uid) });
+    },
+  });
 }
 
 export function useReprocessMeeting(id: string) {

@@ -17,6 +17,8 @@ import { stillPose } from '@/lib/avatar/pose';
 import { LISTENER } from '@/lib/avatar/styles';
 import { filtersFromParams, filtersToSearch, hasFilters } from '@/lib/filters';
 import { formatMeetingDate } from '@/lib/format';
+import { isTyping } from '@/lib/meeting-nav';
+import { isPersonName, personHref } from '@/lib/people';
 import { markedParts } from '@/lib/search';
 
 export function MeetingsList() {
@@ -46,8 +48,7 @@ export function MeetingsList() {
   const searchBox = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = e.target instanceof HTMLElement && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName));
-      if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.key === '/' && !isTyping(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         searchBox.current?.focus();
       }
@@ -89,7 +90,13 @@ export function MeetingsList() {
         </form>
       </div>
 
-      <FilterBar facets={facets.data} filters={filters} onToggle={toggle} onClear={filtered ? clear : undefined} />
+      <FilterBar
+        facets={facets.data}
+        filters={filters}
+        onToggle={toggle}
+        onClear={filtered ? clear : undefined}
+        person={filters.speaker && me.isSuccess && isPersonName(filters.speaker, me.data.name) ? filters.speaker : undefined}
+      />
 
       <div className="mt-6">
         {me.isError ? (
@@ -131,17 +138,22 @@ type Toggle = (key: 'speaker' | 'topic', value: string) => void;
 /** How many people and topics show before "more". */
 const FACETS_SHOWN = 8;
 
-/** People and topics to filter by, most frequent first; the active ones are highlighted. */
+/**
+ * People and topics to filter by, most frequent first; the active ones are highlighted. Filtered by a
+ * named `person`, it also links to their page.
+ */
 export function FilterBar({
   facets,
   filters,
   onToggle,
   onClear,
+  person,
 }: {
   facets: MeetingFacets | undefined;
   filters: MeetingFilters;
   onToggle: Toggle;
   onClear?: () => void;
+  person?: string;
 }) {
   const [all, setAll] = useState(false);
   const pick = (values: string[], active: string | undefined) => {
@@ -178,7 +190,12 @@ export function FilterBar({
           ))}
         </PillRow>
       )}
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {person && (
+          <Link href={personHref(person)} className="text-sm font-extrabold text-call-deep underline underline-offset-2">
+            Time with {person} →
+          </Link>
+        )}
         {more && (
           <button type="button" className="text-sm font-extrabold text-call-deep underline underline-offset-2" onClick={() => setAll(true)}>
             Show all people and topics

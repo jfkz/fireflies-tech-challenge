@@ -170,7 +170,22 @@ later through `PATCH`) is kept: the summarizer never overwrites a title the user
 
 ### `GET /meetings/:id` → `MeetingDetail`
 The list item plus `language`, `error`, `summary` (summary, keyTopics, actionItems, decisions, model),
-the full `segments` and `audioUrl` — a presigned GET valid for 1 hour, or `null` when there is no audio.
+the full `segments`, `audioUrl` — a presigned GET valid for 1 hour, or `null` when there is no audio —
+and `chain`: the related meetings it is linked with, oldest first, or `null`:
+```json
+"chain": {
+  "id": "9d1e…",
+  "meetings": [
+    { "id": "41fc…", "title": "Admin page plan", "startedAt": "2026-10-01T09:00:00.000Z" },
+    { "id": "3c50…", "title": "Admin page delivery before Friday", "startedAt": "2026-10-06T21:14:25.344Z" }
+  ],
+  "reason": "Picks up the admin page plan from the week before"
+}
+```
+**Chains.** After each summary the worker compares the meeting with the user's other meetings within
+45 days (`processing/chain-linker.ts`, the summary model): when it is the same recurring meeting or a
+follow-up on the same work, it joins that meeting's chain (`reason` says why). Sharing only a broad
+topic or one person isn't enough. A meeting the user linked or unlinked by hand keeps its place.
 
 ```json
 {
@@ -192,6 +207,10 @@ Rename, tick an action item and/or rename speakers (at least one of them):
 ```json
 { "title": "Beta go/no-go", "actionItem": { "id": "zmRnapn6Bn", "done": true }, "speakers": { "Speaker 2": "Leo" } }
 ```
+`"chain": null` takes the meeting out of its chain (a chain left with one meeting ends) and keeps
+the worker from linking it again; `"chain": { "with": "<meeting id>" }` puts it in that meeting's
+chain (starting one), `reason` `null`. `400` for the meeting itself, `404` for someone else's.
+
 `speakers` maps a current display name to a new one (1–20 at a time). The new names are marked as
 typed by hand, so reprocessing never overwrites them; action item owners follow. Giving two speakers
 the same name merges them into one person in lists and filters. `404` if the action item or a
@@ -267,6 +286,34 @@ Tick a task off with `PATCH /meetings/:meetingId { "actionItem": { "id", "done" 
 
 **Due dates.** `due` is the deadline as said; `dueDate` is the same deadline as a date, worked out by
 the summarizer from the meeting's date ("Friday" → the Friday after the meeting), or `null`.
+
+## People
+
+A person is a speaker name across meetings, case-insensitive: "Maya" in two meetings is one person.
+Unnamed voices ("Speaker 2"), roles the summarizer gave for want of a name ("Recruiter"), the
+account holder ("You", or their own name among numbered speakers) and the demo meeting don't count.
+Name speakers on a meeting (`PATCH /meetings/:id { "speakers" }`) to link them.
+
+### `GET /people?days=` → `PeopleList`
+Everyone the user met in the last `days` (1–3650; all time when left out), most time together first.
+`togetherSec` adds up the meetings they were in, `talkSec` how long they spoke, `openTasks` their open
+action items; `meetingSec` is all the user's meetings in the period.
+```json
+{
+  "since": "2026-09-07T12:00:00.000Z",
+  "meetingSec": 54000,
+  "people": [{ "name": "Maya", "meetingCount": 6, "togetherSec": 15000, "talkSec": 5100, "lastMetAt": "2026-10-06T09:00:00.000Z", "openTasks": 2 }]
+}
+```
+
+### `GET /people/:name` → `PersonDetail`
+The summary plus `meetings` (newest first, each with `durationSec` and the person's `talkSec`),
+`topics` of those meetings (most frequent first) and `tasks` they own (`TaskItem`, open first).
+`404` for a name nobody has.
+
+### `PATCH /people/:name` (`RenamePersonRequest`) → `PersonDetail`
+`{ "name": "Maya Lin" }` renames the person in every meeting (as typed by hand) and in their action
+items, and returns them under the new name. Renaming to another person's name merges the two.
 
 ## Devices (Mac app sign-in, PKCE)
 

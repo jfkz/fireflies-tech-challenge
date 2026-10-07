@@ -27,6 +27,9 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     meetingFacets: vi.fn(() => Promise.resolve({ speakers: [], topics: [] })),
     meetingStats: notMocked('meetingStats'),
     listTasks: notMocked('listTasks'),
+    listPeople: notMocked('listPeople'),
+    getPerson: notMocked('getPerson'),
+    renamePerson: notMocked('renamePerson'),
     ...overrides,
   } as ApiClient;
 }

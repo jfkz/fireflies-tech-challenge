@@ -4,7 +4,10 @@ import { DevicesRepository } from '../devices/devices.repository';
 import { EmailLogRepository } from '../email/email-log.repository';
 import { DemoService } from '../meetings/demo.service';
 import { DEMO_MEETING, DEMO_SEGMENTS } from '../meetings/demo-meeting';
+import { linkExistingMeetings } from '../link-chains';
 import { MeetingsRepository } from '../meetings/meetings.repository';
+import { PeopleRepository } from '../people/people.repository';
+import { FakeChainLinker } from '../processing/chain-linker';
 import { createTestDb } from '../testing/pglite';
 import { seg } from '../testing/fixtures';
 import { UsersRepository } from '../users/users.repository';
@@ -289,5 +292,76 @@ describe('EmailLogRepository', () => {
     expect(await log.claim('k1', userId, 'welcome')).toBe(false);
     await log.release('k1');
     expect(await log.claim('k1', userId, 'welcome')).toBe(true);
+  });
+});
+
+describe('chains and people', () => {
+  it('links older meetings into chains, oldest first, leaving demo and hand-unlinked ones alone', async () => {
+    const user = (await users.insertIfAbsent({ firebaseUid: 'fb-chain', email: null, name: null }))!;
+    const make = async (title: string, day: string, extra: Record<string, unknown> = {}) => {
+      const m = await meetings.create({
+        userId: user.id,
+        title,
+        status: 'ready',
+        source: 'macos',
+        startedAt: new Date(`2026-10-${day}T10:00:00Z`),
+        speakers: ['You', 'Gat'],
+        topics: ['Admin Page'],
+        ...extra,
+      });
+      await meetings.saveSummary(m.id, { summary: `About ${title}`, keyTopics: [], decisions: [], model: 'm', actionItems: [] }, {});
+      return m;
+    };
+    const plan = await make('Admin page plan', '01');
+    const delivery = await make('Admin page delivery', '06');
+    await make('Demo', '02', { source: 'demo' });
+    const unlinked = await make('Admin page retro', '07', { chainLocked: true });
+    await make('Hiring loop', '03', { speakers: ['Dana'], topics: ['Hiring'] });
+
+    const { checked, linked } = await linkExistingMeetings(db, new FakeChainLinker(), { userId: user.id });
+    expect(checked).toBe(4);
+    // The plan links to the delivery (its nearest match); the delivery is then already in that chain.
+    expect(linked).toEqual([expect.objectContaining({ id: plan.id, meetingId: delivery.id })]);
+    const chainOf = async (id: string) => (await meetings.findById(id))?.chainId;
+    expect(await chainOf(plan.id)).toBeTruthy();
+    expect(await chainOf(delivery.id)).toBe(await chainOf(plan.id));
+    expect(await chainOf(unlinked.id)).toBeNull();
+    expect((await meetings.chainMeetings(user.id, (await chainOf(plan.id))!)).map((m) => m.title)).toEqual(['Admin page plan', 'Admin page delivery']);
+    // Run again: nothing new to link.
+    expect((await linkExistingMeetings(db, new FakeChainLinker(), { userId: user.id })).linked).toEqual([]);
+
+    // Leaving a chain of two ends it, and a deleted meeting's chain ends too.
+    await meetings.leaveChain(plan.id);
+    expect(await chainOf(delivery.id)).toBeNull();
+    expect((await meetings.findById(plan.id))?.chainLocked).toBe(true);
+    const again = await make('Admin page follow-up', '08');
+    await meetings.joinChain(again.id, delivery.id, { reason: null, locked: true });
+    expect(await chainOf(again.id)).toBe(await chainOf(delivery.id));
+    await meetings.delete(delivery.id);
+    expect(await chainOf(again.id)).toBeNull();
+  });
+
+  it('adds up talk time per speaker, meeting time and open tasks per owner', async () => {
+    const user = (await users.insertIfAbsent({ firebaseUid: 'fb-people', email: null, name: 'Ann' }))!;
+    const people = new PeopleRepository(db);
+    const m = await meetings.create({ userId: user.id, title: 'Sync', status: 'ready', source: 'macos', startedAt: new Date('2026-10-05T10:00:00Z'), durationSec: 600 });
+    await meetings.replaceTranscript(m.id, [seg('You', 0, 2_000, 'hi'), seg('Speaker 1', 2_000, 7_000, 'hello'), seg('Speaker 1', 8_000, 9_000, 'bye')], {});
+    await meetings.saveSummary(
+      m.id,
+      { summary: 's', keyTopics: [], decisions: [], model: 'm', actionItems: [{ id: 'a', text: 'Send it', owner: 'Maya', due: null, dueDate: null, done: false }] },
+      { speakerNames: { 'Speaker 1': { name: 'Maya', by: 'ai' } } },
+    );
+    const rows = await people.speakerTime(user.id, null);
+    expect(rows.map((r) => [r.label, r.talkMs, r.durationSec]).sort()).toEqual([
+      ['Speaker 1', 6_000, 600],
+      ['You', 2_000, 600],
+    ]);
+    expect(rows[0].speakerNames).toEqual({ 'Speaker 1': { name: 'Maya', by: 'ai' } });
+    expect(await people.speakerTime(user.id, new Date('2026-10-06T00:00:00Z'))).toEqual([]);
+    expect(await people.meetingSeconds(user.id, null)).toBe(600);
+    expect(await people.openTasksByOwner(user.id)).toEqual(new Map([['maya', 1]]));
+    expect((await people.tasksOf(user.id, 'maya')).map((t) => t.text)).toEqual(['Send it']);
+    await people.renameOwner(user.id, 'maya', 'Maya Lin');
+    expect((await people.tasksOf(user.id, 'maya lin')).map((t) => t.owner)).toEqual(['Maya Lin']);
   });
 });

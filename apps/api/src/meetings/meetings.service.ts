@@ -144,6 +144,13 @@ export class MeetingsService {
     if (body.title !== undefined) {
       meeting = (await this.repo.update(meeting.id, { title: body.title, titleLocked: true })) ?? meeting;
     }
+    if (body.chain === null) {
+      meeting = await this.repo.leaveChain(meeting.id);
+    } else if (body.chain) {
+      const target = await this.owned(user, body.chain.with);
+      if (target.id === meeting.id) throw validationError([{ path: 'chain.with', message: 'A meeting cannot be chained to itself' }]);
+      meeting = await this.repo.joinChain(meeting.id, target.id, { reason: null, locked: true });
+    }
     return this.detail(meeting);
   }
 
@@ -218,11 +225,13 @@ export class MeetingsService {
   }
 
   private async detail(meeting: MeetingRow): Promise<MeetingDetail> {
-    const [summary, segments, audioUrl] = await Promise.all([
+    const [summary, segments, audioUrl, chained] = await Promise.all([
       this.repo.getSummary(meeting.id),
       this.repo.getSegments(meeting.id),
       meeting.hasAudio && meeting.audioKey ? this.storage.presignGet(meeting.audioKey) : Promise.resolve(null),
+      meeting.chainId ? this.repo.chainMeetings(meeting.userId, meeting.chainId) : Promise.resolve([]),
     ]);
-    return toDetail(meeting, summary, segments, audioUrl);
+    const chain = meeting.chainId && chained.length >= 2 ? { id: meeting.chainId, meetings: chained, reason: meeting.chainReason } : null;
+    return toDetail(meeting, summary, segments, audioUrl, chain);
   }
 }

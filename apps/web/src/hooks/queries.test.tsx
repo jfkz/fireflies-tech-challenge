@@ -2,7 +2,23 @@ import type { MeetingDetail, MeetingPage } from '@boringtalks/shared';
 import { act, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { authValue, fakeApi, meeting, renderHookWithProviders } from '@/test/utils';
-import { applyUpdate, keys, useDeleteMeeting, useDevices, useLatestDownload, useMe, useMeeting, useMeetings, useRevokeDevice, useUpdateMeeting, useUpdateSettings } from './queries';
+import {
+  applyUpdate,
+  keys,
+  useDeleteMeeting,
+  useDevices,
+  useLatestDownload,
+  useMe,
+  useMeeting,
+  useMeetings,
+  usePeople,
+  usePerson,
+  useRenamePerson,
+  useRevokeDevice,
+  useSameDayMeetings,
+  useUpdateMeeting,
+  useUpdateSettings,
+} from './queries';
 
 afterEach(() => vi.useRealTimers());
 
@@ -142,6 +158,53 @@ describe('mutations', () => {
     await waitFor(() => expect(result.current.devices.data).toEqual([]));
     await act(() => result.current.revoke.mutateAsync('d1'));
     expect(api.revokeDevice).toHaveBeenCalledWith('d1');
+  });
+});
+
+describe('people and navigation', () => {
+  const maya = { name: 'Maya', meetingCount: 1, togetherSec: 1800, talkSec: 600, lastMetAt: '2026-10-01T10:00:00.000Z', openTasks: 0, meetings: [], topics: [], tasks: [] };
+
+  it('lists people for a period and all time', async () => {
+    const listPeople = vi.fn(async () => ({ since: null, meetingSec: 0, people: [] }));
+    const auth = authValue({ api: fakeApi({ listPeople }) });
+    renderHookWithProviders(() => [usePeople(30), usePeople(null)], { auth });
+    await waitFor(() => expect(listPeople).toHaveBeenCalledTimes(2));
+    expect(listPeople.mock.calls.map((c: unknown[]) => c[0])).toEqual([30, undefined]);
+  });
+
+  it('renames a person: the new name is cached, the old one dropped, the rest refreshed', async () => {
+    const getPerson = vi.fn(async () => ({ ...maya, name: 'Maya Chen' }));
+    const renamePerson = vi.fn(async () => maya);
+    const { result, client } = renderHookWithProviders(() => ({ person: usePerson('Maya Chen'), rename: useRenamePerson() }), {
+      auth: authValue({ api: fakeApi({ getPerson, renamePerson }) }),
+    });
+    await waitFor(() => expect(result.current.person.data?.name).toBe('Maya Chen'));
+    client.setQueryData(keys.people('u1', 30), { since: null, meetingSec: 0, people: [] });
+    await act(() => result.current.rename.mutateAsync({ name: 'Maya Chen', newName: 'Maya' }));
+    expect(renamePerson).toHaveBeenCalledWith('Maya Chen', 'Maya');
+    expect(client.getQueryData(keys.person('u1', 'maya'))).toEqual(maya);
+    expect(client.getQueryState(keys.people('u1', 30))!.isInvalidated).toBe(true);
+  });
+
+  it('lists the meetings of the local day a meeting started on', async () => {
+    const listMeetings = vi.fn(async () => ({ items: [item(meeting())], nextCursor: null }));
+    const { result } = renderHookWithProviders(() => useSameDayMeetings('2026-10-06T15:00:00.000Z'), { auth: authValue({ api: fakeApi({ listMeetings: listMeetings as never }) }) });
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+    const start = new Date('2026-10-06T15:00:00.000Z');
+    start.setHours(0, 0, 0, 0);
+    expect(listMeetings).toHaveBeenCalledWith(expect.objectContaining({ from: start.toISOString(), limit: 100 }), expect.anything());
+  });
+
+  it('a chain change refreshes the other meetings of the chain', async () => {
+    const m = meeting();
+    const updateMeeting = vi.fn(async () => ({ ...m, chain: null }));
+    const { result, client } = renderHookWithProviders(() => useUpdateMeeting(m.id), { auth: authValue({ api: fakeApi({ updateMeeting }) }) });
+    client.setQueryData(keys.meeting('u1', m.id), m);
+    client.setQueryData(keys.meeting('u1', 'other'), m);
+    await act(() => result.current.mutateAsync({ chain: null }));
+    expect(updateMeeting).toHaveBeenCalledWith(m.id, { chain: null });
+    expect(client.getQueryState(keys.meeting('u1', 'other'))!.isInvalidated).toBe(true);
+    expect(client.getQueryState(keys.meeting('u1', m.id))!.isInvalidated).toBe(false);
   });
 });
 

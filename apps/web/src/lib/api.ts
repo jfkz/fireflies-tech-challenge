@@ -8,6 +8,8 @@ import {
   MeetingFacets,
   MeetingPage,
   MeetingStats,
+  PeopleList,
+  PersonDetail,
   TaskPage,
   UploadUrlResponse,
   type AuthorizeDeviceRequest,
@@ -16,6 +18,7 @@ import {
   type ListMeetingsQuery,
   type ListTasksQuery,
   type MeetingStatsQuery,
+  type RenamePersonRequest,
   type UpdateMeetingRequest,
   type UpdateSettingsRequest,
   type UploadUrlRequest,
@@ -122,6 +125,14 @@ export function createApiClient({ baseUrl, getToken, fetch: fetchImpl }: ApiClie
     completeMeeting: (id: string, body: CompleteMeetingRequest = {}) =>
       request('POST', `/meetings/${encodeURIComponent(id)}/complete`, { schema: MeetingDetail, body }),
     reprocessMeeting: (id: string) => request('POST', `/meetings/${encodeURIComponent(id)}/reprocess`, { schema: MeetingDetail, body: {} }),
+
+    /** Everyone the user meets, most time together first; `days` narrows it to the last that many days. */
+    listPeople: (days?: number, signal?: AbortSignal) => request('GET', '/people', { schema: PeopleList, query: { days }, signal }),
+    /** One person by name (any case); 404 when nobody by that name spoke in a meeting. */
+    getPerson: (name: string, signal?: AbortSignal) => request('GET', `/people/${encodeURIComponent(name)}`, { schema: PersonDetail, signal }),
+    /** Renames them in every meeting; renaming to someone else's name merges the two. */
+    renamePerson: (name: string, newName: string) =>
+      request('PATCH', `/people/${encodeURIComponent(name)}`, { schema: PersonDetail, body: { name: newName } satisfies RenamePersonRequest }),
 
     authorizeDevice: (body: AuthorizeDeviceRequest) => request('POST', '/devices/authorize', { schema: AuthorizeDeviceResponse, body }),
     listDevices: () => request('GET', '/devices', { schema: DeviceList }),

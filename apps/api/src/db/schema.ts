@@ -19,6 +19,8 @@ import type { MeetingSource, MeetingStatus } from '@boringtalks/shared';
 export interface SpeakerNameEntry {
   name: string;
   by: 'ai' | 'user';
+  /** The summarizer found no name and gave a role ("Recruiter"): not a person to link across meetings. */
+  role?: true;
 }
 /** Raw transcript label ("You", "Speaker 1") → its display name. */
 export type SpeakerNameMap = Record<string, SpeakerNameEntry>;
@@ -92,6 +94,12 @@ export const meetings = pgTable(
     speakerNames: jsonb('speaker_names').$type<SpeakerNameMap>().notNull().default({}),
     /** Short reusable tags from the summary, for the topic filter. */
     topics: text('topics').array().notNull().default(sql`'{}'::text[]`),
+    /** Related meetings share a chain id (the summarizer links a follow-up to the meeting it continues). */
+    chainId: uuid('chain_id'),
+    /** Why the summarizer linked it; null when linked by hand. */
+    chainReason: text('chain_reason'),
+    /** The user linked or unlinked it by hand: the summarizer leaves its chain alone. */
+    chainLocked: boolean('chain_locked').notNull().default(false),
     error: text('error'),
     /** Processing runs started; part of the job id so a reprocess is a new job. */
     attempts: integer('attempts').notNull().default(0),
@@ -111,6 +119,7 @@ export const meetings = pgTable(
     index('meetings_search_idx').using('gin', t.search),
     index('meetings_speakers_idx').using('gin', t.speakers),
     index('meetings_topics_idx').using('gin', t.topics),
+    index('meetings_user_chain_idx').on(t.userId, t.chainId),
     uniqueIndex('meetings_user_client_key_idx').on(t.userId, t.clientKey),
   ],
 );
