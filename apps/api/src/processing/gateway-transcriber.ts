@@ -178,7 +178,7 @@ export function joinDiarized(results: readonly TranscribeResult[]): TranscribeRe
     }
   }
   const names = new Map<string, string>();
-  const segments = merged.map((s) => {
+  const segments = absorbStraySpeakers(merged).map((s) => {
     if (!names.has(s.speaker)) names.set(s.speaker, `Speaker ${names.size + 1}`);
     return { ...s, speaker: names.get(s.speaker)! };
   });
@@ -189,6 +189,33 @@ export function joinDiarized(results: readonly TranscribeResult[]): TranscribeRe
     durationSec: last?.durationSec ?? null,
     diarized: results.every((r) => r.diarized),
   };
+}
+
+/** A "speaker" heard this little is a diarization slip (one "Yeah." clustered on its own), not a person. */
+const STRAY_MAX_MS = 2_000;
+const STRAY_MAX_SEGMENTS = 2;
+
+/** Gives a stray speaker's lines to whoever speaks nearest in time, when there are real speakers to give them to. */
+export function absorbStraySpeakers<T extends { speaker: string; startMs: number; endMs: number }>(segments: readonly T[]): T[] {
+  const totals = new Map<string, { ms: number; count: number }>();
+  for (const s of segments) {
+    const t = totals.get(s.speaker) ?? { ms: 0, count: 0 };
+    totals.set(s.speaker, { ms: t.ms + (s.endMs - s.startMs), count: t.count + 1 });
+  }
+  const stray = new Set([...totals].filter(([, t]) => t.ms < STRAY_MAX_MS && t.count <= STRAY_MAX_SEGMENTS).map(([speaker]) => speaker));
+  if (stray.size === 0 || stray.size === totals.size) return [...segments];
+  return segments.map((s, i) => {
+    if (!stray.has(s.speaker)) return s;
+    let best: T | undefined;
+    let gap = Infinity;
+    for (let j = 0; j < segments.length; j++) {
+      const o = segments[j];
+      if (j === i || stray.has(o.speaker)) continue;
+      const d = o.endMs <= s.startMs ? s.startMs - o.endMs : o.startMs >= s.endMs ? o.startMs - s.endMs : 0;
+      if (d < gap) [best, gap] = [o, d];
+    }
+    return best ? { ...s, speaker: best.speaker } : s;
+  });
 }
 
 export function toTranscribeResult(result: {

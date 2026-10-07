@@ -70,7 +70,9 @@ export function resolveSpeakerNames(
     if (Object.hasOwn(out, label) || !isPlaceholderLabel(label)) continue;
     const guess = guesses.find((g) => g.label.trim().toLowerCase() === label.toLowerCase());
     const owner = /^you$/i.test(label) ? firstName(ownerName) : null;
-    const name = owner ?? clean(guess?.name, NAME_MAX);
+    const guessed = clean(guess?.name, NAME_MAX);
+    // The account holder recognized among numbered speakers: called what "You" would be called.
+    const name = owner ?? (guessed && ownerName && guessed.toLocaleLowerCase() === ownerName.trim().toLocaleLowerCase() ? firstName(ownerName) : guessed);
     const role = clean(guess?.role, ROLE_MAX);
     if (name) claim(label, name, 'ai');
     else if (role) claim(label, capitalize(role), 'ai');

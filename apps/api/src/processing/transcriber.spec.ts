@@ -1,5 +1,6 @@
 import { testConfig } from '../testing/fixtures';
 import {
+  absorbStraySpeakers,
   diarizesItself,
   fromPhrases,
   GatewayTranscriber,
@@ -76,6 +77,14 @@ describe('MAI-Transcribe (diarizing model)', () => {
       { speaker: '0:1', startMs: 1_000, endMs: 2_000, text: 'Real words.' },
     ]);
     expect(fromPhrases(maiResult([phrase(0, 0, 500, 'Bye.'), phrase(1, 600, 900, 'Okay.')]), '0').segments).toEqual([]);
+  });
+
+  it('folds a stray one-word "speaker" into whoever speaks nearest', () => {
+    const seg = (speaker: string, startMs: number, endMs: number) => ({ speaker, startMs, endMs, text: 'x' });
+    expect(absorbStraySpeakers([seg('a', 0, 5_000), seg('b', 5_100, 9_000), seg('c', 9_050, 9_250), seg('a', 12_000, 20_000)]).map((s) => s.speaker)).toEqual(['a', 'b', 'b', 'a']);
+    // A real third person (longer, or more often) stays; a recording of one short voice stays too.
+    expect(absorbStraySpeakers([seg('a', 0, 5_000), seg('c', 6_000, 9_000)]).map((s) => s.speaker)).toEqual(['a', 'c']);
+    expect(absorbStraySpeakers([seg('c', 0, 500)]).map((s) => s.speaker)).toEqual(['c']);
   });
 
   it('takes the language spoken longest', () => {

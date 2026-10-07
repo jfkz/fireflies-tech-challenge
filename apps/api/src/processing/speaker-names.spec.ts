@@ -23,6 +23,11 @@ describe('resolveSpeakerNames', () => {
     expect(displayNames(resolveSpeakerNames(['You'], [{ label: 'You', name: 'Sam', role: null }], null))).toEqual({ You: 'Sam' });
   });
 
+  it('calls the account holder found among numbered speakers by their first name', () => {
+    const map = resolveSpeakerNames(['Speaker 1', 'Speaker 2'], [{ label: 'Speaker 2', name: 'Mikhail Pershin', role: null }], 'Mikhail Pershin');
+    expect(displayNames(map)).toEqual({ 'Speaker 2': 'Mikhail' });
+  });
+
   it('rejects answers that are not names', () => {
     const guesses = ['Speaker 4', 'unknown speaker', '"N/A"', 'Me', 'x'.repeat(41)].map((name) => ({ label: 'Speaker 1', name, role: null }));
     for (const g of guesses) expect(resolveSpeakerNames(['Speaker 1'], [g], null)).toEqual({});
