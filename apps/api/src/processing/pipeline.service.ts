@@ -44,8 +44,8 @@ export class PipelineService {
       language: meeting.language,
     });
     if (result.segments.length === 0) throw new UnrecoverableError('No speech was found in the audio');
-    // The server's transcript has one voice; listen again to tell the people apart.
-    const segments = await this.diarizer.diarize({ audio, segments: result.segments });
+    // A model that doesn't tell voices apart gives one; then listen again to tell the people apart.
+    const segments = result.diarized ? result.segments : await this.diarizer.diarize({ audio, segments: result.segments });
     await this.transcripts.store(meeting, { ...result, segments });
     const next = await this.meetings.transition(meeting.id, 'transcribing', { status: 'summarizing' });
     if (next) await this.jobs.summarize(next.id, next.attempts);

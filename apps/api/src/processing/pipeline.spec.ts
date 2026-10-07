@@ -65,6 +65,17 @@ describe('PipelineService.transcribe', () => {
     expect(t.transcripts.store.mock.calls[0][1].segments.map((s: { speaker: string }) => s.speaker)).toEqual(['Speaker 1', 'Speaker 2']);
   });
 
+  it('keeps the speakers of a model that told them apart itself', async () => {
+    const t = setup();
+    const m = meeting({ status: 'transcribing', attempts: 1, audioKey: 'a.m4a' });
+    t.meetings.findById.mockResolvedValue(m);
+    const segments = [seg('Speaker 1', 0, 1, 'hi'), seg('Speaker 2', 1, 2, 'hello')];
+    t.transcriber.transcribe.mockResolvedValue({ segments, language: 'en', durationSec: 2, diarized: true });
+    await t.pipeline.transcribe({ meetingId: m.id, run: 1 });
+    expect(t.diarizer.diarize).not.toHaveBeenCalled();
+    expect(t.transcripts.store.mock.calls[0][1].segments).toEqual(segments);
+  });
+
   it('skips stale or deleted meetings', async () => {
     const t = setup();
     t.meetings.findById.mockResolvedValueOnce(null);

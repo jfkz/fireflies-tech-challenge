@@ -482,18 +482,26 @@ as rows for search. `POST /meetings` honours `Idempotency-Key`, so a client retr
 duplicate.
 
 ### Processing pipeline (worker)
-- **Transcribe** (browser recordings and uploads only): Whisper through the AI Gateway, with
-  segment timestamps (`processing/audio-prep.ts`, `gateway-transcriber.ts`):
-  - Audio over 24 MB is re-encoded for speech with ffmpeg (mono, 16 kHz, 24 kbps MP3: about 11 MB
-    an hour). The API takes at most 25 MB a request.
-  - Recordings over 20 minutes are cut into 20-minute parts that overlap by 5 s. Each part gets the
-    end of the previous part's text as context, so names and spelling carry over the cut.
-  - The stitched transcript drops the overlap's repeated lines.
-- **Tell voices apart** (server-transcribed audio): Whisper hears one voice, so an audio model
-  (`DIARIZE_MODEL`, Gemini 3 Flash through the AI Gateway) listens to the recording with the
-  numbered transcript and says which voice speaks each line. Long recordings go in parts, each told
-  the voices heard before. The lines become Speaker 1, 2, 3, and the summarizer names them as
-  usual. If this fails, the meeting keeps one speaker rather than failing (`processing/diarizer.ts`).
+- **Transcribe and tell voices apart** (browser recordings and uploads only): MAI-Transcribe 2
+  (`TRANSCRIBE_MODEL`, `microsoft/mai-transcribe-2` through the AI Gateway, $0.10 an hour) with
+  diarization: one phrase per speaker turn, each with its speaker (`processing/gateway-transcriber.ts`
+  `transcribeDiarized`, `fromPhrases`, `joinDiarized`):
+  - The audio is always re-encoded for speech with ffmpeg (mono, 16 kHz, 24 kbps MP3; Azure refuses
+    AAC in M4A). Up to an hour goes in one request (~11 MB, ~20 s), so a meeting keeps one set of
+    speakers; longer ones are cut into hour parts that overlap by 90 s, and each part's speakers are
+    matched to the earlier part's by who speaks in the overlap.
+  - Phrases become segments labelled Speaker 1, 2, 3 by first appearance; the language is the one
+    spoken longest. The summarizer then names them as usual.
+  - Chosen against the old Whisper + Gemini Flash line labelling on a 13-minute two-person upload:
+    Whisper's 10-second lines often held both people (“Yeah. Cool. All right, anything else? No,
+    that's fine.”), so a line's single label was wrong for half of it, and in the silent last two
+    minutes Whisper wrote “Bye.” every 30 s. MAI split the turns, agreed with on-device voice
+    separation 86% of the time (Whisper + Gemini: 78%), and was right in the disputed turns.
+- **Whisper fallback:** with a model that doesn't diarize (`TRANSCRIBE_MODEL=openai/whisper-1`),
+  audio over 24 MB is compressed, recordings over 20 minutes go in 20-minute parts that overlap by
+  5 s with the previous text as context, and an audio model (`DIARIZE_MODEL`, Gemini 3 Flash)
+  listens to the recording with the numbered transcript and says which voice speaks each line. If
+  that fails, the meeting keeps one speaker rather than failing (`processing/diarizer.ts`).
   **Reprocess** on a browser or upload meeting starts again from its audio, so older ones get voices too.
 - **Summarize:** Claude Haiku 4.5 through the AI Gateway with structured output: a specific title,
   one-line description, summary, key topics, 1–4 reusable topic tags, action items (owner, due date),

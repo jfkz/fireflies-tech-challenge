@@ -8,7 +8,7 @@ Submission for the "Clone the Fireflies.ai app" technical challenge.
 - **Brief requirements → where they are:**
   - Meeting recording → Mac menu-bar app (real capture of both sides of any call) and a browser
     recorder / file upload as a fallback
-  - Transcription → on the Mac (Parakeet, speaker-labelled); Whisper on the server for browser audio
+  - Transcription → on the Mac (Parakeet, speaker-labelled); MAI-Transcribe 2 (with speakers) on the server for browser audio
   - Summary & action items → server worker with Claude Haiku 4.5: title, description, summary, key
     topics, action items with owners and due dates, decisions, and names for the speakers
   - User interface → Next.js dashboard (meetings with search and filters, tasks, calendar) + Mac
@@ -46,7 +46,7 @@ server-side speech-to-text. Numbers in [COSTS.md](COSTS.md).
 6. **One contract.** `packages/shared` holds zod schemas used by the API (validation), the web app
    (response parsing) and the Mac app's test fixtures.
 7. **Fallbacks for reviewers.** Without a Mac: record in the browser or upload a file, and the
-   server transcribes with Whisper. Every new account gets a ready demo meeting.
+   server transcribes it (MAI-Transcribe 2, which also tells the speakers apart). Every new account gets a ready demo meeting.
 8. **Action items are data, not text.** They live in their own table with due dates resolved from
    the meeting's date ("Friday" → a date), so a tasks page can list everyone's promises from every
    meeting, soonest due first, each linking back to the moment it was made.
@@ -55,7 +55,7 @@ server-side speech-to-text. Numbers in [COSTS.md](COSTS.md).
 
 - **Mac app:** menu bar, Start/Stop, live transcript window with cartoon heads, offline-safe upload
   queue that resumes after relaunch, browser sign-in, model download progress, settings.
-- **Backend:** NestJS API + worker, Postgres, Redis, R2, AI Gateway (Haiku 4.5, Whisper), Resend
+- **Backend:** NestJS API + worker, Postgres, Redis, R2, AI Gateway (Haiku 4.5, MAI-Transcribe 2), Resend
   emails ("your meeting is ready" with the summary and action items), per-user rate limits,
   idempotent creates, full-text search, health checks.
 - **Web:** funny parallax landing page with cartoon heads that babble out loud (with a mute
@@ -87,7 +87,7 @@ server-side speech-to-text. Numbers in [COSTS.md](COSTS.md).
 - **macOS 26 only** (Core Audio process taps and the current speech stack). A Chrome extension could cover web meetings.
 - **No live streaming to the server:** the transcript uploads when the meeting ends. Next: stream
   segments during long meetings so the summary is ready seconds after hanging up.
-- **Server transcription has no diarization** (single "Speaker 1"); fine for the fallback.
+- **Server transcription tells speakers apart** (MAI-Transcribe 2), but only within one meeting.
 - **Speaker names** are per meeting. Next: remember a voice (its embedding) across meetings, so
   Maya is Maya everywhere without being greeted by name.
 - **Search** is Postgres full-text with prefix matching; semantic search over transcripts

@@ -77,13 +77,13 @@ Validated with zod at boot (`src/config/env.ts`); the process exits with a list 
 | `DOWNLOADS_BASE_URL` | | `https://download.boringtalks.lol` (the bucket's `downloads/` folder; dev: `…/dev`) with `latest.json` |
 | `AI_GATEWAY_API_KEY` | worker | Vercel AI Gateway key (summaries and fallback transcription) |
 | `SUMMARY_MODEL` | | `anthropic/claude-haiku-4.5` |
-| `TRANSCRIBE_MODEL` | | `openai/whisper-1` |
+| `TRANSCRIBE_MODEL` | | `microsoft/mai-transcribe-2` (diarizes itself); `openai/whisper-1` also works, with `DIARIZE_MODEL` telling voices apart |
 | `SUMMARIZE_CONCURRENCY` / `TRANSCRIBE_CONCURRENCY` | | `4` / `2` jobs per worker replica |
 | `AI_FAKE` | | `1` = fake summarizer, transcriber and email sender; refused unless `NODE_ENV=test` |
 | `RESEND_API_KEY` | | empty = log emails instead of sending |
 | `EMAIL_FROM` | | `BoringTalks <hello@send.boringtalks.lol>` |
 | `EMAIL_ALLOWLIST` | | comma list; when set, mail only these addresses (dev) |
-| `DIARIZE_MODEL` | | `google/gemini-3-flash`: hears server-transcribed audio to tell voices apart; empty = off |
+| `DIARIZE_MODEL` | | `google/gemini-3-flash`: tells voices apart when `TRANSCRIBE_MODEL` can't (Whisper); empty = off |
 | `THROTTLE_LIMIT` | | `120` requests/min per user |
 
 ## Architecture

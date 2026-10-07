@@ -57,7 +57,13 @@ describe('prepareForTranscription', () => {
 
   it.skipIf(!hasFfmpeg)('keeps a short small recording as it is', async () => {
     const wav = toneWav(2);
-    expect(await prepareForTranscription(wav, 'audio/wav')).toEqual([{ audio: wav, mediaType: 'audio/wav', offsetMs: 0 }]);
+    expect(await prepareForTranscription(wav, 'audio/wav')).toEqual([{ audio: wav, mediaType: 'audio/wav', offsetMs: 0, durationMs: 2000 }]);
+  });
+
+  it.skipIf(!hasFfmpeg)('re-encodes even a small recording when asked (APIs that only take MP3)', async () => {
+    const parts = await prepareForTranscription(toneWav(2), 'audio/wav', { encode: true });
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toMatchObject({ mediaType: 'audio/mpeg', offsetMs: 0, durationMs: 2000 });
   });
 
   it.skipIf(!hasFfmpeg)('re-encodes a big but short recording for speech', async () => {
