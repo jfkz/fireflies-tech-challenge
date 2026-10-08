@@ -295,8 +295,9 @@ around (“This page left the meeting early.”).
 
 ### Version and updates
 
-**What.** Every footer (the dashboard's and the landing page's) shows the build: `v0.2.0 · abc1234`
-(the `apps/web` package version and the deployed commit; `dev` locally). Each deployment serves its
+**What.** Every footer (the dashboard's and the landing page's) shows the build: `v0.4.0 · abc1234`
+(the `apps/web` package version and the deployed commit; `dev` locally). The web app, the API and the Mac
+app share major.minor (0.4.x); `pnpm check:versions` enforces it in CI. Each deployment serves its
 own build at `GET /version.json` (uncached). An open tab checks it every 5 minutes while visible, and
 when it comes back into view (at most once a minute). When a different deployment is live, a dialog
 says “A new version is out” with **Reload now** / **Later**; **Later** leaves a “New version: reload”
@@ -375,6 +376,11 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 - **Limits:** if one permission is refused the other side is still recorded (with a warning
   in the menu); with both refused, Start fails with the reason. Without headphones the mic
   also hears the call (handled by echo removal, below).
+- **Never on the main thread:** Core Audio start/stop calls run on one serial queue per side
+  (`MeetingRecorder.micQueue` / `systemQueue`). Unplugging wired headphones mid-call once kept
+  `AudioOutputUnitStart` waiting 7 minutes; now a side that hasn't started within 10 s shows
+  "The microphone isn't responding…" while the meeting carries on (the gap is silence), and joins if
+  Core Audio ever comes back. Stopping never waits for Core Audio.
 
 ### Stop after silence
 
@@ -514,6 +520,26 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 - **Where:** `BoringTalksKit/AppFlavor.swift` (`BTFlavor` in Info.plist), `BoringTalksKit/AppConfig.swift`;
   the `BoringTalksDev` target in `project.yml` (same sources, `Dev/Info.plist`).
 
+### Report a Problem and the hang watchdog
+
+- **What:** **Report a Problem…** in the menu footer opens a window: "What happened?", an
+  **Include the log** switch (on), and **What else is sent** listing the diagnostics. **Send** posts
+  it to `POST /reports` (needs sign-in); **Save to File…** writes the same as text to Downloads.
+  Sent: the message, app version/build/flavor, macOS and Mac model, short diagnostics (recorder
+  phase and warnings, microphone, default input/output and inputs, model state, upload counts,
+  preferences, uptime, memory) and this run's log (BoringTalks' own lines plus errors from system
+  frameworks in the process, newest 1 MB). Never audio, transcripts or meeting titles.
+- **Hang watchdog:** a background queue pings the main thread every second; 5 s without an answer
+  is a hang. It is logged and saved to `last-hang.json` while it lasts, so a hang that ends in a
+  force quit is still known on the next launch. The menu then shows "BoringTalks stopped
+  responding for 7 min at 20:11." with **Report…** (the report is marked `hang`, with its start
+  and length) and **Dismiss**.
+- **Where:** `BoringTalks/App/ProblemReporter.swift`, `BoringTalks/UI/ReportWindow.swift`,
+  `AppModel.diagnostics()`, `BoringTalksKit/ProblemReport.swift`, `HangWatch.swift`
+  (`HangDetector`, `HangStore`), `Deadline.swift`.
+- **Limits:** macOS only lets an app read its own log for the current run, so a report sent after
+  a relaunch has the hang's time and length but not the log from before it.
+
 ### Command line (QA and CI)
 
 - `--transcribe <file> [--speakers] [--mic <file>] [--language xx] [--realtime]` prints the
@@ -521,6 +547,9 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   `--show-menu` show the live window and the menu for screenshots; `--mic-users [seconds]` prints
   which apps use a microphone (and which call app each counts as) whenever that changes;
   `--keychain-check` prints the app, its API and which Keychain it keeps the sign-in in.
+  `--report` opens Report a Problem. Debug builds only: `--simulate-hang <seconds>` blocks the main
+  thread 3 s after launch; `--write-report <file>` writes what a report would send and quits;
+  `--snapshot-windows <folder> <seconds>` saves the open windows as PNGs and quits.
 - **Where:** `BoringTalks/Recording/FileTranscriber.swift`, `BoringTalks/App/BoringTalksApp.swift`,
   `BoringTalks/Avatar/AppIconArt.swift`.
 
@@ -619,6 +648,16 @@ duplicate.
   "new Mac connected". Idempotent, allow-listed in dev, logged instead of sent without a key.
 - Jobs retry 5 times with backoff, collapse duplicates, and a final failure marks the meeting
   `failed` with the reason; Reprocess starts over.
+
+### Problem reports
+`POST /reports` keeps what the Mac app sends from **Report a Problem…** (or after it noticed a hang):
+the user's message, app version and flavor, macOS and Mac model, up to 100 short diagnostics and the
+app's own recent log (≤ 1,000,000 characters), with the user and the Mac that sent it, in
+`problem_reports`. 10 reports an hour per user. When `REPORTS_NOTIFY_EMAIL` is set, each one is
+emailed there (without the log) through the `email` queue. Operators read them with
+`node dist/reports.js` (latest 20, `--user <id|email>`, or `<id>` for one in full).
+**Where.** `src/reports/` (controller, service, repository), `src/reports.ts` (CLI),
+`src/email/templates/problem-report.tsx`, migration `0006_problem_reports`.
 
 ### Operations
 `GET /health` (database + Redis, version, commit), `GET /downloads/latest` (current DMG),

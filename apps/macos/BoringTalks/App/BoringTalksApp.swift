@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return AppModel(config: AppConfig.resolve(arguments: CommandLine.arguments, defaults: .standard, flavor: flavor), flavor: flavor)
     }()
     private var liveWindow: LiveWindowController?
+    private var reportWindow: ReportWindowController?
     private var previewPanel: NSPanel?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
@@ -62,6 +63,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let liveWindow = LiveWindowController(model: model)
         model.onLiveWindowChange = { [weak liveWindow] visible in liveWindow?.setVisible(visible) }
         self.liveWindow = liveWindow
+        let reportWindow = ReportWindowController(model: model)
+        model.reporter.showWindow = { [weak reportWindow] in reportWindow?.show() }
+        self.reportWindow = reportWindow
         model.launch()
 
         let arguments = CommandLine.arguments
@@ -73,7 +77,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         if arguments.contains("--debug-sign-in") { model.signIn() }
         if arguments.contains("--debug-sign-out") { model.signOut() }
+        if let index = arguments.firstIndex(of: "--simulate-hang"), index + 1 < arguments.count, let seconds = Double(arguments[index + 1]) {
+            // Blocks the main thread a few seconds after launch, to try the hang watchdog.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { Thread.sleep(forTimeInterval: seconds) }
+        }
+        if let index = arguments.firstIndex(of: "--write-report"), index + 1 < arguments.count {
+            // `--write-report <file>`: what Report a Problem would send, written to a file instead.
+            let url = URL(fileURLWithPath: arguments[index + 1])
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                let started = Date()
+                do {
+                    try await model.reporter.write(to: url)
+                    FileHandle.standardOutput.write(Data("report written in \(Int(Date().timeIntervalSince(started) * 1000)) ms\n".utf8))
+                } catch {
+                    FileHandle.standardError.write(Data("couldn't write the report: \(error)\n".utf8))
+                }
+                exit(0)
+            }
+        }
+        if let index = arguments.firstIndex(of: "--snapshot-windows"), index + 2 < arguments.count, let delay = Double(arguments[index + 2]) {
+            // `--snapshot-windows <folder> <seconds>`: writes every visible window to a PNG, then quits (UI checks without screen recording).
+            let folder = URL(fileURLWithPath: arguments[index + 1])
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay - 1)) { NSApp.appearance = NSAppearance(named: .aqua) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                for (number, window) in NSApp.windows.filter(\.isVisible).enumerated() {
+                    guard let view = window.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
+                    view.cacheDisplay(in: view.bounds, to: rep)
+                    let name = window.title.isEmpty ? "window-\(number)" : window.title
+                    try? rep.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("\(name).png"))
+                }
+                exit(0)
+            }
+        }
         #endif
+        if arguments.contains("--report") { model.reportProblem() }
         if arguments.contains("--show-menu") {
             // The menu-bar window in an ordinary panel, for screenshots and QA.
             showMenuPreview()

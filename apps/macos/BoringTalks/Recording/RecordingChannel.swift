@@ -23,6 +23,8 @@ final class RecordingChannel: @unchecked Sendable {
     private var backlogSamples = 0
     private var droppedBacklog = false
     private var transcriber: PhraseTranscriber?
+    /// Past `end`: a capture still stopping may deliver a buffer or two more, and they're dropped.
+    private var ended = false
 
     private static let backlogLimit = SpeechFormat.rate * 60 * 20
 
@@ -45,6 +47,7 @@ final class RecordingChannel: @unchecked Sendable {
     func catchUp() {
         let elapsed = ProcessInfo.processInfo.systemUptime - clockStart
         queue.async {
+            guard !self.ended else { return }
             let silence = self.timeline.catchUp(to: elapsed)
             if silence > 0 { self.deliver([Float](repeating: 0, count: silence)) }
         }
@@ -81,6 +84,7 @@ final class RecordingChannel: @unchecked Sendable {
                     _ = self.timeline.catchUp(to: elapsed, lag: 0)
                     self.deliver([Float](repeating: 0, count: behind))
                 }
+                self.ended = true
                 continuation.resume(returning: Ending(transcribed: self.transcriber != nil && !self.droppedBacklog,
                                                       transcriber: self.transcriber))
             }
@@ -88,6 +92,7 @@ final class RecordingChannel: @unchecked Sendable {
     }
 
     private func process(_ samples: [Float], endingAt elapsed: TimeInterval) {
+        guard !ended else { return }
         let silence = timeline.silenceBefore(frames: samples.count, endingAt: elapsed)
         if silence > 0 { deliver([Float](repeating: 0, count: silence)) }
         deliver(samples)

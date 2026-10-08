@@ -65,6 +65,10 @@ Keychain (see Signing in). It then runs the app with `--keychain-check` and stop
 still use the login keychain. The profiles expire with the certificate (2031); to make new ones, POST
 `/v1/profiles` with the bundle ID's and the certificate's IDs.
 
+**Version:** `MARKETING_VERSION` in `project.yml` keeps the same major.minor as the API and the web
+app (`pnpm check:versions`, run in CI): a release that needs new server features bumps all three
+minors together; a Mac-only fix bumps the patch.
+
 `release.sh` imports the Developer ID certificate into a throwaway keychain for the build and
 restores the keychain search list afterwards. Defaults read the certificate, its password and the
 R2 keys from the repo's gitignored `.local/secrets/`, and the App Store Connect key from
@@ -134,6 +138,7 @@ $BIN --transcribe talk.m4a --language de --realtime    # steer the alphabet; fee
 $BIN --icon BoringTalks/Assets.xcassets/AppIcon.appiconset   # re-render the app icon
 open BoringTalks.app --args --demo                     # live transcript window with sample lines
 open BoringTalks.app --args --show-menu                # the menu-bar window as a normal panel (QA, screenshots)
+open BoringTalks.app --args --report                   # opens Report a Problem
 BT_TRACE=1 $BIN --transcribe meeting.wav --speakers    # how voices were told apart (stderr)
 log stream --predicate 'subsystem == "games.cutthecheese.boringtalks"'
 ```
@@ -142,7 +147,10 @@ log stream --predicate 'subsystem == "games.cutthecheese.boringtalks"'
 `PUT /meetings/:id/transcript` body) to stdout and progress to stderr, and exits 1 when the
 model can't load or the file can't be read. Debug builds also accept
 `--debug-sign-in --debug-print-connect-url` (start a sign-in and print the connect URL
-instead of opening a browser) and `--debug-sign-out`, for QA against a mock API.
+instead of opening a browser) and `--debug-sign-out`, for QA against a mock API, plus
+`--simulate-hang <seconds>` (blocks the main thread, for the hang watchdog), `--write-report <file>`
+(what Report a Problem would send, then quit) and `--snapshot-windows <folder> <seconds>` (the open
+windows as PNGs, then quit; no screen-recording permission needed).
 
 ## How it works
 
@@ -210,10 +218,10 @@ cuts) the result was the same.
 
 | | |
 |---|---|
-| `BoringTalksKit/` | pure logic, unit-tested: `APIClient` + Codable mirrors of `packages/shared`, `PKCE`, `DeviceLink`/`DeviceAuthenticator`, `KeychainStore`, `UploadQueue`/`PendingMeeting`, `SegmentAssembler`/`SpeakerLabeler`, `ChannelTimeline`/`AudioMixer`, `RecordingJanitor`, `AppConfig` |
+| `BoringTalksKit/` | pure logic, unit-tested: `APIClient` + Codable mirrors of `packages/shared`, `PKCE`, `DeviceLink`/`DeviceAuthenticator`, `KeychainStore`, `UploadQueue`/`PendingMeeting`, `SegmentAssembler`/`SpeakerLabeler`, `ChannelTimeline`/`AudioMixer`, `RecordingJanitor`, `AppConfig`, `ProblemReport`, `HangWatch`, `Deadline`/`BlockingQueue` |
 | `BoringTalks/Speech/` | shared speech code: `AudioCapture` (process tap, mic), `ParakeetEngine`, `PhraseTranscriber` (now with phrase times), `VoiceAnalysis` (`VoiceRegistry`, `VoiceIdentifier`, `VoiceEmbedder`), `VoiceTraits`, `LevelMeter`; plus `SpeechModels` (download/progress) |
 | `BoringTalks/Recording/` | `MeetingRecorder`, `RecordingChannel`, `RecordingWriter` (AAC), `LiveTranscript`, `FileTranscriber` (`--transcribe`) |
-| `BoringTalks/UI/`, `Avatar/`, `App/` | menu-bar window, settings, live transcript panel, the cartoon head and the icon, `AppModel` |
+| `BoringTalks/UI/`, `Avatar/`, `App/` | menu-bar window, settings, live transcript panel, Report a Problem window, the cartoon head and the icon, `AppModel`, `ProblemReporter` |
 | `BoringTalksTests/` | XCTest: PKCE (RFC 7636 vector), callback parsing, sign-in, Keychain, API encoding/decoding against JSON fixtures, upload queue state machine with a `URLProtocol` stub, segment assembly, timeline, mixer, janitor |
 
 See also [docs/FEATURES.md](../../docs/FEATURES.md) and

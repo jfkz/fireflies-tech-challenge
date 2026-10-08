@@ -52,6 +52,7 @@ Per signed-in user (per IP for public routes), counted in Redis so all API repli
 - default: 120 requests/minute (`THROTTLE_LIMIT`)
 - `POST /meetings/:id/upload-url`: 20/minute
 - `POST /devices/token`: 10/minute
+- `POST /reports`: 10/hour
 
 Responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`.
 
@@ -352,6 +353,30 @@ Active (not revoked) devices. `lastSeenAt` is updated at most once a minute.
 
 ### `DELETE /devices/:id` → `204`
 Revokes the device; its token stops working immediately. `404` if unknown or already revoked.
+
+## Problem reports
+
+### `POST /reports` (`ProblemReportRequest`) → `201 ProblemReportResponse`
+Sent by the Mac app's **Report a Problem…** (device token), or after it noticed it had been stuck
+(`kind: "hang"`). Any signed-in client may send one; a device token also records which Mac it came from.
+```json
+{
+  "kind": "user",
+  "message": "The menu froze after I unplugged my headphones",
+  "app": { "version": "0.4.0", "build": "1", "flavor": "release" },
+  "system": { "os": "macOS 26.2 (25C56)", "model": "Mac15,3" },
+  "diagnostics": { "recorder.phase": "recording", "mic.device": "MacBook Pro Microphone" },
+  "log": "2026-10-08 20:11:42 recorder audio device changed; restarting microphone\n…"
+}
+```
+```json
+{ "id": "5b0e…", "receivedAt": "2026-10-08T18:19:07.000Z" }
+```
+`kind` defaults to `user`, `message` to empty. `flavor` is `release` or `dev`. Limits: message 4,000
+characters, at most 100 `diagnostics` (key ≤ 80, value ≤ 2,000 characters), `log` 1,000,000 characters
+(`PROBLEM_REPORT_LOG_LIMIT`; the app keeps the newest part). Reports are stored in `problem_reports`, read
+with `node dist/reports.js` ([DEPLOYMENT](DEPLOYMENT.md#problem-reports)), and emailed (without the log)
+to `REPORTS_NOTIFY_EMAIL` when it is set.
 
 ---
 

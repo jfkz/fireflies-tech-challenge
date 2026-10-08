@@ -5,9 +5,11 @@ import { AppConfig } from '../config/config.module';
 import type { UserRow } from '../db/schema';
 import { DevicesRepository } from '../devices/devices.repository';
 import { MeetingsRepository } from '../meetings/meetings.repository';
+import { ReportsRepository } from '../reports/reports.repository';
 import type { EmailJob } from '../queues/queues';
 import { DeviceConnectedEmail } from './templates/device-connected';
 import { MeetingReadyEmail } from './templates/meeting-ready';
+import { ProblemReportEmail } from './templates/problem-report';
 import { WelcomeEmail } from './templates/welcome';
 
 export interface ComposedEmail {
@@ -23,6 +25,7 @@ export class EmailComposer {
     private readonly config: AppConfig,
     private readonly meetings: MeetingsRepository,
     private readonly devices: DevicesRepository,
+    private readonly reports: ReportsRepository,
   ) {}
 
   async compose(job: EmailJob, user: UserRow): Promise<ComposedEmail | null> {
@@ -52,6 +55,24 @@ export class EmailComposer {
         return renderEmail(
           `New Mac connected: ${device.name}`,
           <DeviceConnectedEmail deviceName={device.name} connectedAt={connectedAt} settingsUrl={`${web}/settings`} />,
+        );
+      }
+      case 'problem-report': {
+        const found = await this.reports.findById(job.reportId);
+        if (!found) return null;
+        const { report } = found;
+        const what = report.kind === 'hang' ? 'Hang' : 'Problem report';
+        return renderEmail(
+          `${what}: BoringTalks ${report.appVersion}${report.flavor === 'dev' ? ' (Dev)' : ''} from ${user.email ?? user.id}`,
+          <ProblemReportEmail
+            reportId={report.id}
+            kind={report.kind}
+            from={user.email ?? user.id}
+            app={`BoringTalks${report.flavor === 'dev' ? ' Dev' : ''} ${report.appVersion}${report.appBuild ? ` (${report.appBuild})` : ''}`}
+            system={[report.os, report.model].filter(Boolean).join(', ')}
+            message={report.message}
+            logBytes={Buffer.byteLength(report.log)}
+          />,
         );
       }
     }

@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { MeetingDetail, MeetingPage } from '@boringtalks/shared';
+import { DB, type Database } from '../src/db/db.module';
 import { DEMO_MEETING } from '../src/meetings/demo-meeting';
+import { ReportsRepository } from '../src/reports/reports.repository';
 import { StorageService } from '../src/storage/storage.service';
 import { bearer, emulatorToken, startHarness, waitFor, type Harness } from './harness';
 
@@ -275,8 +277,30 @@ describe('device link', () => {
     expect(devices.body).toEqual([expect.objectContaining({ id: tok.body.deviceId, name: "Dev's MacBook", lastSeenAt: expect.any(String) })]);
     await waitFor(async () => h.mail.sent.find((m) => m.to === 'device@example.com' && m.subject === "New Mac connected: Dev's MacBook"));
 
+    // "Report a Problem…" from the Mac: kept with the device, announced to the operator.
+    const report = {
+      kind: 'hang',
+      message: 'The menu froze after I unplugged my headphones',
+      app: { version: '0.4.0', build: '1', flavor: 'release' },
+      system: { os: 'macOS 26.2 (25C56)', model: 'Mac15,3' },
+      diagnostics: { 'recorder.phase': 'recording' },
+      log: 'restarting microphone\n'.repeat(1000),
+    };
+    await h.http.post('/reports').send(report).expect(401);
+    const bad = await h.http.post('/reports').set(bearer(deviceToken)).send({ ...report, app: { version: '0.4.0', flavor: 'beta' } }).expect(400);
+    expect(bad.body.issues).toEqual([expect.objectContaining({ path: 'app.flavor' })]);
+    const sent = await h.http.post('/reports').set(bearer(deviceToken)).send(report).expect(201);
+    expect(sent.body).toEqual({ id: expect.any(String), receivedAt: expect.any(String) });
+    const stored = await new ReportsRepository(h.app.get<Database>(DB)).findById(sent.body.id);
+    expect(stored).toMatchObject({ email: 'device@example.com', report: { deviceId: tok.body.deviceId, kind: 'hang', log: report.log, diagnostics: report.diagnostics } });
+    await waitFor(async () => h.mail.sent.find((m) => m.to === 'ops@example.com' && m.subject === 'Hang: BoringTalks 0.4.0 from device@example.com'));
+    // The dashboard's session can send one too, without a device.
+    const web = await h.http.post('/reports').set(bearer(firebase)).send({ app: { version: '0.4.0', flavor: 'dev' }, system: { os: 'web' } }).expect(201);
+    expect((await new ReportsRepository(h.app.get<Database>(DB)).findById(web.body.id))?.report).toMatchObject({ deviceId: null, kind: 'user', message: '' });
+
     await h.http.delete(`/devices/${tok.body.deviceId}`).set(bearer(firebase)).expect(204);
     await h.http.get('/meetings').set(bearer(deviceToken)).expect(401);
+    await h.http.post('/reports').set(bearer(deviceToken)).send(report).expect(401);
     await h.http.delete(`/devices/${tok.body.deviceId}`).set(bearer(firebase)).expect(404);
   });
 });

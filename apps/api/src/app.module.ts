@@ -17,6 +17,7 @@ import { MeetingsModule } from './meetings/meetings.module';
 import { PeopleModule } from './people/people.module';
 import { QueuesModule } from './queues/queues.module';
 import { REDIS, RedisModule } from './redis/redis.module';
+import { ReportsModule } from './reports/reports.module';
 import { StorageModule } from './storage/storage.module';
 import { TasksModule } from './tasks/tasks.module';
 import { UsersModule } from './users/users.module';
@@ -44,6 +45,7 @@ import { UsersModule } from './users/users.module';
     TasksModule,
     PeopleModule,
     DownloadsModule,
+    ReportsModule,
     HealthModule,
   ],
   providers: [

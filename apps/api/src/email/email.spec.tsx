@@ -46,7 +46,8 @@ describe('templates', () => {
 describe('EmailComposer', () => {
   const meetings = { findById: vi.fn(), getSummary: vi.fn() };
   const devices = { findById: vi.fn() };
-  const composer = new EmailComposer(testConfig({ WEB_URL: 'https://boringtalks.lol/' }), meetings as never, devices as never);
+  const reports = { findById: vi.fn() };
+  const composer = new EmailComposer(testConfig({ WEB_URL: 'https://boringtalks.lol/' }), meetings as never, devices as never, reports as never);
 
   it('composes each type from current data', async () => {
     expect((await composer.compose({ type: 'welcome', userId: 'u' }, user()))?.subject).toBe('Welcome to BoringTalks');
@@ -61,6 +62,23 @@ describe('EmailComposer', () => {
     const dev = await composer.compose({ type: 'device-connected', userId: 'u', deviceId: 'd' }, user());
     expect(dev?.subject).toBe('New Mac connected: Mac mini');
     expect(dev?.text).toContain('06 Oct 2026 10:00:00 UTC');
+
+    const report = { id: 'r-1', kind: 'hang', appVersion: '0.4.0', appBuild: '3', flavor: 'dev', os: 'macOS 26.2', model: 'Mac15,3', message: '', log: 'x'.repeat(3000) };
+    reports.findById.mockResolvedValue({ report, email: 'ann@example.com' });
+    const hang = await composer.compose({ type: 'problem-report', userId: 'u', reportId: 'r-1' }, user());
+    expect(hang?.subject).toBe('Hang: BoringTalks 0.4.0 (Dev) from ann@example.com');
+    expect(hang?.text).toContain('The Mac app was stuck');
+    expect(hang?.text).toContain('BoringTalks Dev 0.4.0 (3)');
+    expect(hang?.text).toContain('macOS 26.2, Mac15,3');
+    expect(hang?.text).toContain('(no message)');
+    expect(hang?.text).toContain('node dist/reports.js r-1');
+
+    reports.findById.mockResolvedValue({ report: { ...report, kind: 'user', flavor: 'release', appBuild: '', model: '', os: '', message: 'It froze' }, email: null });
+    const sent = await composer.compose({ type: 'problem-report', userId: 'u', reportId: 'r-1' }, user({ email: null }));
+    expect(sent?.subject).toBe(`Problem report: BoringTalks 0.4.0 from ${user().id}`);
+    expect(sent?.text).toContain('New problem report');
+    expect(sent?.text).toContain('It froze');
+    expect(sent?.text).toContain('unknown');
   });
 
   it('returns null when the subject is gone', async () => {
@@ -68,6 +86,8 @@ describe('EmailComposer', () => {
     devices.findById.mockResolvedValue(null);
     expect(await composer.compose({ type: 'meeting-ready', userId: 'u', meetingId: 'm', run: 1 }, user())).toBeNull();
     expect(await composer.compose({ type: 'device-connected', userId: 'u', deviceId: 'd' }, user())).toBeNull();
+    reports.findById.mockResolvedValue(null);
+    expect(await composer.compose({ type: 'problem-report', userId: 'u', reportId: 'r' }, user())).toBeNull();
   });
 });
 
@@ -124,6 +144,17 @@ describe('EmailService', () => {
     t.composer.compose.mockResolvedValueOnce(null);
     await expect(t.service.send({ type: 'device-connected', userId: 'u', deviceId: 'd' })).resolves.toBe('skipped');
     expect(t.sender.sent).toHaveLength(0);
+  });
+
+  it('sends problem reports to the operator, not the user, and only when an address is set', async () => {
+    const off = setup();
+    await expect(off.service.send({ type: 'problem-report', userId: 'u', reportId: 'r' })).resolves.toBe('skipped');
+    const on = setup({ REPORTS_NOTIFY_EMAIL: 'ops@example.com' });
+    on.users.findById.mockResolvedValueOnce(user({ email: null }));
+    await expect(on.service.send({ type: 'problem-report', userId: 'u', reportId: 'r' })).resolves.toBe('sent');
+    expect(on.sender.sent[0]).toMatchObject({ to: 'ops@example.com', idempotencyKey: 'problem-report_r' });
+    on.users.findById.mockResolvedValueOnce(null);
+    await expect(on.service.send({ type: 'problem-report', userId: 'u', reportId: 'r2' })).resolves.toBe('skipped');
   });
 
   it('is driven by the email queue processor', async () => {

@@ -9,6 +9,9 @@ struct MenuContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+            if let hang = model.reporter.pendingHang {
+                HangBanner(hang: hang, appName: model.flavor.displayName, report: { model.reportProblem(about: hang) }, dismiss: model.reporter.dismissHang)
+            }
             Divider()
             switch model.auth {
             case .signedIn:
@@ -58,6 +61,7 @@ struct MenuContent: View {
                 NSApp.activate()
                 openSettings()
             }
+            Button("Report a Problem…") { model.reportProblem() }
             Spacer()
             Button("Quit") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
@@ -268,6 +272,39 @@ private struct StopCountdown: View {
 
     private var icon: String {
         if case .callEnded = pending.reason { "phone.down" } else { "moon.zzz" }
+    }
+}
+
+/// The app was stuck (the watchdog saw the main thread stop answering): offer to report it.
+private struct HangBanner: View {
+    let hang: Hang
+    let appName: String
+    let report: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(text, systemImage: "exclamationmark.triangle.fill")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Report…", action: report)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                Button("Dismiss", action: dismiss)
+                    .controlSize(.small)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var text: String {
+        let when = hang.startedAt.formatted(date: Calendar.current.isDateInToday(hang.startedAt) ? .omitted : .abbreviated, time: .shortened)
+        return hang.recovered
+            ? "\(appName) stopped responding for \(ProblemReport.describe(seconds: hang.seconds)) at \(when)."
+            : "\(appName) stopped responding at \(when) and was closed while stuck."
     }
 }
 

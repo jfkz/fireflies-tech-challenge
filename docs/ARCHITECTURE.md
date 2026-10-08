@@ -93,6 +93,10 @@ dashboard calls `POST /devices/authorize` and redirects to `boringtalks://callba
 exchanges code + verifier at `POST /devices/token` for a long-lived, revocable `btd_…` token kept in
 the Keychain. The Mac app never sees a Firebase credential and needs no Firebase SDK.
 
+**Problem reports:** the Mac app's "Report a Problem…" (or a hang it noticed) posts its version, macOS,
+diagnostics and its own recent log to `POST /reports`; the row lands in `problem_reports`, an optional
+email goes to `REPORTS_NOTIFY_EMAIL` through the `email` queue, and `node dist/reports.js` reads them.
+
 ## Built for a crowded site
 
 - **Stateless API, scaled by replicas.** No sessions, no local files. Auth is a JWT check against

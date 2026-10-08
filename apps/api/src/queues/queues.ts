@@ -11,7 +11,9 @@ export interface MeetingJob {
 export type EmailJob =
   | { type: 'welcome'; userId: string }
   | { type: 'meeting-ready'; userId: string; meetingId: string; run: number }
-  | { type: 'device-connected'; userId: string; deviceId: string };
+  | { type: 'device-connected'; userId: string; deviceId: string }
+  /** To the operator (REPORTS_NOTIFY_EMAIL), about a report `userId` sent. */
+  | { type: 'problem-report'; userId: string; reportId: string };
 
 /**
  * BullMQ job ids must not contain ':', so the documented `<meetingId>:<stage>:<run>`
@@ -28,6 +30,8 @@ export function emailJobId(job: EmailJob): string {
       return `meeting-ready_${job.meetingId}_${job.run}`;
     case 'device-connected':
       return `device-connected_${job.deviceId}`;
+    case 'problem-report':
+      return `problem-report_${job.reportId}`;
   }
 }
 

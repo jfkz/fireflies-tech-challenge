@@ -22,6 +22,7 @@ final class AppModel {
     let models: SpeechModels
     let recorder: MeetingRecorder
     let notifier = Notifier()
+    let reporter: ProblemReporter
 
     private(set) var auth: Auth = .unknown
     private(set) var authError: String?
@@ -68,6 +69,7 @@ final class AppModel {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
         let api = APIClient(baseURL: config.apiURL, userAgent: "BoringTalks-macOS/\(version)") { await tokenSource.token() }
         self.api = api
+        reporter = ProblemReporter(api: api, flavor: flavor, folders: folders)
         authenticator = DeviceAuthenticator(api: api, store: secrets, account: account)
         tokenSource.authenticator = authenticator
         queue = UploadQueue(api: api, store: FileUploadStore(url: folders.uploadQueue), recordings: folders.recordings,
@@ -81,12 +83,15 @@ final class AppModel {
         notifier.onRecordCall = { [weak self] in self?.recordCall() }
         notifier.onDeclineCall = { [weak self] in self?.declineCall() }
         notifier.onIgnoreCallApp = { [weak self] app in self?.ignoreCallApp(app) }
+        reporter.collectDiagnostics = { [weak self] in await self?.diagnostics() ?? [:] }
     }
 
     // MARK: - Launch
 
     func launch() {
         try? folders.create()
+        _ = Self.launchedAt
+        reporter.start()
         Task {
             await queue.setObserver { snapshot in
                 Task { @MainActor [weak self] in self?.receive(snapshot) }
@@ -422,6 +427,71 @@ final class AppModel {
             let deleted = RecordingJanitor.prune(folder: folder, keepDays: keep, protected: protected)
             if !deleted.isEmpty { Self.log.notice("deleted \(deleted.count) old recordings") }
         }
+    }
+
+    // MARK: - Problem reports
+
+    /// Short facts for a problem report. Nothing from meetings: no titles, no transcripts.
+    func diagnostics() async -> [String: String] {
+        var values: [String: String] = [
+            "app.flavor": flavor.rawValue,
+            "app.api": config.apiURL.absoluteString,
+            "app.uptime": ProblemReport.describe(seconds: Date().timeIntervalSince(Self.launchedAt)),
+            "app.memoryMB": Self.memoryFootprintMB.map(String.init) ?? "?",
+            "account.signedIn": { if case .signedIn = auth { "yes" } else { "no" } }(),
+            "recorder.phase": "\(recorder.phase)",
+            "recorder.microphone": recorder.microphoneName ?? "-",
+            "recorder.waitingForModel": recorder.waitingForModel ? "yes" : "no",
+            "models": models.summary,
+            "uploads.waiting": String(uploads.waiting),
+            "uploads.failed": String(uploads.failed),
+            "uploads.online": uploads.isOnline ? "yes" : "no",
+            "calls.offer": callOffer ?? "-",
+            "prefs.avoidBluetoothMic": preferences.avoidBluetoothMic ? "yes" : "no",
+            "prefs.silenceStopMinutes": String(preferences.silenceStopMinutes),
+            "prefs.offerToRecordCalls": preferences.offerToRecordCalls ? "yes" : "no",
+            "prefs.stopWhenCallEnds": preferences.stopWhenCallEnds ? "yes" : "no",
+            "prefs.uploadAudio": preferences.uploadAudio ? "yes" : "no",
+            "prefs.language": preferences.language.isEmpty ? "auto" : preferences.language,
+        ]
+        for (channel, warning) in recorder.warnings {
+            values["recorder.warning.\(channel.rawValue)"] = warning
+        }
+        if let error = uploads.items.compactMap(\.lastError).last {
+            values["uploads.lastError"] = error
+        }
+        // Core Audio may be the thing that is stuck: ask it off the main thread, briefly.
+        let audio = Task.detached { () -> [String: String]? in
+            try? await Self.diagnosticsQueue.run {
+                [
+                    "audio.defaultInput": AudioInputs.defaultInput()?.name ?? "-",
+                    "audio.defaultOutput": AudioInputs.defaultOutput()?.name ?? "-",
+                    "audio.inputs": AudioInputs.all().map(\.name).joined(separator: ", "),
+                ]
+            }
+        }
+        if let audio = await Deadline.value(of: audio, within: .seconds(2)) ?? nil {
+            values.merge(audio) { _, new in new }
+        } else {
+            values["audio"] = "Core Audio didn't answer within 2 s"
+        }
+        return values
+    }
+
+    func reportProblem(about hang: Hang? = nil) {
+        reporter.begin(about: hang)
+    }
+
+    private static let launchedAt = Date()
+    nonisolated private static let diagnosticsQueue = BlockingQueue(label: "games.cutthecheese.boringtalks.diagnostics")
+
+    private static var memoryFootprintMB: Int? {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let status = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+        }
+        return status == KERN_SUCCESS ? Int(info.phys_footprint / 1_048_576) : nil
     }
 
     func toggleLiveWindow() {

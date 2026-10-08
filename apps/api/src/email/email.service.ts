@@ -28,9 +28,11 @@ export class EmailService {
   async send(job: EmailJob): Promise<SendOutcome> {
     const key = emailJobId(job);
     const user = await this.users.findById(job.userId);
-    if (!user?.email) return this.skip(job, 'no user or no email address');
+    // A problem report goes to the operator; everything else to the user.
+    const to = job.type === 'problem-report' ? this.config.env.REPORTS_NOTIFY_EMAIL : user?.email;
+    if (!user || !to) return this.skip(job, 'no user or no email address');
     if (job.type === 'meeting-ready' && !user.emailOnReady) return this.skip(job, 'user turned ready emails off');
-    if (!this.allowed(user.email)) {
+    if (!this.allowed(to)) {
       this.logger.log({ type: job.type, key }, 'recipient not in EMAIL_ALLOWLIST; not sending');
       return 'not-allowed';
     }
@@ -38,7 +40,7 @@ export class EmailService {
     if (!email) return this.skip(job, 'its subject no longer exists');
     if (!(await this.log.claim(key, user.id, job.type))) return 'duplicate';
     try {
-      await this.sender.send({ from: this.config.env.EMAIL_FROM, to: user.email, ...email, idempotencyKey: key });
+      await this.sender.send({ from: this.config.env.EMAIL_FROM, to, ...email, idempotencyKey: key });
     } catch (err) {
       await this.log.release(key);
       throw err;

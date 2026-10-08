@@ -27,6 +27,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Mac app, API and web app share major.minor.
+      - run: pnpm check:versions
       # test:cov enforces the coverage thresholds set in each package's vitest config.
       - run: pnpm turbo run lint typecheck test:cov build
       - uses: actions/upload-artifact@v7

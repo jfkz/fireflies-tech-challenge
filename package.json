@@ -10,7 +10,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:cov": "turbo run test:cov",
-    "test:e2e": "turbo run test:e2e"
+    "test:e2e": "turbo run test:e2e",
+    "check:versions": "node scripts/check-versions.mjs"
   },
   "devDependencies": {
     "turbo": "^2.11.7",

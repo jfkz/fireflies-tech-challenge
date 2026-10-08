@@ -277,6 +277,26 @@ Against dev: install **BoringTalks Dev** from https://download.boringtalks.lol/d
 | Turn off **Offer to record when a call starts** / **Stop when the call ends** | No question / the recording keeps going after the call (until Stop after silence) |
 | Signed out, join a call | No question |
 
+### 4d. Audio devices change mid-meeting
+
+| Step | Expected |
+|---|---|
+| Record with wired headphones (or AirPods) in a call, then unplug / take them off | The log shows "audio device changed; restarting microphone"; the menu keeps responding throughout |
+| If macOS is slow to hand the microphone back | After 10 s the menu says "The microphone isn't responding…"; the timer keeps running, and the warning goes away once the mic is back |
+| Leave the call right after unplugging | The call-end countdown still starts on time (the main thread is never held by Core Audio) |
+
+### 4e. Report a Problem and hangs
+
+| Step | Expected |
+|---|---|
+| Menu → **Report a Problem…** | A window with "What happened?", **Include the log** on, **What else is sent** listing app, audio devices, recorder state, uploads and preferences, no meeting titles |
+| Type a message, **Send** | "Sent. Thank you!" with a reference; `node dist/reports.js` on the API lists it (QA backend §9) |
+| Signed out | **Send** is disabled with "Sign in to send it…"; **Save to File…** writes `BoringTalks report <time>.txt` to Downloads and shows it in Finder |
+| Debug build: `"BoringTalks Dev" --simulate-hang 8` | After ~11 s the log has "the main thread has not answered for 5 s" and "was stuck for 8 s"; the menu shows "stopped responding for 8 s at …" with **Report…** / **Dismiss** |
+| **Report…** on that banner | The window opens with the hang described; the sent report has kind `hang` and `hang.seconds` |
+| Quit the app while a simulated hang lasts (`kill` it), relaunch | The banner says it "was closed while stuck" |
+| **Dismiss** | The banner goes away and stays away after a relaunch |
+
 ### 5. Offline upload, then reconnect
 
 | Step | Expected |
@@ -361,3 +381,16 @@ deploy, and against production after a merge.
 1. On the landing page, click Download for Mac.
    **Expected:** `BoringTalks-<version>.dmg` from `download.boringtalks.lol` (dev: `/dev/BoringTalks-Dev-<version>.dmg`), version
    and size match `GET /downloads/latest`.
+
+### 9. Problem reports
+1. Send a report from the Mac app (Report a Problem…), then on the API service run `node dist/reports.js`.
+   **Expected:** the report is first in the list with your email, `user`, the app version; `node dist/reports.js <id>`
+   prints the message, diagnostics and the log.
+2. With `REPORTS_NOTIFY_EMAIL` set (dev only), send another.
+   **Expected:** an email "Problem report: BoringTalks <version> from <you>" arrives there, without the log.
+3. `curl -X POST <api>/reports` without a token.
+   **Expected:** `401`.
+
+### 10. Versions
+1. Compare `GET /health` `version`, the web footer and the Mac app's About/menu version.
+   **Expected:** all three share major.minor (0.4.x); `pnpm check:versions` passes.

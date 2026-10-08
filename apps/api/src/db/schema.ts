@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { MeetingSource, MeetingStatus } from '@boringtalks/shared';
+import type { DeviceApp, MeetingSource, MeetingStatus, ProblemReportKind } from '@boringtalks/shared';
 
 /** Who named a speaker: the summarizer from the conversation, or the user by hand (never overwritten). */
 export interface SpeakerNameEntry {
@@ -206,9 +206,33 @@ export const emailLog = pgTable('email_log', {
   sentAt: timestamp('sent_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 });
 
+/** "Report a Problem…" from the Mac app (or a hang it noticed itself), with its diagnostics and log. */
+export const problemReports = pgTable(
+  'problem_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
+    kind: text('kind').$type<ProblemReportKind>().notNull(),
+    message: text('message').notNull().default(''),
+    appVersion: text('app_version').notNull(),
+    appBuild: text('app_build').notNull().default(''),
+    flavor: text('flavor').$type<DeviceApp>().notNull(),
+    os: text('os').notNull(),
+    model: text('model').notNull().default(''),
+    diagnostics: jsonb('diagnostics').$type<Record<string, string>>().notNull().default({}),
+    log: text('log').notNull().default(''),
+    createdAt: createdAt(),
+  },
+  (t) => [index('problem_reports_created_idx').on(t.createdAt), index('problem_reports_user_idx').on(t.userId)],
+);
+
 export type UserRow = typeof users.$inferSelect;
 export type DeviceRow = typeof devices.$inferSelect;
 export type MeetingRow = typeof meetings.$inferSelect;
 export type SegmentRow = typeof segments.$inferSelect;
 export type SummaryRow = typeof summaries.$inferSelect;
 export type ActionItemRow = typeof actionItems.$inferSelect;
+export type ProblemReportRow = typeof problemReports.$inferSelect;
