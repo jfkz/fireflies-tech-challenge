@@ -92,6 +92,9 @@ final class ProblemReporter {
                 Self.log.notice("report \(response.id, privacy: .public) sent")
                 finished()
                 state = .sent(reference: String(response.id.prefix(8)))
+            } catch APIError.notFound {
+                // A server from before reports existed.
+                state = .failed("This server doesn't take reports yet. Use Save to File… and send the file instead.")
             } catch {
                 Self.log.error("report not sent: \(error.localizedDescription, privacy: .public)")
                 state = .failed(error.localizedDescription)
