@@ -24,7 +24,7 @@ import { audioKey, meetingPrefix } from '../storage/keys';
 import { StorageService, UPLOAD_URL_TTL_SEC } from '../storage/storage.service';
 import { displayNames, renameSpeakers } from '../processing/speaker-names';
 import { defaultTitle, toDetail, toListItem } from './meeting.mapper';
-import { MeetingsRepository } from './meetings.repository';
+import { MeetingsRepository, type ChainMemberRow } from './meetings.repository';
 import { TranscriptService } from './transcript.service';
 
 /** An IANA zone both Node and Postgres understand ("Europe/Berlin", "UTC"). */
@@ -35,6 +35,19 @@ export function isTimeZone(tz: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Why a chain's meetings belong together, shown on every one of them: the meeting's own reason, else
+ * that of the nearest other meeting that has one (the meeting a chain started from has none).
+ */
+export function chainReason(meeting: Pick<MeetingRow, 'id' | 'startedAt' | 'chainReason'>, members: readonly ChainMemberRow[]): string | null {
+  if (meeting.chainReason) return meeting.chainReason;
+  const at = meeting.startedAt.getTime();
+  const away = (m: ChainMemberRow) => Math.abs(Date.parse(m.startedAt) - at);
+  // Members come oldest first and the sort is stable, so a tie goes to the earlier meeting.
+  const nearest = members.filter((m) => m.id !== meeting.id && m.reason).sort((a, b) => away(a) - away(b));
+  return nearest[0]?.reason ?? null;
 }
 
 /** How many speakers and topics the filter bar offers. */
@@ -231,7 +244,10 @@ export class MeetingsService {
       meeting.hasAudio && meeting.audioKey ? this.storage.presignGet(meeting.audioKey) : Promise.resolve(null),
       meeting.chainId ? this.repo.chainMeetings(meeting.userId, meeting.chainId) : Promise.resolve([]),
     ]);
-    const chain = meeting.chainId && chained.length >= 2 ? { id: meeting.chainId, meetings: chained, reason: meeting.chainReason } : null;
+    const chain =
+      meeting.chainId && chained.length >= 2
+        ? { id: meeting.chainId, meetings: chained.map(({ id, title, startedAt }) => ({ id, title, startedAt })), reason: chainReason(meeting, chained) }
+        : null;
     return toDetail(meeting, summary, segments, audioUrl, chain);
   }
 }

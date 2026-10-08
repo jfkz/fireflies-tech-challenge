@@ -7,8 +7,9 @@
 # Env: R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_DOWNLOADS_BUCKET,
 #      DOWNLOADS_BASE_URL (e.g. https://download.boringtalks.lol),
 #      R2_DOWNLOADS_KEY_PREFIX (default "downloads/": the folder of the shared bucket
-#      that download.boringtalks.lol serves).
-# Writes  <key prefix>[prefix]BoringTalks-<version>.dmg, …BoringTalks-latest.dmg and
+#      that download.boringtalks.lol serves), DMG_NAME (default "BoringTalks"; "BoringTalks-Dev"
+#      for the dev app).
+# Writes  <key prefix>[prefix]<DMG_NAME>-<version>.dmg, …<DMG_NAME>-latest.dmg and
 # …latest.json, whose shape is LatestDownload in packages/shared/src/user.ts.
 set -euo pipefail
 DMG="${1:?usage: publish.sh <dmg> <version> <build> <notarized:true|false> [prefix]}"
@@ -28,7 +29,8 @@ PREFIX="${PREFIX#/}"
 [[ -n "$PREFIX" && "$PREFIX" != */ ]] && PREFIX="$PREFIX/"
 
 SIZE="$(stat -f%z "$DMG" 2>/dev/null || stat -c%s "$DMG")"
-NAME="BoringTalks-$VERSION.dmg"
+BASE="${DMG_NAME:-BoringTalks}"
+NAME="$BASE-$VERSION.dmg"
 URL="${DOWNLOADS_BASE_URL%/}/$PREFIX$NAME"
 PUBLISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 LATEST="$(mktemp)"
@@ -51,7 +53,7 @@ KEY_PREFIX="${R2_DOWNLOADS_KEY_PREFIX-downloads/}"
 BUCKET="s3://$R2_DOWNLOADS_BUCKET/$KEY_PREFIX$PREFIX"
 # Not immutable: a build published before Apple finished notarizing is replaced by its stapled copy.
 s3 "$DMG" "$BUCKET$NAME" --content-type application/x-apple-diskimage --cache-control "public, max-age=3600"
-s3 "$DMG" "${BUCKET}BoringTalks-latest.dmg" --content-type application/x-apple-diskimage --cache-control "public, max-age=300"
+s3 "$DMG" "${BUCKET}$BASE-latest.dmg" --content-type application/x-apple-diskimage --cache-control "public, max-age=300"
 s3 "$LATEST" "${BUCKET}latest.json" --content-type application/json --cache-control "public, max-age=60"
 
 echo "published $URL ($SIZE bytes, notarized=$NOTARIZED)"

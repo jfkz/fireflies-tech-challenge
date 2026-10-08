@@ -134,7 +134,7 @@ docs/           this documentation
 |---|---|---|
 | Web | https://boringtalks.lol | https://dev.boringtalks.lol |
 | API | https://api.boringtalks.lol | https://api.dev.boringtalks.lol |
-| DMG | https://download.boringtalks.lol (`downloads/`) | https://download.boringtalks.lol/dev/ (`downloads/dev/`) |
+| DMG | BoringTalks: https://download.boringtalks.lol (`downloads/`) | BoringTalks Dev: https://download.boringtalks.lol/dev/ (`downloads/dev/`) |
 | Storage prefix in R2 bucket `boringtalks` | `prod/` | `dev/` |
 | Deployed by | push to `main` | a ready (non-draft) pull request |
 

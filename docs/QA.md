@@ -62,6 +62,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 3.3 | With more than 20 meetings, scroll to the bottom. | **Load more** appends the next page; disappears at the end. |
 | 3.4 | Start a browser recording (section 5) and return to the list. | Its chip animates (Transcribing/Summarizing) and changes to Ready by itself. |
 | 3.6 | Click a topic pill on a row, then a person in the filter bar, then the active pill again, then **Clear filters**. | The list narrows to that topic, then that topic and person; the URL shows `?topic=…&speaker=…`; clicking an active pill removes it; Clear brings everything back. Back button walks through the filters. |
+| 3.6a | On a row, click a named person's chip (e.g. Maya), go back, then click “Speaker 2” or your own name. | Maya's person page opens; “Speaker 2” / you filter the list instead (`?speaker=…`), like on the meeting page. |
 | 3.7 | Filter to a combination with no meetings. | “No meetings with X about Y.” and a **Clear filters** button. |
 | 3.8 | Upload a recording with three people (e.g. a synthetic one made with `say`), wait for Ready. | Transcript has Speaker 1–3 per voice, then their names from the conversation; deadlines like “today or tomorrow” show the later day. A 26 MB+ or 2 h+ file transcribes too. **Reprocess** on an older upload separates its voices. |
 | 3.5 | New account with the demo deleted. | Empty state with a head (“Your calendar must be suspiciously free.”) and links to record or get the Mac app. |
@@ -84,9 +85,10 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 4.13 | **Rename speakers** → change one name → **Save names**; then Reprocess. | Chips, transcript and action item owners update at once; the name you typed survives the reprocess. Clicking a speaker or topic chip opens the filtered list. |
 | 4.11 | Phone width. | Sections stack; transcript below the summary; no overflow. |
 | 4.14 | Open the middle one of three meetings recorded on one day. | Under **All meetings**: **← Previous that day**, “2 of 3 that day”, **Next that day →** (“today” if it's today); hovering shows the target's title. Press **[** and **]**: the earlier / later meeting opens. Type `[` in Find in transcript: nothing happens. The last meeting of the day has Next greyed out; a day with one meeting shows no day buttons. |
-| 4.15 | Record a follow-up of an earlier meeting (same project, “as we said last week…”), wait for Ready. | A **Chain · 2 of 2** strip with the reason, **← Previous in chain** to the earlier meeting (which shows the chain too); **{** / **}** step through it; **Show all 2** lists both, this one highlighted. |
+| 4.15 | Record a follow-up of an earlier meeting (same project, “as we said last week…”), wait for Ready. | A **Chain · 2 of 2** strip with the reason, **← Previous in chain** to the earlier meeting (which shows the chain and the same reason too); **{** / **}** step through it; **Show all 2** lists both, this one highlighted. |
 | 4.16 | **Remove from chain** → Cancel, then again → **Remove from chain**. | An in-page dialog; confirming removes the strip here and from the other meetings; reprocessing doesn't link it again. |
 | 4.17 | Click a named speaker chip (e.g. Maya), then “Speaker 2”. | Maya's person page opens; “Speaker 2” opens the meeting list filtered by it. |
+| 4.18 | On a meeting in no chain, **Link to…**; press Escape; open it again, type part of an older meeting's title, pick it. | An in-page dialog listing meetings around this one's date, nearest first, focus in the search; Escape closes it. The search finds older meetings; picking one closes the dialog and shows **Chain · 2 of 2** here and on the other meeting; reprocessing keeps it. On a meeting already in a chain the dialog says it leaves that chain, and its chain's meetings aren't listed. |
 
 ### 4b. Tasks `/tasks`
 
@@ -193,8 +195,8 @@ defaults delete games.cutthecheese.boringtalks
 rm -rf ~/Library/Application\ Support/BoringTalks   # keeps the shared Parakeet model in …/FluidAudio
 ```
 
-Against dev: `defaults write games.cutthecheese.boringtalks apiURL https://api.dev.boringtalks.lol`
-and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
+Against dev: install **BoringTalks Dev** from https://download.boringtalks.lol/dev/BoringTalks-Dev-latest.dmg
+(bundle ID `games.cutthecheese.boringtalks.dev`, so use that in the commands above). Watch the logs while testing:
 `log stream --predicate 'subsystem == "games.cutthecheese.boringtalks"'`.
 
 ### 1. DMG install and Gatekeeper
@@ -205,6 +207,8 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | Drag the app to Applications, eject, open it from Applications | **Notarized build:** opens after the usual "downloaded from the Internet" confirmation. **Ad-hoc build:** "cannot be opened" — right-click → Open → Open works |
 | `spctl -a -vv /Applications/BoringTalks.app` | Notarized: `accepted, source=Notarized Developer ID` |
 | Look at the menu bar | The BoringTalks icon (two speech bubbles); no Dock icon |
+| Install BoringTalks Dev next to it | Both run at once; the Dev menu says "BoringTalks Dev" with an `api.dev.boringtalks.lol` badge |
+| `"/Applications/BoringTalks.app/Contents/MacOS/BoringTalks" --keychain-check` | `BoringTalks https://api.boringtalks.lol: data protection keychain` |
 
 ### 2. First launch and permissions
 
@@ -224,7 +228,9 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | **Sign in with browser** | The browser opens `…/connect?challenge=…&device=<your Mac's name>`; the menu shows "Finish signing in in your browser…" |
 | Sign in on the page and approve the Mac | The browser offers to open BoringTalks; accept. The menu now shows your email, **Start meeting** and "Recent meetings" |
 | Dashboard → Settings → Devices | This Mac is listed |
-| Quit and relaunch the app | Still signed in (token in the Keychain: Keychain Access → "BoringTalks device sign-in") |
+| Quit and relaunch the app | Still signed in, and macOS never asks for Keychain access |
+| Install a newer release over it (or a release over 0.3.0 that was signed in) | No "wants to use your confidential information" prompt. Coming from 0.3.0 or older you are asked to sign in once more |
+| BoringTalks Dev: **Sign in with browser** | Opens `dev.boringtalks.lol/connect?…&app=dev`; after approving, the page's button says **Open BoringTalks Dev** and the Dev app (not the release one) signs in |
 | **Paste code** fallback: start a sign-in, copy the code (or the `boringtalks://` link) shown by the dashboard, paste, **Connect** | Signed in the same way |
 | Paste garbage (`two words`) | "That doesn't look like a sign-in code." |
 
@@ -353,5 +359,5 @@ deploy, and against production after a merge.
 
 ### 8. Download
 1. On the landing page, click Download for Mac.
-   **Expected:** `BoringTalks-<version>.dmg` from `download.boringtalks.lol` (dev: `/dev/`), version
+   **Expected:** `BoringTalks-<version>.dmg` from `download.boringtalks.lol` (dev: `/dev/BoringTalks-Dev-<version>.dmg`), version
    and size match `GET /downloads/latest`.

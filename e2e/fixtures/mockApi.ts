@@ -210,6 +210,18 @@ export async function mockApi(
         if (ai && next.summary) {
           next = { ...next, summary: { ...next.summary, actionItems: next.summary.actionItems.map((a) => (a.id === ai.id ? { ...a, done: ai.done } : a)) } };
         }
+        const link = parsed.data.chain;
+        if (link === null) next = { ...next, chain: null };
+        if (link) {
+          // Just enough of the real thing: a chain of the two, linked by hand (no reason).
+          const to = state.meetings.find((x) => x.id === link.with);
+          if (!to) return error(route, 404, 'Meeting not found');
+          if (to.id === next.id) return error(route, 400, 'A meeting cannot be chained to itself');
+          const meetings = [to, next].map(({ id: ref, title, startedAt }) => ({ id: ref, title, startedAt })).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+          const chain = { id: to.chain?.id ?? crypto.randomUUID(), meetings, reason: null };
+          state.meetings[state.meetings.indexOf(to)] = { ...to, chain };
+          next = { ...next, chain };
+        }
         return json(route, 200, save(next));
       }
       if (!action && method === 'DELETE') {

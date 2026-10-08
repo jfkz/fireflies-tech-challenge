@@ -16,6 +16,7 @@ final class AppModel {
     }
 
     let config: AppConfig
+    let flavor: AppFlavor
     let folders: AppFolders
     let preferences: Preferences
     let models: SpeechModels
@@ -50,8 +51,11 @@ final class AppModel {
     @ObservationIgnored var onLiveWindowChange: ((Bool) -> Void)?
     private static let log = Log.logger("app")
 
-    init(config: AppConfig, folders: AppFolders = .standard, secrets: any SecretStore = KeychainStore()) {
+    init(config: AppConfig, flavor: AppFlavor = .production, folders: AppFolders? = nil, secrets: (any SecretStore)? = nil) {
+        let folders = folders ?? flavor.folders
+        let secrets = secrets ?? KeychainStore(service: flavor.keychainService)
         self.config = config
+        self.flavor = flavor
         self.folders = folders
         preferences = Preferences()
         let models = SpeechModels(folders: folders)
@@ -124,7 +128,7 @@ final class AppModel {
         authError = nil
         linkCopied = false
         Task {
-            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName)
+            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName, flavor: flavor)
             auth = .waitingForBrowser
             #if DEBUG
             // QA against a mock API: print the connect URL instead of opening a browser.
@@ -143,7 +147,7 @@ final class AppModel {
     func copySignInLink() {
         authError = nil
         Task {
-            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName)
+            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName, flavor: flavor)
             auth = .waitingForBrowser
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(url.absoluteString, forType: .string)

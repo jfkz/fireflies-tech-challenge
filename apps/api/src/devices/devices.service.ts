@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
-  DEVICE_CALLBACK_URL,
+  DEVICE_CALLBACK_URLS,
   type AuthorizeDeviceRequest,
   type AuthorizeDeviceResponse,
   type Device,
@@ -38,7 +38,7 @@ export class DevicesService {
     return {
       code,
       expiresInSec: DEVICE_CODE_TTL_SEC,
-      redirectUrl: `${DEVICE_CALLBACK_URL}?code=${encodeURIComponent(code)}`,
+      redirectUrl: `${DEVICE_CALLBACK_URLS[body.app ?? 'release']}?code=${encodeURIComponent(code)}`,
     };
   }
 

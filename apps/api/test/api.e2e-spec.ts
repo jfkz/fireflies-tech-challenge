@@ -364,6 +364,8 @@ describe('chains and people across meetings', () => {
     expect(second.chain?.reason).toMatch(/Same people and topic/);
     const firstNow = (await h.http.get(`/meetings/${first.id}`).set(bearer(token)).expect(200)).body as MeetingDetail;
     expect(firstNow.chain?.id).toBe(second.chain?.id);
+    // The meeting it was linked to says why too.
+    expect(firstNow.chain?.reason).toBe(second.chain?.reason);
 
     // Out of the chain: a chain of one ends, and a reprocess doesn't link it again.
     const unlinked = await h.http.patch(`/meetings/${second.id}`).set(bearer(token)).send({ chain: null }).expect(200);

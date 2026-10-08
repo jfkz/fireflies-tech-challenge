@@ -39,12 +39,15 @@ private struct MenuBarLabel: View {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let model = AppModel(config: AppConfig.resolve(arguments: CommandLine.arguments, defaults: .standard))
+    let model: AppModel = {
+        let flavor = AppFlavor.of(.main)
+        return AppModel(config: AppConfig.resolve(arguments: CommandLine.arguments, defaults: .standard, flavor: flavor), flavor: flavor)
+    }()
     private var liveWindow: LiveWindowController?
     private var previewPanel: NSPanel?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // The sign-in callback (boringtalks://callback?code=…). An Apple Event handler
+        // The sign-in callback (boringtalks://callback?code=…, boringtalks-dev:// in BoringTalks Dev). An Apple Event handler
         // gets it even when no window is open, which a menu-bar app rarely has.
         NSAppleEventManager.shared().setEventHandler(
             self, andSelector: #selector(handleURL(_:reply:)),
@@ -147,6 +150,13 @@ enum CommandLineTools {
             let seconds = index + 1 < arguments.count ? Double(arguments[index + 1]) ?? 30 : 30
             MicUsersTool.run(seconds: seconds, extra: model.preferences.extraCallApps)
             return true
+        }
+        if arguments.contains("--keychain-check") {
+            // `--keychain-check`: which Keychain this build keeps the sign-in in (a release build
+            // must say "data protection", or updating it will ask for Keychain access).
+            let store = KeychainStore.usesDataProtection ? "data protection keychain" : "login keychain (no access-group entitlement)"
+            FileHandle.standardOutput.write(Data("\(model.flavor.displayName) \(model.config.apiURL.absoluteString): \(store)\n".utf8))
+            exit(0)
         }
         if let options = FileTranscriber.Options(arguments: arguments) {
             Task {

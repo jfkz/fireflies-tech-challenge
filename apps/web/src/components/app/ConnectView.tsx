@@ -10,7 +10,8 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { useAuthorizeDevice } from '@/hooks/queries';
 import { TALKER } from '@/lib/avatar/styles';
-import { DECLINED_CALLBACK_URL, isAppCallback, parseConnectParams } from '@/lib/connect';
+import { declinedCallbackUrl, isAppCallback, parseConnectParams } from '@/lib/connect';
+import type { DeviceApp } from '@boringtalks/shared';
 
 /** Hands the browser over to the Mac app. A function so tests can replace it. */
 export function openApp(url: string) {
@@ -20,10 +21,10 @@ export function openApp(url: string) {
 export function ConnectView({ open = openApp }: { open?: (url: string) => void }) {
   const params = parseConnectParams(useSearchParams());
   if (!params.ok) return <BadLink reason={params.reason} />;
-  return <Approve challenge={params.challenge} deviceName={params.deviceName} open={open} />;
+  return <Approve challenge={params.challenge} deviceName={params.deviceName} app={params.app} open={open} />;
 }
 
-function Approve({ challenge, deviceName, open }: { challenge: string; deviceName: string; open: (url: string) => void }) {
+function Approve({ challenge, deviceName, app, open }: { challenge: string; deviceName: string; app: DeviceApp; open: (url: string) => void }) {
   const { user } = useAuth();
   const authorize = useAuthorizeDevice();
   const [copied, setCopied] = useState(false);
@@ -32,12 +33,12 @@ function Approve({ challenge, deviceName, open }: { challenge: string; deviceNam
 
   function decline() {
     setDeclined(true);
-    open(DECLINED_CALLBACK_URL);
+    open(declinedCallbackUrl(app));
   }
 
   function approve() {
     authorize.mutate(
-      { codeChallenge: challenge, deviceName: deviceName === 'your Mac' ? 'Mac' : deviceName },
+      { codeChallenge: challenge, deviceName: deviceName === 'your Mac' ? 'Mac' : deviceName, ...(app === 'dev' ? { app } : {}) },
       {
         onSuccess: (res) => {
           if (isAppCallback(res.redirectUrl)) open(res.redirectUrl);
@@ -52,7 +53,7 @@ function Approve({ challenge, deviceName, open }: { challenge: string; deviceNam
         <h1 className="font-display text-3xl leading-tight sm:text-4xl">Okay, not connected.</h1>
         <p className="mt-3 font-semibold text-ink-soft">We told the app you said no. You can close this tab, or connect later from the app’s menu.</p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <a href={DECLINED_CALLBACK_URL} className="btn btn-secondary">
+          <a href={declinedCallbackUrl(app)} className="btn btn-secondary">
             Back to the app
           </a>
           <Link href="/meetings" className="btn btn-secondary">
@@ -74,7 +75,7 @@ function Approve({ challenge, deviceName, open }: { challenge: string; deviceNam
         <div className="mt-6 flex flex-wrap gap-3">
           {isAppCallback(result.redirectUrl) && (
             <a href={result.redirectUrl} className="btn btn-primary" data-testid="open-app">
-              Open BoringTalks
+              Open {app === 'dev' ? 'BoringTalks Dev' : 'BoringTalks'}
             </a>
           )}
           <Link href="/meetings" className="btn btn-secondary">

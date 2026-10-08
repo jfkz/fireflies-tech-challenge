@@ -22,8 +22,8 @@ Each deploy run:
 3. **Smoke tests.** Playwright `smoke` suite against the deployed web + API.
 4. **Mac app.** `macos.yml` builds and tests it on a `macos-26` runner when `apps/macos/**` changes.
    Releases run on a developer's Mac, so the signing key stays off CI: `apps/macos/scripts/release.sh
-   prod` (or `dev`) signs with Developer ID, builds the DMG, submits it for notarization and publishes
-   it to R2 with `latest.json`; once Apple accepts it, `release.sh staple prod` staples the ticket and
+   prod` (or `dev`, which builds the separate BoringTalks Dev app) signs with Developer ID and the app's
+   provisioning profile, builds the DMG, submits it for notarization and publishes it to R2 with `latest.json`; once Apple accepts it, `release.sh staple prod` staples the ticket and
    republishes it as notarized (`WAIT=1` does both in one go). The landing page's Download button reads it via `GET /downloads/latest`; links
    elsewhere (README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg.
 

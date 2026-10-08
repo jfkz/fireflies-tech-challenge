@@ -1,9 +1,9 @@
 import Foundation
 
 /// The browser half of signing a Mac in: the page the app opens, and the
-/// `boringtalks://callback?code=…` link the dashboard sends back.
+/// `boringtalks://callback?code=…` link the dashboard sends back (`boringtalks-dev://` for BoringTalks Dev).
 public enum DeviceLink {
-    public static let callbackScheme = "boringtalks"
+    public static let callbackSchemes = AppFlavor.allCases.map(\.callbackScheme)
     public static let callbackHost = "callback"
 
     public enum CallbackError: Error, Equatable, LocalizedError {
@@ -20,10 +20,12 @@ public enum DeviceLink {
         }
     }
 
-    /// `https://boringtalks.lol/connect?challenge=<c>&device=<name>`.
-    public static func connectURL(webURL: URL, challenge: String, deviceName: String) -> URL {
+    /// `https://boringtalks.lol/connect?challenge=<c>&device=<name>`, plus `&app=dev` from BoringTalks Dev
+    /// so the dashboard sends the code back on its scheme.
+    public static func connectURL(webURL: URL, challenge: String, deviceName: String, flavor: AppFlavor = .production) -> URL {
         let page = webURL.appendingPathComponent("connect")
-        let query = "challenge=\(encode(challenge))&device=\(encode(deviceName))"
+        var query = "challenge=\(encode(challenge))&device=\(encode(deviceName))"
+        if flavor != .production { query += "&app=\(flavor.rawValue)" }
         guard var components = URLComponents(url: page, resolvingAgainstBaseURL: false) else { return page }
         components.percentEncodedQuery = query
         return components.url ?? page
@@ -31,7 +33,7 @@ public enum DeviceLink {
 
     /// The one-time code from the callback link.
     public static func code(fromCallback url: URL) throws -> String {
-        guard url.scheme?.lowercased() == callbackScheme, url.host?.lowercased() == callbackHost else {
+        guard let scheme = url.scheme?.lowercased(), callbackSchemes.contains(scheme), url.host?.lowercased() == callbackHost else {
             throw CallbackError.notACallback
         }
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
@@ -49,7 +51,7 @@ public enum DeviceLink {
     public static func code(fromPasted text: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        if trimmed.lowercased().hasPrefix("\(callbackScheme)://"), let url = URL(string: trimmed) {
+        if callbackSchemes.contains(where: { trimmed.lowercased().hasPrefix("\($0)://") }), let url = URL(string: trimmed) {
             return try? code(fromCallback: url)
         }
         guard !trimmed.contains(where: \.isWhitespace), trimmed.count <= 512 else { return nil }
@@ -105,12 +107,12 @@ public actor DeviceAuthenticator {
     private var pendingAccount: String { "\(account).pending-verifier" }
 
     /// Starts a sign-in: remembers a fresh verifier and returns the page to open.
-    public func begin(webURL: URL, deviceName: String) -> URL {
+    public func begin(webURL: URL, deviceName: String, flavor: AppFlavor = .production) -> URL {
         let pkce = PKCE.generate()
         pending = pkce
         // Survives a relaunch between opening the browser and the callback.
         try? store.write(pkce.verifier, account: pendingAccount)
-        return DeviceLink.connectURL(webURL: webURL, challenge: pkce.challenge, deviceName: deviceName)
+        return DeviceLink.connectURL(webURL: webURL, challenge: pkce.challenge, deviceName: deviceName, flavor: flavor)
     }
 
     /// Swaps the one-time code for the device token and stores it.

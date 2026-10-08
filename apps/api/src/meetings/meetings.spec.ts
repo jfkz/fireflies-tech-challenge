@@ -4,7 +4,7 @@ import type { SummaryWithItems } from './meetings.repository';
 import { meeting, seg, user } from '../testing/fixtures';
 import { defaultTitle, toDetail } from './meeting.mapper';
 import { MeetingsController } from './meetings.controller';
-import { canStart, MeetingsService } from './meetings.service';
+import { canStart, chainReason, MeetingsService } from './meetings.service';
 import { TranscriptService } from './transcript.service';
 
 const summaryRow = (o: Partial<SummaryWithItems> = {}): SummaryWithItems => ({
@@ -65,6 +65,23 @@ describe('mapper', () => {
     const d = toDetail(meeting({ hasAudio: true }), summaryRow(), [seg('You', 0, 1, 'hi')], 'https://a');
     expect(d).toMatchObject({ actionItemCount: 1, audioUrl: 'https://a', summary: { model: 'm', decisions: ['d'] } });
     expect(d.summary).not.toHaveProperty('title');
+  });
+});
+
+describe('chainReason', () => {
+  const at = (day: string) => `2026-10-${day}T10:00:00.000Z`;
+  const member = (n: number, day: string, reason: string | null) => ({ id: `m${n}`, title: `M${n}`, startedAt: at(day), reason });
+  const self = (reason: string | null) => ({ id: 'm3', startedAt: new Date(at('05')), chainReason: reason });
+
+  it("keeps the meeting's own reason", () => {
+    expect(chainReason(self('Own'), [member(1, '01', 'Other'), member(3, '05', 'Own')])).toBe('Own');
+  });
+
+  it('borrows the nearest reason, the earlier one on a tie, and has none when nobody says', () => {
+    const members = [member(1, '01', 'Far'), member(2, '03', 'Before'), member(3, '05', null), member(4, '07', 'After'), member(5, '08', null)];
+    expect(chainReason(self(null), members)).toBe('Before');
+    expect(chainReason(self(null), members.filter((m) => m.id !== 'm2'))).toBe('After');
+    expect(chainReason(self(null), [member(3, '05', null), member(5, '08', null)])).toBeNull();
   });
 });
 
@@ -235,6 +252,20 @@ describe('MeetingsService', () => {
       const d = await service.get(user(), meeting().id);
       expect(repo.chainMeetings).toHaveBeenCalledWith(user().id, chainId);
       expect(d.chain).toEqual({ id: chainId, meetings: refs, reason: 'Same admin page work' });
+    });
+
+    it('shows why the chain is linked on every meeting of it, from the nearest one that says', async () => {
+      const { repo, service } = setup();
+      // This meeting started the chain, so it has no reason of its own.
+      repo.findOwned.mockResolvedValue(meeting({ chainId, chainReason: null }));
+      repo.chainMeetings.mockResolvedValue([
+        { ...refs[0], reason: 'Same admin page work' },
+        { ...refs[1], reason: null },
+      ]);
+      const d = await service.get(user(), meeting().id);
+      expect(d.chain).toEqual({ id: chainId, meetings: refs, reason: 'Same admin page work' });
+      // Only the contract's fields go out.
+      expect(d.chain?.meetings[0]).not.toHaveProperty('reason');
     });
 
     it('shows no chain when there is none or the others are gone', async () => {

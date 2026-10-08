@@ -184,7 +184,8 @@ and `chain`: the related meetings it is linked with, oldest first, or `null`:
 ```
 **Chains.** After each summary the worker compares the meeting with the user's other meetings within
 45 days (`processing/chain-linker.ts`, the summary model): when it is the same recurring meeting or a
-follow-up on the same work, it joins that meeting's chain (`reason` says why). Sharing only a broad
+follow-up on the same work, it joins that meeting's chain (`reason` says why, on every meeting of the
+chain: the meeting's own reason, else the nearest member's; `null` when all were linked by hand). Sharing only a broad
 topic or one person isn't enough. A meeting the user linked or unlinked by hand keeps its place.
 
 ```json
@@ -209,7 +210,8 @@ Rename, tick an action item and/or rename speakers (at least one of them):
 ```
 `"chain": null` takes the meeting out of its chain (a chain left with one meeting ends) and keeps
 the worker from linking it again; `"chain": { "with": "<meeting id>" }` puts it in that meeting's
-chain (starting one), `reason` `null`. `400` for the meeting itself, `404` for someone else's.
+chain (starting one) with no reason of its own (`chain.reason` shows the chain's, if another meeting
+has one). `400` for the meeting itself, `404` for someone else's.
 
 `speakers` maps a current display name to a new one (1–20 at a time). The new names are marked as
 typed by hand, so reprocessing never overwrites them; action item owners follow. Giving two speakers
@@ -318,9 +320,11 @@ items, and returns them under the new name. Renaming to another person's name me
 ## Devices (Mac app sign-in, PKCE)
 
 1. The app makes a `code_verifier` (43–128 chars) and `code_challenge = base64url(sha256(verifier))`,
-   then opens `https://boringtalks.lol/connect?challenge=<challenge>&device=<device name>`.
+   then opens `https://boringtalks.lol/connect?challenge=<challenge>&device=<device name>` (BoringTalks Dev
+   adds `&app=dev`).
 2. The signed-in dashboard calls `POST /devices/authorize` and redirects the browser to `redirectUrl`.
-3. The app receives `boringtalks://callback?code=…` and calls `POST /devices/token` with the verifier.
+3. The app receives `boringtalks://callback?code=…` (BoringTalks Dev: `boringtalks-dev://callback?code=…`)
+   and calls `POST /devices/token` with the verifier.
 
 ### `POST /devices/authorize` (`AuthorizeDeviceRequest`, **Firebase only**) → `201 AuthorizeDeviceResponse`
 ```json
@@ -329,7 +333,8 @@ items, and returns them under the new name. Renaming to another person's name me
 ```json
 { "code": "q1…", "expiresInSec": 600, "redirectUrl": "boringtalks://callback?code=q1…" }
 ```
-The code is single-use and expires in 10 minutes.
+The code is single-use and expires in 10 minutes. Optional `"app": "dev"` (from the connect page's
+`app=dev`) makes `redirectUrl` use BoringTalks Dev's scheme, `boringtalks-dev://callback?code=…`.
 
 ### `POST /devices/token` (`DeviceTokenRequest`, **public**) → `DeviceTokenResponse`
 ```json

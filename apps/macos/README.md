@@ -41,10 +41,10 @@ with every build and macOS asks again. Without that certificate add `BT_SIGN_IDE
 | Script | What it does |
 |---|---|
 | `scripts/test.sh` | builds the app (Debug) and runs the unit tests; `SIGN_IDENTITY=-` for ad-hoc (CI) |
-| `scripts/build.sh` | universal Release build (`ARCHS="arm64 x86_64"`); `SIGN_IDENTITY=-` for ad-hoc, `SIGN_IDENTITY="Developer ID Application: …"` for a release (adds `--timestamp`); `MARKETING_VERSION`, `BUILD_NUMBER` (→ `CURRENT_PROJECT_VERSION`), `KEYCHAIN` optional. Leaves the app in `build/Release/BoringTalks.app`. |
-| `scripts/make-dmg.sh <app> <out.dmg>` | UDZO DMG, volume "BoringTalks", app + `/Applications` link; signs the DMG when `SIGN_IDENTITY` is a Developer ID |
+| `scripts/build.sh` | universal Release build (`ARCHS="arm64 x86_64"`); `FLAVOR=dev` for BoringTalks Dev; `SIGN_IDENTITY=-` for ad-hoc, `SIGN_IDENTITY="Developer ID Application: …"` for a release (adds `--timestamp`); `MARKETING_VERSION`, `BUILD_NUMBER` (→ `CURRENT_PROJECT_VERSION`), `KEYCHAIN` optional. Leaves the app in `build/Release/<name>.app`. |
+| `scripts/make-dmg.sh <app> <out.dmg>` | UDZO DMG named after the app, app + `/Applications` link; signs the DMG when `SIGN_IDENTITY` is a Developer ID |
 | `scripts/notarize.sh <dmg>` | `notarytool submit --wait` with an App Store Connect API key (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_PATH` or `ASC_KEY_P8`), then `stapler staple`. Exit 0 = notarized, 1 = rejected (prints the log), 2 = skipped because the key isn't set. |
-| `scripts/publish.sh <dmg> <version> <build> <true\|false> [dev/]` | uploads `BoringTalks-<version>.dmg`, `BoringTalks-latest.dmg` and `latest.json` (shared `LatestDownload` shape) to R2 with `aws s3 cp --endpoint-url $R2_ENDPOINT`; env `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_DOWNLOADS_BUCKET` (`boringtalks`), `DOWNLOADS_BASE_URL`, optional `R2_DOWNLOADS_KEY_PREFIX` (default `downloads/`) |
+| `scripts/publish.sh <dmg> <version> <build> <true\|false> [dev/]` | uploads `<DMG_NAME>-<version>.dmg`, `<DMG_NAME>-latest.dmg` (`DMG_NAME` default `BoringTalks`) and `latest.json` (shared `LatestDownload` shape) to R2 with `aws s3 cp --endpoint-url $R2_ENDPOINT`; env `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_DOWNLOADS_BUCKET` (`boringtalks`), `DOWNLOADS_BASE_URL`, optional `R2_DOWNLOADS_KEY_PREFIX` (default `downloads/`) |
 
 A release, from your Mac (CI only builds and tests):
 
@@ -52,7 +52,18 @@ A release, from your Mac (CI only builds and tests):
 scripts/release.sh prod          # Developer ID build + DMG, notarization submitted, published to R2
 scripts/release.sh staple prod   # once `notarytool info <id>` says Accepted: staple and republish as notarized
 WAIT=1 scripts/release.sh prod   # or wait for Apple in one go
+WAIT=1 scripts/release.sh dev    # BoringTalks Dev → download.boringtalks.lol/dev/BoringTalks-Dev-latest.dmg
+NO_PUBLISH=1 scripts/release.sh dev   # signed build and DMG only, to try locally
 ```
+
+After building, `release.sh` embeds the app's **Developer ID provisioning profile**
+(`.local/secrets/apple/BoringTalks.provisionprofile` / `BoringTalksDev.provisionprofile`, profile type
+`MAC_APP_DIRECT`, made with the App Store Connect API for bundle IDs `games.cutthecheese.boringtalks`
+and `….dev`) and re-signs the app with `Signing/Distribution.entitlements`: the application identifier
+and Keychain access group the profile grants. That is what lets the app use the data protection
+Keychain (see Signing in). It then runs the app with `--keychain-check` and stops if the build would
+still use the login keychain. The profiles expire with the certificate (2031); to make new ones, POST
+`/v1/profiles` with the bundle ID's and the certificate's IDs.
 
 `release.sh` imports the Developer ID certificate into a throwaway keychain for the build and
 restores the keychain search list afterwards. Defaults read the certificate, its password and the
@@ -68,30 +79,46 @@ R2 keys from the repo's gitignored `.local/secrets/`, and the App Store Connect 
 
 Either can be refused: the meeting is then recorded from the other side only, and the
 menu shows why. The app is **not sandboxed** (it ships as a Developer ID DMG, not through
-the App Store); it runs with the **hardened runtime** for notarization, with one
-entitlement, `com.apple.security.device.audio-input`.
+the App Store); it runs with the **hardened runtime** for notarization, with the
+`com.apple.security.device.audio-input` entitlement. Release builds also carry the application
+identifier and Keychain access group from their provisioning profile.
 
 ## Signing in
 
 **Sign in with browser** opens `https://boringtalks.lol/connect?challenge=…&device=<Mac name>`
 (PKCE, S256: the app keeps a 32-byte random verifier, the browser only sees its SHA-256).
-After you approve the Mac, the dashboard redirects to `boringtalks://callback?code=…`; the
+After you approve the Mac, the dashboard redirects to `boringtalks://callback?code=…`
+(BoringTalks Dev adds `&app=dev` to the connect page and gets `boringtalks-dev://callback?code=…`); the
 app sends `POST /devices/token {code, codeVerifier}` and stores the `btd_…` device token in
-the **login Keychain** (service `games.cutthecheese.boringtalks`, one item per API host).
+the Keychain (service = the app's bundle ID, one item per API host). Release builds use the
+**data protection Keychain**: the item belongs to the app's access group, not to one code signature,
+so updates never ask for Keychain access. Local and ad-hoc builds have no access group and fall back
+to the login keychain, which does ask when a differently signed build made the item.
 If the redirect doesn't reach the app, copy the code (or the whole `boringtalks://` link)
 into **Paste code**. Every API call sends `Authorization: Bearer btd_…`; a 401 signs the app
 out and pauses uploads until you sign in again. Devices can be revoked from the dashboard.
 
 ## Dev vs prod
 
-Production by default: API `https://api.boringtalks.lol`, dashboard `https://boringtalks.lol`.
+Two apps from the same sources (`AppFlavor`, set by `BTFlavor` in Info.plist):
+
+| | BoringTalks | BoringTalks Dev |
+|---|---|---|
+| Target / scheme | `BoringTalks` | `BoringTalksDev` |
+| Bundle ID | `games.cutthecheese.boringtalks` | `games.cutthecheese.boringtalks.dev` |
+| API / dashboard | `api.boringtalks.lol` / `boringtalks.lol` | `api.dev.boringtalks.lol` / `dev.boringtalks.lol` |
+| Sign-in callback | `boringtalks://` | `boringtalks-dev://` |
+| Data folder | `Application Support/BoringTalks` | `Application Support/BoringTalks Dev` |
+| Download | `download.boringtalks.lol/BoringTalks-latest.dmg` | `download.boringtalks.lol/dev/BoringTalks-Dev-latest.dmg` |
+
+They can run side by side. Either can be pointed at another API:
 
 ```sh
-defaults write games.cutthecheese.boringtalks apiURL https://api.dev.boringtalks.lol
-defaults write games.cutthecheese.boringtalks webURL https://dev.boringtalks.lol
+defaults write games.cutthecheese.boringtalks apiURL http://localhost:3001
+defaults write games.cutthecheese.boringtalks webURL http://localhost:3000
 # or per launch (wins over defaults):
 open BoringTalks.app --args --api-url http://localhost:3001 --web-url http://localhost:3000
-defaults delete games.cutthecheese.boringtalks apiURL   # back to production
+defaults delete games.cutthecheese.boringtalks apiURL   # back to the app's own environment
 ```
 
 A non-production API shows its host as a yellow badge in the menu. Tokens are stored per

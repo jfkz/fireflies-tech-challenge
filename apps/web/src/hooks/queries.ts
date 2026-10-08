@@ -3,7 +3,7 @@
 import type { ListTasksQuery, MeetingDetail, MeetingPage, MeetingStatsQuery, PersonDetail, TaskItem, TaskPage, UpdateMeetingRequest } from '@boringtalks/shared';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { publicApi, useAuth } from '@/components/providers/AuthProvider';
-import { localDayRange } from '@/lib/meeting-nav';
+import { aroundRange, LINK_WINDOW_DAYS, localDayRange } from '@/lib/meeting-nav';
 import { isProcessing, meetingPollInterval } from '@/lib/status';
 
 /** Query keys, scoped by user so two accounts never share a cache entry. */
@@ -23,6 +23,8 @@ export const keys = {
   allMeetingDetails: (uid: string | undefined) => ['meeting', uid] as const,
   /** The meetings of one local day, for "previous / next today"; under `allMeetings`, so it refreshes with them. */
   day: (uid: string | undefined, from: string) => ['meetings', uid, 'day', from] as const,
+  /** What the "Link to…" picker offers: a search, or the meetings around one; under `allMeetings` too. */
+  linkCandidates: (uid: string | undefined, around: string, q: string) => ['meetings', uid, 'link', around, q] as const,
   people: (uid: string | undefined, days: number | null) => ['people', uid, days] as const,
   allPeople: (uid: string | undefined) => ['people', uid] as const,
   /** By lower-cased name: the API matches names in any case. */
@@ -212,6 +214,20 @@ export function useSameDayMeetings(startedAt: string) {
     queryKey: keys.day(user?.uid, from),
     queryFn: ({ signal }) => api.listMeetings({ from, to, limit: 100 }, signal),
     enabled: !!user,
+    select: (page) => page.items,
+  });
+}
+
+/**
+ * Meetings to link one into a chain with: those matching `q` across everything, or with no search the
+ * ones within LINK_WINDOW_DAYS of `startedAt`. Only fetched while the picker is open (`enabled`).
+ */
+export function useLinkCandidates(startedAt: string, q: string, enabled: boolean) {
+  const { api, user } = useAuth();
+  return useQuery({
+    queryKey: keys.linkCandidates(user?.uid, startedAt, q),
+    queryFn: ({ signal }) => api.listMeetings(q ? { q, limit: 30 } : { ...aroundRange(startedAt, LINK_WINDOW_DAYS), limit: 100 }, signal),
+    enabled: !!user && enabled,
     select: (page) => page.items,
   });
 }

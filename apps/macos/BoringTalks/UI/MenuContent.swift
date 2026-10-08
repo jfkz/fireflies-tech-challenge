@@ -34,7 +34,7 @@ struct MenuContent: View {
                 .font(.title2)
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 1) {
-                Text("BoringTalks").font(.headline)
+                Text(model.flavor.displayName).font(.headline)
                 if case .signedIn(let email) = model.auth {
                     Text(email ?? "Signed in").font(.caption).foregroundStyle(.secondary)
                 } else {

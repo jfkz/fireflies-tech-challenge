@@ -119,7 +119,10 @@ export type MeetingRef = z.infer<typeof MeetingRef>;
 export const MeetingChain = z.object({
   id: z.string().uuid(),
   meetings: z.array(MeetingRef).min(2),
-  /** Why this meeting was linked ("Follows up on the admin page plan"); null when linked by hand. */
+  /**
+   * What connects them ("Follows up on the admin page plan"): why this meeting was linked, else why
+   * the nearest other one was, so every meeting of the chain shows it; null when all were linked by hand.
+   */
   reason: z.string().nullable(),
 });
 export type MeetingChain = z.infer<typeof MeetingChain>;
