@@ -168,6 +168,15 @@ describe('PipelineService.transcribe: microphone and system audio on their own c
     t.transcriber.transcribe.mockResolvedValue({ segments: [], language: null, durationSec: null });
     await expect(t.pipeline.transcribe({ meetingId: m.id, run: 1 })).rejects.toThrow('No speech');
   });
+
+  it('keeps the mono mix to play even when transcription fails', async () => {
+    const t = setup();
+    const m = split(t);
+    t.transcriber.transcribe.mockRejectedValue(new Error('gateway down'));
+    await expect(t.pipeline.transcribe({ meetingId: m.id, run: 1 })).rejects.toThrow('gateway down');
+    expect(t.storage.putBytes).toHaveBeenCalledWith(expect.stringContaining('audio-playback.m4a'), mix, 'audio/mp4');
+    expect(t.meetings.update).toHaveBeenCalledWith(m.id, { playbackKey: expect.stringContaining('audio-playback.m4a') });
+  });
 });
 
 describe('PipelineService.summarize: chains', () => {

@@ -233,6 +233,18 @@ export class MeetingsService {
     return started;
   }
 
+  /**
+   * The audio the dashboard plays. A two-channel Mac recording (the user on one side, the call on
+   * the other) is only ever played as the worker's mono mix of both, never as the raw file.
+   */
+  private playbackUrl(meeting: MeetingRow): Promise<string | null> {
+    if (!meeting.hasAudio || !meeting.audioKey) return Promise.resolve(null);
+    if (meeting.audioChannels === 'mic-system') {
+      return meeting.playbackKey ? this.storage.presignGet(meeting.playbackKey) : Promise.resolve(null);
+    }
+    return this.storage.presignGet(meeting.audioKey);
+  }
+
   private assertEditable(meeting: MeetingRow): void {
     if (!EDITABLE.includes(meeting.status)) {
       throw new ConflictException(`The meeting is ${meeting.status}; wait until processing finishes`);
@@ -249,7 +261,7 @@ export class MeetingsService {
     const [summary, segments, audioUrl, chained] = await Promise.all([
       this.repo.getSummary(meeting.id),
       this.repo.getSegments(meeting.id),
-      meeting.hasAudio && meeting.audioKey ? this.storage.presignGet(meeting.playbackKey ?? meeting.audioKey) : Promise.resolve(null),
+      this.playbackUrl(meeting),
       meeting.chainId ? this.repo.chainMeetings(meeting.userId, meeting.chainId) : Promise.resolve([]),
     ]);
     const chain =

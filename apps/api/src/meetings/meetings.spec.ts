@@ -149,11 +149,15 @@ describe('MeetingsService', () => {
     expect(storage.presignGet).toHaveBeenCalledTimes(1);
   });
 
-  it('plays the mono mix of a split-channel recording', async () => {
+  it('plays only the mono mix of a split-channel recording, never the two-channel file', async () => {
     const { repo, storage, service } = setup();
     repo.findOwned.mockResolvedValue(meeting({ hasAudio: true, audioKey: 'k', audioChannels: 'mic-system', playbackKey: 'mix' }));
     await service.get(user(), meeting().id);
     expect(storage.presignGet).toHaveBeenCalledWith('mix');
+    // Before the worker has mixed it: no player yet.
+    repo.findOwned.mockResolvedValue(meeting({ hasAudio: true, audioKey: 'k', audioChannels: 'mic-system' }));
+    expect((await service.get(user(), meeting().id)).audioUrl).toBeNull();
+    expect(storage.presignGet).toHaveBeenCalledTimes(1);
   });
 
   describe('list', () => {

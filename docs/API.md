@@ -244,7 +244,8 @@ Allowed types: `audio/mp4`, `audio/m4a`, `audio/x-m4a`, `audio/webm`, `audio/ogg
 Optional `"channels": "mic-system"` says the file has the microphone (the user) on the left channel
 and system audio (everyone else) on the right, as the Mac app records with **Transcribe: Online**.
 The worker then transcribes each side by itself (the microphone as `You`), drops the microphone's
-echo of the call, and serves a mono mix as `audioUrl`. Leave it out (or `"mixed"`) for anything else.
+echo of the call, and serves one mono mix of both sides as `audioUrl` (`null` for the minute until the
+worker has made it; the two-channel file itself is never played). Leave it out (or `"mixed"`) for anything else.
 
 ### `PUT /meetings/:id/transcript` (`TranscriptUpload`) → `204` (replaces)
 ```json
