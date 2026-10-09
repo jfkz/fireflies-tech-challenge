@@ -9,14 +9,18 @@ pages, October 2026.
 
 ## Per meeting-hour
 
-| Item | Mac recording | Browser recording / upload |
-|---|---|---|
-| Transcription | **$0** (Parakeet on the Neural Engine) | $0.10 (`microsoft/mai-transcribe-2`, with speakers) |
-| Title + summary + action items | ~$0.02 (`anthropic/claude-haiku-4.5`: ~13k tokens in at $1/M, ~1k out at $5/M) | ~$0.02 |
-| Upload to the server | a few KB of JSON (+14 MB audio if kept) | 14–60 MB audio |
-| Audio storage | $0.0002/month (14 MB at $0.015/GB-month) | same |
-| Playback | $0 (R2 has no egress fees) | $0 |
-| **Total** | **≈ $0.02** | **≈ $0.38** |
+| Item | Mac recording | Mac, transcribed online | Browser recording / upload |
+|---|---|---|---|
+| Transcription | **$0** (Parakeet on the Neural Engine) | $0.20 (MAI-Transcribe 2 on each side) | $0.10 (`microsoft/mai-transcribe-2`, with speakers) |
+| Title + summary + action items | ~$0.02 (`anthropic/claude-haiku-4.5`: ~13k tokens in at $1/M, ~1k out at $5/M) | ~$0.02 | ~$0.02 |
+| Upload to the server | a few KB of JSON (+14 MB audio if kept) | 22 MB stereo audio | 14–60 MB audio |
+| Audio storage | $0.0002/month (14 MB at $0.015/GB-month) | $0.0005/month (+ a 14 MB playback mix) | same |
+| Playback | $0 (R2 has no egress fees) | $0 | $0 |
+| **Total** | **≈ $0.02** | **≈ $0.22** | **≈ $0.38** |
+
+Transcribing online (a Mac setting) bills both channels for the whole meeting, since each side
+is transcribed on its own to keep “You” apart; it is meant for Macs where on-device transcription
+isn't wanted, not as the default.
 
 ## Per 1,000 meeting-hours
 

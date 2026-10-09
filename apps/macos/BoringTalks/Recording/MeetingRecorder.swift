@@ -4,8 +4,9 @@ import Observation
 
 /// Records one meeting: the microphone is "You", what the Mac plays is everyone
 /// else. Both channels run on one clock (seconds since Start), go to their own
-/// transcriber, and are mixed into one AAC file. Stop hands back a
-/// `PendingMeeting` for the upload queue.
+/// transcriber, and are mixed into one AAC file. When the server is to transcribe
+/// the meeting instead, nothing is transcribed here and the file keeps the two sides
+/// on their own channels. Stop hands back a `PendingMeeting` for the upload queue.
 @MainActor @Observable
 final class MeetingRecorder {
     enum Phase: Equatable {
@@ -18,6 +19,8 @@ final class MeetingRecorder {
     private(set) var warnings: [AudioChannel: String] = [:]
     /// Recording while the speech model is still loading; audio waits for it.
     private(set) var waitingForModel = false
+    /// This meeting is transcribed here (false: recorded for the server to transcribe).
+    private(set) var transcribesLocally = true
     /// The microphone recording "You" (shown in the menu).
     private(set) var microphoneName: String?
     /// See `Preferences.avoidBluetoothMic`; read when a meeting starts.
@@ -51,6 +54,10 @@ final class MeetingRecorder {
     @ObservationIgnored private var channels: [AudioChannel: RecordingChannel] = [:]
     @ObservationIgnored private var mic: MicCapture?
     @ObservationIgnored private var system: SystemAudioCapture?
+    /// Captures on their way up. One that comes back after `startLimit` is used only if it is
+    /// still the latest for its side and the meeting is still on.
+    @ObservationIgnored private var startingMic: MicCapture?
+    @ObservationIgnored private var startingSystem: SystemAudioCapture?
     @ObservationIgnored private var writer: RecordingWriter?
     @ObservationIgnored private var registry = VoiceRegistry()
     @ObservationIgnored private var records: [PhraseRecord] = []
@@ -73,6 +80,12 @@ final class MeetingRecorder {
     /// Meters for the menu while nothing records.
     @ObservationIgnored private let idleMeters: [AudioChannel: LevelMeter] = [.microphone: LevelMeter(), .system: LevelMeter()]
     private static let log = Log.logger("recorder")
+    /// Core Audio start and stop calls, one serial queue per side, never the main thread:
+    /// they can block for minutes when a device goes away mid-call (headphones unplugged).
+    nonisolated static let micQueue = BlockingQueue(label: "games.cutthecheese.boringtalks.mic-control")
+    nonisolated static let systemQueue = BlockingQueue(label: "games.cutthecheese.boringtalks.system-control")
+    /// How long a side may take to start before the meeting carries on without it.
+    static let startLimit: Duration = .seconds(10)
 
     init(models: SpeechModels, folders: AppFolders) {
         self.models = models
@@ -98,9 +111,10 @@ final class MeetingRecorder {
         }
     }
 
-    func start(title: String?, language: String?, uploadAudio: Bool) async throws {
+    func start(title: String?, language: String?, uploadAudio: Bool, transcribeLocally: Bool = true) async throws {
         guard phase == .idle else { return }
         phase = .starting
+        transcribesLocally = transcribeLocally
         warnings = [:]
         records = []
         live.reset()
@@ -117,12 +131,13 @@ final class MeetingRecorder {
 
         do {
             try folders.create()
-            let writer = try RecordingWriter(url: folders.recordings.appendingPathComponent("\(id.uuidString).m4a"))
+            let writer = try RecordingWriter(url: folders.recordings.appendingPathComponent("\(id.uuidString).m4a"),
+                                             split: !transcribeLocally)
             self.writer = writer
             clockStart = ProcessInfo.processInfo.systemUptime
             startedAt = Date()
             for kind in AudioChannel.allCases {
-                channels[kind] = RecordingChannel(kind: kind, clockStart: clockStart, writer: writer)
+                channels[kind] = RecordingChannel(kind: kind, clockStart: clockStart, writer: writer, transcribes: transcribeLocally)
             }
 
             // Keep both sides on the clock from the first moment: a side that is slow
@@ -140,7 +155,7 @@ final class MeetingRecorder {
             // now and let the other side join when it can.
             let system = Task { await self.startSystem() }
             systemStart = Task { _ = await system.value }
-            let systemStarted = await Self.result(of: system, within: micStarted ? .seconds(3) : .seconds(60))
+            let systemStarted = await Deadline.value(of: system, within: micStarted ? .seconds(3) : .seconds(60))
             if systemStarted == nil {
                 warnings[.system] = "Waiting for macOS to allow System Audio Recording. Answer its prompt, or allow BoringTalks under System Settings › Privacy & Security › Screen & System Audio Recording."
             }
@@ -153,7 +168,8 @@ final class MeetingRecorder {
         }
 
         phase = .recording
-        Self.log.notice("recording \(id, privacy: .public)")
+        Self.log.notice("recording \(id, privacy: .public)\(transcribeLocally ? "" : " for the server to transcribe", privacy: .public)")
+        guard transcribeLocally else { return }
         // Transcribe as soon as the model is there; until then the audio waits.
         waitingForModel = !models.isReady
         modelWait = Task { [weak self] in
@@ -170,10 +186,7 @@ final class MeetingRecorder {
         ticker?.cancel()
         modelWait?.cancel()
         restarts.values.forEach { $0.cancel() }
-        mic?.stop()
-        system?.stop()
-        mic = nil
-        system = nil
+        stopCaptures()
         let elapsed = ProcessInfo.processInfo.systemUptime - clockStart
         // A model that has just arrived may be attaching right now.
         await attaching?.value
@@ -184,7 +197,7 @@ final class MeetingRecorder {
         }
         // The model may have finished loading just now.
         let missing = endings.keys.filter { !attached.contains($0) }
-        if models.isReady, !missing.isEmpty {
+        if transcribesLocally, models.isReady, !missing.isEmpty {
             await attachTranscribers(to: missing)
             for kind in missing {
                 if let channel = channels[kind] { endings[kind] = await channel.end(at: elapsed) }
@@ -196,9 +209,9 @@ final class MeetingRecorder {
         let seconds = await writer.finish()
 
         // Sides that couldn't start count as heard (there is nothing to transcribe).
-        let transcribed = endings.allSatisfy { kind, ending in ending.transcribed || warnings[kind] != nil }
+        let transcribed = transcribesLocally && endings.allSatisfy { kind, ending in ending.transcribed || warnings[kind] != nil }
         let segments = transcribed ? SegmentAssembler.assemble(records) : []
-        if !transcribed {
+        if !transcribed, transcribesLocally {
             Self.log.notice("no local transcript; the server will transcribe the audio")
         }
         let language = meeting.language ?? LanguageGuess.detect(segments.map(\.text).joined(separator: " "))
@@ -207,7 +220,8 @@ final class MeetingRecorder {
 
         let pending = PendingMeeting(id: meeting.id, title: meeting.title, startedAt: startedAt,
                                      durationSec: Int(elapsed.rounded()), language: language, segments: segments,
-                                     audioFileName: fileName, uploadAudio: meeting.uploadAudio)
+                                     audioFileName: fileName, uploadAudio: meeting.uploadAudio,
+                                     audioChannels: transcribesLocally ? nil : .micSystem)
         reset()
         Self.log.notice("stopped: \(segments.count, privacy: .public) segments, \(Int(elapsed), privacy: .public) s")
         return pending.hasContent(audioExists: fileName != nil) ? pending : nil
@@ -225,57 +239,116 @@ final class MeetingRecorder {
         capture.onConfigurationChange = { [weak self] in
             Task { @MainActor in self?.scheduleRestart(.microphone) }
         }
-        let defaultInput = AudioInputs.defaultInput()
-        let chosen = MicChoice.pick(defaultInput: defaultInput, inputs: AudioInputs.all(), avoidBluetooth: avoidBluetoothMic)
-        do {
-            try capture.start(device: chosen.map { AudioDeviceID($0.id) }) { buffer in channel.ingest(buffer) }
-            microphoneName = (chosen ?? defaultInput)?.name
-            if let chosen { Self.log.notice("recording You with \(chosen.name, privacy: .public) instead of a Bluetooth headset") }
+        startingMic = capture
+        let avoidBluetooth = avoidBluetoothMic
+        let start = Task.detached { () -> Result<MicStarted, Error> in
+            do {
+                return .success(try await Self.micQueue.run {
+                    let defaultInput = AudioInputs.defaultInput()
+                    let chosen = MicChoice.pick(defaultInput: defaultInput, inputs: AudioInputs.all(), avoidBluetooth: avoidBluetooth)
+                    try capture.start(device: chosen.map { AudioDeviceID($0.id) }) { buffer in channel.ingest(buffer) }
+                    return MicStarted(name: (chosen ?? defaultInput)?.name, insteadOfBluetooth: chosen?.name)
+                })
+            } catch {
+                return .failure(error)
+            }
+        }
+        guard let outcome = await Deadline.value(of: start, within: Self.startLimit) else {
+            stuck(.microphone)
+            Task { [weak self] in
+                let outcome = await start.value
+                self?.micStarted(capture, outcome)
+            }
+            return false
+        }
+        return micStarted(capture, outcome)
+    }
+
+    private struct MicStarted: Sendable {
+        var name: String?
+        /// Set when a built-in microphone was picked over the Bluetooth headset.
+        var insteadOfBluetooth: String?
+    }
+
+    @discardableResult
+    private func micStarted(_ capture: MicCapture, _ outcome: Result<MicStarted, Error>) -> Bool {
+        guard startingMic === capture, phase == .starting || phase == .recording else {
+            // The meeting ended, or this side restarted again, while Core Audio was busy.
+            capture.onConfigurationChange = nil
+            if case .success = outcome { Self.micQueue.enqueue { capture.stop() } }
+            return false
+        }
+        startingMic = nil
+        switch outcome {
+        case .success(let started):
+            microphoneName = started.name
+            if let name = started.insteadOfBluetooth {
+                Self.log.notice("recording You with \(name, privacy: .public) instead of a Bluetooth headset")
+            }
             mic = capture
             warnings[.microphone] = nil
             return true
-        } catch {
+        case .failure(let error):
             fail(.microphone, error.localizedDescription)
             return false
         }
     }
 
-    /// The task's result, or nil when it isn't done within `limit` (it keeps running).
-    private static func result(of task: Task<Bool, Never>, within limit: Duration) async -> Bool? {
-        await withTaskGroup(of: Bool?.self) { group in
-            group.addTask { await task.value }
-            group.addTask {
-                try? await Task.sleep(for: limit)
-                return nil
-            }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
-        }
-    }
-
     private func startSystem() async -> Bool {
         guard let channel = channels[.system] else { return false }
-        let generation = meeting?.id
         let capture = SystemAudioCapture()
         capture.onDeviceChange = { [weak self] in
             Task { @MainActor in self?.scheduleRestart(.system) }
         }
+        startingSystem = capture
         do {
-            // Core Audio blocks this call until the System Audio Recording prompt
-            // is answered, so keep it off the main thread.
-            try await Task.detached { try capture.start { buffer in channel.ingest(buffer) } }.value
-            // The meeting may have ended while macOS was asking for permission.
-            guard meeting?.id == generation, phase == .starting || phase == .recording else {
-                capture.stop()
-                return false
-            }
-            system = capture
-            warnings[.system] = nil
-            return true
+            // Core Audio blocks this call until the System Audio Recording prompt is answered.
+            try await Self.systemQueue.run { try capture.start { buffer in channel.ingest(buffer) } }
         } catch {
+            guard startingSystem === capture else { return false }
+            startingSystem = nil
             fail(.system, "System audio: \(error.localizedDescription). Allow BoringTalks under System Settings › Privacy & Security › Screen & System Audio Recording.")
             return false
+        }
+        // The meeting may have ended (or this side restarted) while macOS was asking for
+        // permission or busy.
+        guard startingSystem === capture, phase == .starting || phase == .recording else {
+            capture.onDeviceChange = nil
+            Self.systemQueue.enqueue { capture.stop() }
+            return false
+        }
+        startingSystem = nil
+        system = capture
+        warnings[.system] = nil
+        return true
+    }
+
+    /// Core Audio hasn't come back in time. The meeting carries on (the timeline fills the gap
+    /// with silence) and the side joins if Core Audio ever lets go.
+    private func stuck(_ kind: AudioChannel) {
+        let side = kind == .microphone ? "The microphone" : "System audio"
+        warnings[kind] = "\(side) isn't responding: macOS audio is busy, often just after headphones are plugged in or out. Recording carries on, and it joins as soon as macOS lets go."
+        Self.log.error("\(kind.rawValue, privacy: .public) start is stuck in Core Audio")
+    }
+
+    /// Stops the captures without waiting for Core Audio, which may take its time. A side
+    /// still starting is stopped when it comes back.
+    private func stopCaptures(_ kinds: [AudioChannel] = AudioChannel.allCases) {
+        if kinds.contains(.microphone) {
+            if let mic {
+                mic.onConfigurationChange = nil
+                Self.micQueue.enqueue { mic.stop() }
+            }
+            mic = nil
+            startingMic = nil
+        }
+        if kinds.contains(.system) {
+            if let system {
+                system.onDeviceChange = nil
+                Self.systemQueue.enqueue { system.stop() }
+            }
+            system = nil
+            startingSystem = nil
         }
     }
 
@@ -297,15 +370,13 @@ final class MeetingRecorder {
             try? await Task.sleep(for: .milliseconds(400))
             guard let self, !Task.isCancelled, self.phase == .recording else { return }
             Self.log.notice("audio device changed; restarting \(kind.rawValue, privacy: .public)")
+            self.stopCaptures([kind])
             switch kind {
             case .microphone:
-                self.mic?.stop()
-                self.mic = nil
                 _ = await self.startMic()
             case .system:
-                self.system?.stop()
-                self.system = nil
-                _ = await self.startSystem()
+                let start = Task { await self.startSystem() }
+                if await Deadline.value(of: start, within: Self.startLimit) == nil { self.stuck(.system) }
             }
         }
     }
@@ -456,8 +527,7 @@ final class MeetingRecorder {
     // MARK: - Teardown
 
     private func abandon() async {
-        mic?.stop()
-        system?.stop()
+        stopCaptures()
         if let writer {
             _ = await writer.finish()
             try? FileManager.default.removeItem(at: writer.url)
@@ -471,8 +541,7 @@ final class MeetingRecorder {
         ticker?.cancel()
         modelWait?.cancel()
         channels = [:]
-        mic = nil
-        system = nil
+        stopCaptures()
         writer = nil
         meeting = nil
         startedAt = nil

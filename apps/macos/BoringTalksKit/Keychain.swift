@@ -27,20 +27,27 @@ public struct KeychainError: Error, Equatable, LocalizedError {
     }
 }
 
-/// Generic passwords in the login Keychain, under one service name.
+/// Generic passwords under one service name, in the data protection Keychain: items belong to the
+/// app's Keychain access group (team ID + bundle ID), so any build signed by the team reads them
+/// without asking. The file-based login keychain, which ties each item to the exact code signature
+/// that made it and asks "BoringTalks wants to use your confidential information" when another
+/// build reads it, is only a fallback for builds without the access-group entitlement (local and
+/// ad-hoc builds; the entitlement needs the Developer ID provisioning profile).
 public struct KeychainStore: SecretStore {
     public let service: String
 
-    public init(service: String = "games.cutthecheese.boringtalks") {
+    public init(service: String = AppFlavor.production.keychainService) {
         self.service = service
     }
 
     private func query(_ account: String) -> [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
+        if Self.usesDataProtection { query[kSecUseDataProtectionKeychain as String] = true }
+        return query
     }
 
     public func readData(account: String) throws -> Data? {
@@ -75,6 +82,15 @@ public struct KeychainStore: SecretStore {
         let status = SecItemDelete(query(account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw KeychainError(status: status) }
     }
+
+    /// Whether this build is signed with an application identifier (a Developer ID release with its
+    /// provisioning profile), which is what the data protection Keychain needs. Decided once from the
+    /// entitlements rather than from Keychain errors, which differ between calls without it (a read
+    /// finds nothing where a write fails), so reads and writes always go to the same Keychain.
+    public static let usesDataProtection: Bool = {
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        return SecTaskCopyValueForEntitlement(task, "com.apple.application-identifier" as CFString, nil) != nil
+    }()
 }
 
 /// For tests and previews.

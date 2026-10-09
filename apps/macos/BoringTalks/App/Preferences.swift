@@ -31,9 +31,20 @@ final class Preferences {
         didSet { defaults.set(silenceStopMinutes, forKey: "silenceStopMinutes") }
     }
 
+    /// Transcribe on this Mac (Parakeet). Off: record both sides on their own channels and let
+    /// the server transcribe the audio after the meeting.
+    var transcribeOnMac: Bool {
+        didSet { defaults.set(transcribeOnMac, forKey: "transcribeOnMac") }
+    }
+
     /// Ask to record when a call app (Zoom, Teams, a browser…) starts using the microphone.
     var offerToRecordCalls: Bool {
         didSet { defaults.set(offerToRecordCalls, forKey: "offerToRecordCalls") }
+    }
+
+    /// Record a call app's call (Zoom, Teams…, not a browser) as soon as it starts, without asking.
+    var autoRecordCalls: Bool {
+        didSet { defaults.set(autoRecordCalls, forKey: "autoRecordCalls") }
     }
 
     /// Stop the recording shortly after the call's app releases the microphone.
@@ -58,7 +69,9 @@ final class Preferences {
         keepAudioDays = defaults.object(forKey: "keepAudioDays") as? Int ?? 7
         avoidBluetoothMic = defaults.object(forKey: "avoidBluetoothMic") as? Bool ?? true
         silenceStopMinutes = max(0, defaults.object(forKey: "silenceStopMinutes") as? Int ?? 5)
+        transcribeOnMac = defaults.object(forKey: "transcribeOnMac") as? Bool ?? true
         offerToRecordCalls = defaults.object(forKey: "offerToRecordCalls") as? Bool ?? true
+        autoRecordCalls = defaults.object(forKey: "autoRecordCalls") as? Bool ?? false
         stopWhenCallEnds = defaults.object(forKey: "stopWhenCallEnds") as? Bool ?? true
         ignoredCallApps = defaults.stringArray(forKey: "ignoredCallApps") ?? []
     }

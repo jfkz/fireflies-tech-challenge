@@ -245,7 +245,7 @@ public actor UploadQueue {
                 Self.log.notice("skipping audio of \(size) bytes")
                 return item
             }
-            let target = try await api.requestUploadURL(meetingID: remoteID, UploadUrlRequest(sizeBytes: size))
+            let target = try await api.requestUploadURL(meetingID: remoteID, UploadUrlRequest(sizeBytes: size, channels: item.audioChannels))
             try await api.uploadAudio(file: file, to: target)
             Self.log.notice("uploaded \(size) bytes of audio for \(remoteID, privacy: .public)")
         case .transcript:

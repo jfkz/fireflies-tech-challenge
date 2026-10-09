@@ -52,6 +52,7 @@ Per signed-in user (per IP for public routes), counted in Redis so all API repli
 - default: 120 requests/minute (`THROTTLE_LIMIT`)
 - `POST /meetings/:id/upload-url`: 20/minute
 - `POST /devices/token`: 10/minute
+- `POST /reports`: 10/hour
 
 Responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset`.
 
@@ -184,7 +185,8 @@ and `chain`: the related meetings it is linked with, oldest first, or `null`:
 ```
 **Chains.** After each summary the worker compares the meeting with the user's other meetings within
 45 days (`processing/chain-linker.ts`, the summary model): when it is the same recurring meeting or a
-follow-up on the same work, it joins that meeting's chain (`reason` says why). Sharing only a broad
+follow-up on the same work, it joins that meeting's chain (`reason` says why, on every meeting of the
+chain: the meeting's own reason, else the nearest member's; `null` when all were linked by hand). Sharing only a broad
 topic or one person isn't enough. A meeting the user linked or unlinked by hand keeps its place.
 
 ```json
@@ -209,7 +211,8 @@ Rename, tick an action item and/or rename speakers (at least one of them):
 ```
 `"chain": null` takes the meeting out of its chain (a chain left with one meeting ends) and keeps
 the worker from linking it again; `"chain": { "with": "<meeting id>" }` puts it in that meeting's
-chain (starting one), `reason` `null`. `400` for the meeting itself, `404` for someone else's.
+chain (starting one) with no reason of its own (`chain.reason` shows the chain's, if another meeting
+has one). `400` for the meeting itself, `404` for someone else's.
 
 `speakers` maps a current display name to a new one (1–20 at a time). The new names are marked as
 typed by hand, so reprocessing never overwrites them; action item owners follow. Giving two speakers
@@ -238,6 +241,12 @@ Then `PUT` the bytes to `url` with exactly those `headers`. The audio never pass
 Allowed types: `audio/mp4`, `audio/m4a`, `audio/x-m4a`, `audio/webm`, `audio/ogg`, `audio/mpeg`,
 `audio/wav`; max 200 MB. `409` while the meeting is being processed.
 
+Optional `"channels": "mic-system"` says the file has the microphone (the user) on the left channel
+and system audio (everyone else) on the right, as the Mac app records with **Transcribe: Online**.
+The worker then transcribes each side by itself (the microphone as `You`), drops the microphone's
+echo of the call, and serves one mono mix of both sides as `audioUrl` (`null` until the worker has
+transcribed both sides and made the mix; the two-channel file itself is never played). Leave it out (or `"mixed"`) for anything else.
+
 ### `PUT /meetings/:id/transcript` (`TranscriptUpload`) → `204` (replaces)
 ```json
 { "language": "en", "durationSec": 1830,
@@ -262,7 +271,8 @@ retried `complete` is harmless; use `reprocess` to run a ready meeting again.
 Poll `GET /meetings/:id` until `status` is `ready` or `failed`.
 
 ### `POST /meetings/:id/reprocess` → `MeetingDetail`
-Runs the pipeline again: from transcription when there is no transcript, else from the summary.
+Runs the pipeline again: from transcription when there is no transcript, or when the server made
+the transcript (browser recordings, uploads, two-channel Mac recordings); else from the summary.
 Allowed from `ready` and `failed`.
 
 ## Tasks
@@ -318,9 +328,11 @@ items, and returns them under the new name. Renaming to another person's name me
 ## Devices (Mac app sign-in, PKCE)
 
 1. The app makes a `code_verifier` (43–128 chars) and `code_challenge = base64url(sha256(verifier))`,
-   then opens `https://boringtalks.lol/connect?challenge=<challenge>&device=<device name>`.
+   then opens `https://boringtalks.lol/connect?challenge=<challenge>&device=<device name>` (BoringTalks Dev
+   adds `&app=dev`).
 2. The signed-in dashboard calls `POST /devices/authorize` and redirects the browser to `redirectUrl`.
-3. The app receives `boringtalks://callback?code=…` and calls `POST /devices/token` with the verifier.
+3. The app receives `boringtalks://callback?code=…` (BoringTalks Dev: `boringtalks-dev://callback?code=…`)
+   and calls `POST /devices/token` with the verifier.
 
 ### `POST /devices/authorize` (`AuthorizeDeviceRequest`, **Firebase only**) → `201 AuthorizeDeviceResponse`
 ```json
@@ -329,7 +341,8 @@ items, and returns them under the new name. Renaming to another person's name me
 ```json
 { "code": "q1…", "expiresInSec": 600, "redirectUrl": "boringtalks://callback?code=q1…" }
 ```
-The code is single-use and expires in 10 minutes.
+The code is single-use and expires in 10 minutes. Optional `"app": "dev"` (from the connect page's
+`app=dev`) makes `redirectUrl` use BoringTalks Dev's scheme, `boringtalks-dev://callback?code=…`.
 
 ### `POST /devices/token` (`DeviceTokenRequest`, **public**) → `DeviceTokenResponse`
 ```json
@@ -347,6 +360,30 @@ Active (not revoked) devices. `lastSeenAt` is updated at most once a minute.
 
 ### `DELETE /devices/:id` → `204`
 Revokes the device; its token stops working immediately. `404` if unknown or already revoked.
+
+## Problem reports
+
+### `POST /reports` (`ProblemReportRequest`) → `201 ProblemReportResponse`
+Sent by the Mac app's **Report a Problem…** (device token), or after it noticed it had been stuck
+(`kind: "hang"`). Any signed-in client may send one; a device token also records which Mac it came from.
+```json
+{
+  "kind": "user",
+  "message": "The menu froze after I unplugged my headphones",
+  "app": { "version": "0.4.0", "build": "1", "flavor": "release" },
+  "system": { "os": "macOS 26.2 (25C56)", "model": "Mac15,3" },
+  "diagnostics": { "recorder.phase": "recording", "mic.device": "MacBook Pro Microphone" },
+  "log": "2026-10-08 20:11:42 recorder audio device changed; restarting microphone\n…"
+}
+```
+```json
+{ "id": "5b0e…", "receivedAt": "2026-10-08T18:19:07.000Z" }
+```
+`kind` defaults to `user`, `message` to empty. `flavor` is `release` or `dev`. Limits: message 4,000
+characters, at most 100 `diagnostics` (key ≤ 80, value ≤ 2,000 characters), `log` 1,000,000 characters
+(`PROBLEM_REPORT_LOG_LIMIT`; the app keeps the newest part). Reports are stored in `problem_reports`, read
+with `node dist/reports.js` ([DEPLOYMENT](DEPLOYMENT.md#problem-reports)), and emailed (without the log)
+to `REPORTS_NOTIFY_EMAIL` when it is set.
 
 ---
 

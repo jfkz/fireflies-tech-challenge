@@ -53,7 +53,8 @@ public enum CallApps {
 }
 
 /// Turns "which call apps have the microphone open" into what the app should do:
-/// offer to record a call that has started, and notice when the recorded call ends.
+/// offer to record a call that has started (or, with `autoStartEnabled`, record a call
+/// app's call straight away), and notice when the recorded call ends.
 ///
 /// Fed every couple of seconds with the apps using the mic. Times are seconds on any
 /// monotonic clock.
@@ -61,6 +62,9 @@ public struct CallSignals: Sendable {
     public enum Event: Equatable, Sendable {
         /// `app` has held the microphone long enough to be a call: ask to record it.
         case offer(app: String)
+        /// A call app (not a browser: it may be using the mic for anything) is in a call and
+        /// calls are to be recorded without asking: start recording.
+        case autoStart(app: String)
         /// The app offered for released the microphone before anyone answered.
         case withdraw(app: String)
         /// The app of the call being recorded released the microphone.
@@ -73,6 +77,8 @@ public struct CallSignals: Sendable {
     public var appDelay: TimeInterval
     public var browserDelay: TimeInterval
     public var offersEnabled = true
+    /// Record a call app's call without asking. Browsers are still only offered.
+    public var autoStartEnabled = false
     /// App names the user said never to ask about.
     public var ignored: Set<String> = []
 
@@ -121,12 +127,17 @@ public struct CallSignals: Sendable {
         let settled = settledApps(at: now)
         if isRecording {
             if callApp == nil { callApp = settled.first }
-        } else if offersEnabled, pendingOffer == nil,
-                  let app = settled.first(where: { !asked.contains($0) && !ignored.contains($0) }) {
-            // One question per call, even when a browser holds the mic alongside the call app.
-            asked.formUnion(settled)
-            pendingOffer = app
-            events.append(.offer(app: app))
+        } else if pendingOffer == nil {
+            let candidates = settled.filter { !asked.contains($0) && !ignored.contains($0) }
+            if autoStartEnabled, let app = candidates.first(where: { apps[$0]?.isBrowser == false }) {
+                asked.formUnion(settled)
+                events.append(.autoStart(app: app))
+            } else if offersEnabled, let app = candidates.first {
+                // One question per call, even when a browser holds the mic alongside the call app.
+                asked.formUnion(settled)
+                pendingOffer = app
+                events.append(.offer(app: app))
+            }
         }
         return events
     }

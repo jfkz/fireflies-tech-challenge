@@ -80,13 +80,15 @@ test('filter by a person or topic by clicking pills, then rename a speaker', asy
   );
   await signUp(page);
   const list = page.getByRole('list', { name: 'Meetings' });
-  await expect(list.getByRole('link')).toHaveCount(2);
+  await expect(list.getByRole('heading')).toHaveCount(2);
+  // A named person's chip in a row opens their page; labels like "Speaker 1" filter instead.
+  await expect(list.getByRole('listitem').filter({ hasText: 'Hiring sync' }).getByRole('link', { name: 'Maya', exact: true })).toHaveAttribute('href', '/people/Maya');
 
   // A topic pill in a row filters the list, and the URL says so.
   const pricingRow = list.getByRole('listitem').filter({ hasText: 'Pricing review' });
   await pricingRow.getByRole('button', { name: /Pricing/ }).first().click();
   await expect(page).toHaveURL(/\/meetings\?topic=Pricing$/);
-  await expect(list.getByRole('link')).toHaveCount(1);
+  await expect(list.getByRole('heading')).toHaveCount(1);
   expect(api.callsTo('GET', /^\/meetings$/).at(-1)?.query.topic).toBe('Pricing');
 
   // Swap to a person from the filter bar; clearing brings everything back.
@@ -94,10 +96,10 @@ test('filter by a person or topic by clicking pills, then rename a speaker', asy
   await expect(page).toHaveURL(/\/meetings$/);
   await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: 'Maya' }).click();
   await expect(page).toHaveURL(/speaker=Maya/);
-  await expect(list.getByRole('link')).toHaveCount(1);
+  await expect(list.getByRole('heading')).toHaveCount(1);
   await expect(list.getByRole('link', { name: 'Hiring sync with Maya' })).toBeVisible();
   await page.getByRole('button', { name: 'Clear filters' }).click();
-  await expect(list.getByRole('link')).toHaveCount(2);
+  await expect(list.getByRole('heading')).toHaveCount(2);
 
   // On a meeting, speaker chips link back to the filtered list; a speaker can be renamed.
   await list.getByRole('link', { name: /Pricing review/ }).click();
@@ -108,4 +110,32 @@ test('filter by a person or topic by clicking pills, then rename a speaker', asy
   await page.getByRole('button', { name: 'Save names' }).click();
   await expect(chips.getByRole('link', { name: /Dana/ })).toBeVisible();
   expect(api.callsTo('PATCH', /^\/meetings\//).at(-1)?.body).toEqual({ speakers: { 'Speaker 1': 'Dana' } });
+});
+
+test('link a meeting to another one by hand, then take it out of the chain', async ({ page, api }) => {
+  const earlier = demoMeeting({ title: 'Pricing kickoff', startedAt: new Date(Date.now() - 6 * 86_400_000).toISOString() });
+  api.meetings.push(demoMeeting(), earlier);
+  await signUp(page);
+  await page.getByRole('list', { name: 'Meetings' }).getByRole('link', { name: /Pricing review/ }).click();
+  await expect(page.getByTestId('meeting-chain')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Link to…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Link to another meeting' });
+  await expect(dialog.getByRole('searchbox', { name: 'Search meetings' })).toBeFocused();
+  // Escape closes it; nothing is sent.
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole('button', { name: 'Link to…' }).click();
+  await dialog.getByRole('searchbox', { name: 'Search meetings' }).fill('kickoff');
+  await dialog.getByRole('button', { name: /Pricing kickoff/ }).click();
+  await expect(dialog).toBeHidden();
+  expect(api.callsTo('PATCH', /^\/meetings\//).at(-1)?.body).toEqual({ chain: { with: earlier.id } });
+  const bar = page.getByTestId('meeting-chain');
+  await expect(bar).toContainText('Chain · 2 of 2');
+  await expect(bar.getByRole('link', { name: 'Previous in chain: Pricing kickoff' })).toBeVisible();
+
+  await bar.getByRole('button', { name: 'Remove from chain' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Remove from chain' }).click();
+  await expect(page.getByTestId('meeting-chain')).toHaveCount(0);
 });

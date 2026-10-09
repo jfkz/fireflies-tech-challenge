@@ -43,26 +43,39 @@ public struct ChannelTimeline: Equatable, Sendable {
     }
 }
 
-/// Mixes the two channels into the mono track that is saved and uploaded.
-/// Both arrive on the same clock (see `ChannelTimeline`), so sample *n* of one
-/// plays with sample *n* of the other; whatever one channel has that the other
-/// hasn't delivered yet waits here.
+/// Puts the two channels together into the track that is saved and uploaded: mixed into
+/// one mono track, or (`split`, for the server to transcribe each side) the microphone on
+/// the left and system audio on the right. Both arrive on the same clock (see
+/// `ChannelTimeline`), so sample *n* of one plays with sample *n* of the other; whatever
+/// one channel has that the other hasn't delivered yet waits here.
 public struct AudioMixer: Sendable {
+    public enum Layout: Sendable {
+        case mixed
+        /// Microphone left, system audio right.
+        case split
+    }
+
+    public let layout: Layout
     private var pending: [AudioChannel: [Float]] = [:]
     private var active: Set<AudioChannel>
-    /// Gain per channel; the call is usually quieter than the user's own microphone.
+    /// Gain per channel in a mix; the call is usually quieter than the user's own microphone.
     public var gains: [AudioChannel: Float] = [.microphone: 0.8, .system: 1.0]
 
-    public init(channels: Set<AudioChannel> = Set(AudioChannel.allCases)) {
+    public init(channels: Set<AudioChannel> = Set(AudioChannel.allCases), layout: Layout = .mixed) {
         active = channels
+        self.layout = layout
     }
+
+    /// Tracks in the file: 1 mixed, 2 split.
+    public var trackCount: Int { layout == .split ? 2 : 1 }
 
     public mutating func append(_ samples: [Float], to channel: AudioChannel) {
         guard active.contains(channel) else { return }
         pending[channel, default: []].append(contentsOf: samples)
     }
 
-    /// A channel that stopped for good (its capture failed): mix without it.
+    /// A channel that stopped for good (its capture failed): go on without it. A split
+    /// file keeps its track, silent.
     public mutating func remove(_ channel: AudioChannel) {
         active.remove(channel)
         pending[channel] = nil
@@ -71,19 +84,15 @@ public struct AudioMixer: Sendable {
     /// Mixed samples ready to write: as far as every active channel has got, or
     /// everything with `flush` (the end of the meeting).
     public mutating func drain(flush: Bool = false) -> [Float] {
-        guard !active.isEmpty else { return [] }
-        let lengths = active.map { pending[$0]?.count ?? 0 }
-        let count = flush ? (lengths.max() ?? 0) : (lengths.min() ?? 0)
+        let count = readyCount(flush: flush)
         guard count > 0 else { return [] }
         var mixed = [Float](repeating: 0, count: count)
         for channel in active {
-            guard let samples = pending[channel] else { continue }
+            let samples = take(count, from: channel)
             let gain = gains[channel] ?? 1
-            let available = min(count, samples.count)
-            for index in 0..<available {
+            for index in samples.indices {
                 mixed[index] += samples[index] * gain
             }
-            pending[channel] = Array(samples.dropFirst(available))
         }
         // Soft limit instead of hard clipping when both sides talk at once.
         for index in mixed.indices where abs(mixed[index]) > 0.9 {
@@ -91,5 +100,35 @@ public struct AudioMixer: Sendable {
                                             : -0.9 - 0.1 * tanh((-mixed[index] - 0.9) * 10)
         }
         return mixed
+    }
+
+    /// The tracks ready to write, all the same length: `[mix]`, or `[microphone, system]`
+    /// for a split file (silence for a side that isn't there).
+    public mutating func drainTracks(flush: Bool = false) -> [[Float]] {
+        guard layout == .split else {
+            let mixed = drain(flush: flush)
+            return mixed.isEmpty ? [] : [mixed]
+        }
+        let count = readyCount(flush: flush)
+        guard count > 0 else { return [] }
+        return AudioChannel.allCases.map { channel in
+            var samples = active.contains(channel) ? take(count, from: channel) : []
+            if samples.count < count { samples += [Float](repeating: 0, count: count - samples.count) }
+            return samples
+        }
+    }
+
+    private func readyCount(flush: Bool) -> Int {
+        guard !active.isEmpty else { return 0 }
+        let lengths = active.map { pending[$0]?.count ?? 0 }
+        return (flush ? lengths.max() : lengths.min()) ?? 0
+    }
+
+    /// Up to `count` samples of `channel`, removed from what waits.
+    private mutating func take(_ count: Int, from channel: AudioChannel) -> [Float] {
+        guard let samples = pending[channel] else { return [] }
+        let available = min(count, samples.count)
+        pending[channel] = Array(samples.dropFirst(available))
+        return Array(samples.prefix(available))
     }
 }

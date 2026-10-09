@@ -108,6 +108,18 @@ describe('ConnectView', () => {
     expect(authorizeDevice.mock.calls[0][0]).toEqual({ codeChallenge: CHALLENGE, deviceName: 'Mac' });
   });
 
+  it('hands BoringTalks Dev its code on its own scheme', async () => {
+    nav.search = new URLSearchParams({ challenge: CHALLENGE, app: 'dev' });
+    const authorizeDevice = vi.fn(async (_body: unknown) => ({ code: 'D', expiresInSec: 60, redirectUrl: 'boringtalks-dev://callback?code=D' }));
+    const open = vi.fn();
+    renderWithProviders(<ConnectView open={open} />, { auth: authValue({ api: fakeApi({ authorizeDevice }) }) });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect this Mac' }));
+    await screen.findByRole('heading', { name: 'You can go back to the app.' });
+    expect(authorizeDevice.mock.calls[0][0]).toEqual({ codeChallenge: CHALLENGE, deviceName: 'Mac', app: 'dev' });
+    expect(open).toHaveBeenCalledWith('boringtalks-dev://callback?code=D');
+    expect(screen.getByRole('link', { name: 'Open BoringTalks Dev' })).toHaveAttribute('href', 'boringtalks-dev://callback?code=D');
+  });
+
   it('tells the app when the person declines', () => {
     nav.search = new URLSearchParams({ challenge: CHALLENGE });
     const open = vi.fn();
@@ -175,7 +187,12 @@ describe('MeetingsList', () => {
 
     // A pill in a row narrows the list further; the active one toggles off.
     const row = screen.getByRole('list', { name: 'Speakers and topics' });
-    fireEvent.click(within(row).getByRole('button', { name: /Maya/ }));
+    fireEvent.click(within(row).getByRole('button', { name: /You/ }));
+    expect(nav.router.push).toHaveBeenLastCalledWith('/meetings?speaker=You&topic=Pricing', { scroll: false });
+    // A named person in a row opens their page; the filter bar still narrows the list to them.
+    expect(within(row).getByRole('link', { name: /Maya/ })).toHaveAttribute('href', '/people/Maya');
+    expect(within(row).queryByRole('button', { name: /Maya/ })).toBeNull();
+    fireEvent.click(within(within(filters).getByRole('list', { name: 'People' })).getByRole('button', { name: /Maya/ }));
     expect(nav.router.push).toHaveBeenLastCalledWith('/meetings?speaker=Maya&topic=Pricing', { scroll: false });
     const active = within(row).getByRole('button', { name: /Pricing/ });
     expect(active).toHaveAttribute('aria-pressed', 'true');
@@ -212,6 +229,15 @@ describe('MeetingsList', () => {
     expect(await screen.findByRole('button', { name: 'Clear filters' })).toBeInTheDocument();
     await screen.findByRole('link', { name: /Pricing review/ });
     expect(screen.queryByRole('link', { name: /Time with/ })).toBeNull();
+  });
+
+  it("links people in a row to their page, but not labels or the account holder's name", async () => {
+    const listMeetings = vi.fn(async () => page([meeting({ speakers: ['Ann', 'Maya Chen', 'Speaker 2', 'Others'] })]));
+    renderWithProviders(<MeetingsList />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ({ ...ME, name: 'Ann Lee' })), listMeetings: listMeetings as never }) }) });
+    await screen.findByRole('link', { name: /Pricing review/ });
+    const row = screen.getByRole('list', { name: 'Speakers and topics' });
+    expect(within(row).getAllByRole('link').map((l) => [l.textContent, l.getAttribute('href')])).toEqual([['Maya Chen', '/people/Maya%20Chen']]);
+    expect(within(row).getAllByRole('button').map((b) => b.textContent)).toEqual(['Ann', 'Speaker 2', 'Others', '#Pricing']);
   });
 
   it('says what was filtered when nothing matches', async () => {

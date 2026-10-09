@@ -16,11 +16,13 @@ final class AppModel {
     }
 
     let config: AppConfig
+    let flavor: AppFlavor
     let folders: AppFolders
     let preferences: Preferences
     let models: SpeechModels
     let recorder: MeetingRecorder
     let notifier = Notifier()
+    let reporter: ProblemReporter
 
     private(set) var auth: Auth = .unknown
     private(set) var authError: String?
@@ -50,8 +52,11 @@ final class AppModel {
     @ObservationIgnored var onLiveWindowChange: ((Bool) -> Void)?
     private static let log = Log.logger("app")
 
-    init(config: AppConfig, folders: AppFolders = .standard, secrets: any SecretStore = KeychainStore()) {
+    init(config: AppConfig, flavor: AppFlavor = .production, folders: AppFolders? = nil, secrets: (any SecretStore)? = nil) {
+        let folders = folders ?? flavor.folders
+        let secrets = secrets ?? KeychainStore(service: flavor.keychainService)
         self.config = config
+        self.flavor = flavor
         self.folders = folders
         preferences = Preferences()
         let models = SpeechModels(folders: folders)
@@ -64,6 +69,7 @@ final class AppModel {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
         let api = APIClient(baseURL: config.apiURL, userAgent: "BoringTalks-macOS/\(version)") { await tokenSource.token() }
         self.api = api
+        reporter = ProblemReporter(api: api, flavor: flavor, folders: folders)
         authenticator = DeviceAuthenticator(api: api, store: secrets, account: account)
         tokenSource.authenticator = authenticator
         queue = UploadQueue(api: api, store: FileUploadStore(url: folders.uploadQueue), recordings: folders.recordings,
@@ -77,12 +83,16 @@ final class AppModel {
         notifier.onRecordCall = { [weak self] in self?.recordCall() }
         notifier.onDeclineCall = { [weak self] in self?.declineCall() }
         notifier.onIgnoreCallApp = { [weak self] app in self?.ignoreCallApp(app) }
+        notifier.onStopRecording = { [weak self] in self?.stopMeeting() }
+        reporter.collectDiagnostics = { [weak self] in await self?.diagnostics() ?? [:] }
     }
 
     // MARK: - Launch
 
     func launch() {
         try? folders.create()
+        _ = Self.launchedAt
+        reporter.start()
         Task {
             await queue.setObserver { snapshot in
                 Task { @MainActor [weak self] in self?.receive(snapshot) }
@@ -101,7 +111,8 @@ final class AppModel {
             Task { await queue.setOnline(online) }
         }
         // Start downloading the speech model right away; it takes a while the first time.
-        Task { await models.prepare() }
+        // Not needed while the server transcribes (see `setTranscribeOnMac`).
+        if preferences.transcribeOnMac { Task { await models.prepare() } }
         startRefreshing()
         startCallDetection()
     }
@@ -124,7 +135,7 @@ final class AppModel {
         authError = nil
         linkCopied = false
         Task {
-            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName)
+            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName, flavor: flavor)
             auth = .waitingForBrowser
             #if DEBUG
             // QA against a mock API: print the connect URL instead of opening a browser.
@@ -143,7 +154,7 @@ final class AppModel {
     func copySignInLink() {
         authError = nil
         Task {
-            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName)
+            let url = await authenticator.begin(webURL: config.webURL, deviceName: Self.deviceName, flavor: flavor)
             auth = .waitingForBrowser
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(url.absoluteString, forType: .string)
@@ -224,7 +235,8 @@ final class AppModel {
                 recorder.avoidBluetoothMic = preferences.avoidBluetoothMic
                 recorder.silenceLimit = TimeInterval(preferences.silenceStopMinutes * 60)
                 if preferences.silenceStopMinutes > 0 { Task { await notifier.requestPermission() } }
-                try await recorder.start(title: titleDraft, language: preferences.languageCode, uploadAudio: preferences.uploadAudio)
+                try await recorder.start(title: titleDraft, language: preferences.languageCode, uploadAudio: preferences.uploadAudio,
+                                         transcribeLocally: preferences.transcribeOnMac)
                 callSignals.recordingStarted(now: ProcessInfo.processInfo.systemUptime)
                 clearCallOffer()
             } catch {
@@ -235,6 +247,7 @@ final class AppModel {
 
     func stopMeeting() {
         notifier.clearWarning()
+        notifier.clearAutoStartNotice()
         Task {
             let meeting = await recorder.stop()
             callSignals.recordingStopped()
@@ -276,6 +289,19 @@ final class AppModel {
         notifier.clearWarning()
     }
 
+    /// On this Mac, or (false) by the server from the two-channel audio. The model is
+    /// downloaded only when it is going to be used.
+    func setTranscribeOnMac(_ onMac: Bool) {
+        preferences.transcribeOnMac = onMac
+        if onMac { Task { await models.prepare() } }
+    }
+
+    /// Record call apps' calls without asking; notifications tell when one starts.
+    func setAutoRecordCalls(_ on: Bool) {
+        preferences.autoRecordCalls = on
+        if on { Task { await notifier.requestPermission() } }
+    }
+
     func dismissAutoStopNotice() {
         autoStopNotice = nil
     }
@@ -287,7 +313,7 @@ final class AppModel {
     private func startCallDetection() {
         micMonitor.onChange = { [weak self] in self?.evaluateCalls() }
         micMonitor.start()
-        if preferences.offerToRecordCalls { Task { await notifier.requestPermission() } }
+        if preferences.offerToRecordCalls || preferences.autoRecordCalls { Task { await notifier.requestPermission() } }
         callTask = Task { [weak self] in
             var ticks = 0
             while !Task.isCancelled {
@@ -307,6 +333,7 @@ final class AppModel {
         var signedIn = false
         if case .signedIn = auth { signedIn = true }
         callSignals.offersEnabled = preferences.offerToRecordCalls && signedIn
+        callSignals.autoStartEnabled = preferences.autoRecordCalls && signedIn
         callSignals.ignored = Set(preferences.ignoredCallApps)
         let events = callSignals.update(active: active, now: ProcessInfo.processInfo.systemUptime,
                                         isRecording: recorder.phase != .idle)
@@ -316,6 +343,11 @@ final class AppModel {
                 Self.log.notice("\(app, privacy: .public) is in a call; offering to record")
                 callOffer = app
                 notifier.offerToRecord(app: app)
+            case .autoStart(let app):
+                guard recorder.phase == .idle else { break }
+                Self.log.notice("\(app, privacy: .public) is in a call; recording it without asking")
+                startMeeting()
+                notifier.recordingCallAutomatically(app: app)
             case .withdraw:
                 clearCallOffer()
             case .callEnded(let app):
@@ -418,6 +450,73 @@ final class AppModel {
             let deleted = RecordingJanitor.prune(folder: folder, keepDays: keep, protected: protected)
             if !deleted.isEmpty { Self.log.notice("deleted \(deleted.count) old recordings") }
         }
+    }
+
+    // MARK: - Problem reports
+
+    /// Short facts for a problem report. Nothing from meetings: no titles, no transcripts.
+    func diagnostics() async -> [String: String] {
+        var values: [String: String] = [
+            "app.flavor": flavor.rawValue,
+            "app.api": config.apiURL.absoluteString,
+            "app.uptime": ProblemReport.describe(seconds: Date().timeIntervalSince(Self.launchedAt)),
+            "app.memoryMB": Self.memoryFootprintMB.map(String.init) ?? "?",
+            "account.signedIn": { if case .signedIn = auth { "yes" } else { "no" } }(),
+            "recorder.phase": "\(recorder.phase)",
+            "recorder.microphone": recorder.microphoneName ?? "-",
+            "recorder.waitingForModel": recorder.waitingForModel ? "yes" : "no",
+            "models": models.summary,
+            "uploads.waiting": String(uploads.waiting),
+            "uploads.failed": String(uploads.failed),
+            "uploads.online": uploads.isOnline ? "yes" : "no",
+            "calls.offer": callOffer ?? "-",
+            "prefs.avoidBluetoothMic": preferences.avoidBluetoothMic ? "yes" : "no",
+            "prefs.silenceStopMinutes": String(preferences.silenceStopMinutes),
+            "prefs.transcribeOnMac": preferences.transcribeOnMac ? "yes" : "no",
+            "prefs.offerToRecordCalls": preferences.offerToRecordCalls ? "yes" : "no",
+            "prefs.autoRecordCalls": preferences.autoRecordCalls ? "yes" : "no",
+            "prefs.stopWhenCallEnds": preferences.stopWhenCallEnds ? "yes" : "no",
+            "prefs.uploadAudio": preferences.uploadAudio ? "yes" : "no",
+            "prefs.language": preferences.language.isEmpty ? "auto" : preferences.language,
+        ]
+        for (channel, warning) in recorder.warnings {
+            values["recorder.warning.\(channel.rawValue)"] = warning
+        }
+        if let error = uploads.items.compactMap(\.lastError).last {
+            values["uploads.lastError"] = error
+        }
+        // Core Audio may be the thing that is stuck: ask it off the main thread, briefly.
+        let audio = Task.detached { () -> [String: String]? in
+            try? await Self.diagnosticsQueue.run {
+                [
+                    "audio.defaultInput": AudioInputs.defaultInput()?.name ?? "-",
+                    "audio.defaultOutput": AudioInputs.defaultOutput()?.name ?? "-",
+                    "audio.inputs": AudioInputs.all().map(\.name).joined(separator: ", "),
+                ]
+            }
+        }
+        if let audio = await Deadline.value(of: audio, within: .seconds(2)) ?? nil {
+            values.merge(audio) { _, new in new }
+        } else {
+            values["audio"] = "Core Audio didn't answer within 2 s"
+        }
+        return values
+    }
+
+    func reportProblem(about hang: Hang? = nil) {
+        reporter.begin(about: hang)
+    }
+
+    private static let launchedAt = Date()
+    nonisolated private static let diagnosticsQueue = BlockingQueue(label: "games.cutthecheese.boringtalks.diagnostics")
+
+    private static var memoryFootprintMB: Int? {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let status = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+        }
+        return status == KERN_SUCCESS ? Int(info.phys_footprint / 1_048_576) : nil
     }
 
     func toggleLiveWindow() {

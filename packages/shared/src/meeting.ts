@@ -119,7 +119,10 @@ export type MeetingRef = z.infer<typeof MeetingRef>;
 export const MeetingChain = z.object({
   id: z.string().uuid(),
   meetings: z.array(MeetingRef).min(2),
-  /** Why this meeting was linked ("Follows up on the admin page plan"); null when linked by hand. */
+  /**
+   * What connects them ("Follows up on the admin page plan"): why this meeting was linked, else why
+   * the nearest other one was, so every meeting of the chain shows it; null when all were linked by hand.
+   */
   reason: z.string().nullable(),
 });
 export type MeetingChain = z.infer<typeof MeetingChain>;
@@ -155,9 +158,19 @@ export const AUDIO_CONTENT_TYPES = ['audio/mp4', 'audio/m4a', 'audio/x-m4a', 'au
 /** 200 MB: about 14 hours of the Mac app's 32 kbps AAC, or a long uploaded file. */
 export const MAX_AUDIO_BYTES = 200 * 1024 * 1024;
 
+/**
+ * How the recording's channels are laid out. `mixed`: everyone in one mix (mono or plain stereo).
+ * `mic-system`: the Mac's microphone (the user) on the left channel and what the Mac played (everyone
+ * else) on the right, so the server can transcribe each side on its own and keep "You" apart.
+ */
+export const AUDIO_CHANNELS = ['mixed', 'mic-system'] as const;
+export const AudioChannels = z.enum(AUDIO_CHANNELS);
+export type AudioChannels = z.infer<typeof AudioChannels>;
+
 export const UploadUrlRequest = z.object({
   contentType: z.enum(AUDIO_CONTENT_TYPES),
   sizeBytes: z.number().int().positive().max(MAX_AUDIO_BYTES),
+  channels: AudioChannels.optional(),
 });
 export type UploadUrlRequest = z.infer<typeof UploadUrlRequest>;
 

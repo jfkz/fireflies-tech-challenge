@@ -22,3 +22,6 @@ export const transcriptKey = (userId: string, meetingId: string): string =>
 /** Each summary run is kept, so a reprocess never overwrites the previous result. */
 export const summaryKey = (userId: string, meetingId: string, at: Date): string =>
   `${meetingPrefix(userId, meetingId)}summary-${at.toISOString().replace(/[:.]/g, '-')}.json`;
+
+/** The worker's mono mix of a split-channel recording, which the dashboard plays. */
+export const playbackKey = (userId: string, meetingId: string): string => `${meetingPrefix(userId, meetingId)}audio-playback.m4a`;

@@ -326,7 +326,11 @@ describe('chains and people', () => {
     expect(await chainOf(plan.id)).toBeTruthy();
     expect(await chainOf(delivery.id)).toBe(await chainOf(plan.id));
     expect(await chainOf(unlinked.id)).toBeNull();
-    expect((await meetings.chainMeetings(user.id, (await chainOf(plan.id))!)).map((m) => m.title)).toEqual(['Admin page plan', 'Admin page delivery']);
+    // Each with its own reason: the meeting that was linked has one, the one it was linked to none.
+    expect((await meetings.chainMeetings(user.id, (await chainOf(plan.id))!)).map((m) => [m.title, m.reason])).toEqual([
+      ['Admin page plan', 'Same people and topic as “Admin page delivery”'],
+      ['Admin page delivery', null],
+    ]);
     // Run again: nothing new to link.
     expect((await linkExistingMeetings(db, new FakeChainLinker(), { userId: user.id })).linked).toEqual([]);
 

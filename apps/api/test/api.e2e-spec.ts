@@ -1,6 +1,12 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { MeetingDetail, MeetingPage } from '@boringtalks/shared';
+import { DB, type Database } from '../src/db/db.module';
 import { DEMO_MEETING } from '../src/meetings/demo-meeting';
+import { ReportsRepository } from '../src/reports/reports.repository';
 import { StorageService } from '../src/storage/storage.service';
 import { bearer, emulatorToken, startHarness, waitFor, type Harness } from './harness';
 
@@ -203,6 +209,49 @@ describe('browser flow: audio only → transcribe → summarize', () => {
   });
 });
 
+/** What the Mac records with "Transcribe online": the microphone on the left, system audio on the right. */
+function micSystemM4a(): Buffer {
+  const dir = mkdtempSync(join(tmpdir(), 'bt-e2e-'));
+  try {
+    const file = join(dir, 'meeting.m4a');
+    execFileSync('ffmpeg', [
+      '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'sine=frequency=300:duration=2',
+      '-f', 'lavfi', '-i', 'sine=frequency=500:duration=2',
+      '-filter_complex', '[0:a][1:a]join=inputs=2:channel_layout=stereo',
+      '-ar', '16000', '-c:a', 'aac', '-b:a', '48k', file,
+    ]);
+    return readFileSync(file);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe('Mac flow, transcribed online: two channels → transcribe each side → summarize', () => {
+  it('transcribes both sides, plays a mono mix and reprocesses from the audio', async () => {
+    const token = emulatorToken('mac-online-user');
+    const created = await createMeeting(token);
+    const audio = micSystemM4a();
+    const res = await h.http
+      .post(`/meetings/${created.id}/upload-url`)
+      .set(bearer(token))
+      .send({ contentType: 'audio/mp4', sizeBytes: audio.length, channels: 'mic-system' })
+      .expect(200);
+    expect((await fetch(res.body.url, { method: 'PUT', headers: res.body.headers, body: audio })).status).toBe(200);
+    const done = await h.http.post(`/meetings/${created.id}/complete`).set(bearer(token)).send({ durationSec: 2 }).expect(200);
+    expect(done.body.status).toBe('transcribing');
+
+    const ready = await waitForStatus(token, created.id, 'ready');
+    // The fake transcriber hears the same words on both sides, so the microphone's copy is dropped as echo.
+    expect(ready.segments.map((s) => s.speaker)).toEqual(['Speaker 1', 'Speaker 1']);
+    expect(ready.audioUrl).toContain('audio-playback.m4a');
+
+    const again = await h.http.post(`/meetings/${created.id}/reprocess`).set(bearer(token)).expect(200);
+    expect(again.body.status).toBe('transcribing');
+    await waitForStatus(token, created.id, 'ready');
+  });
+});
+
 describe('Mac app contract', () => {
   it('creates a meeting once per Idempotency-Key', async () => {
     const token = emulatorToken('idem-user');
@@ -275,8 +324,30 @@ describe('device link', () => {
     expect(devices.body).toEqual([expect.objectContaining({ id: tok.body.deviceId, name: "Dev's MacBook", lastSeenAt: expect.any(String) })]);
     await waitFor(async () => h.mail.sent.find((m) => m.to === 'device@example.com' && m.subject === "New Mac connected: Dev's MacBook"));
 
+    // "Report a Problem…" from the Mac: kept with the device, announced to the operator.
+    const report = {
+      kind: 'hang',
+      message: 'The menu froze after I unplugged my headphones',
+      app: { version: '0.4.0', build: '1', flavor: 'release' },
+      system: { os: 'macOS 26.2 (25C56)', model: 'Mac15,3' },
+      diagnostics: { 'recorder.phase': 'recording' },
+      log: 'restarting microphone\n'.repeat(1000),
+    };
+    await h.http.post('/reports').send(report).expect(401);
+    const bad = await h.http.post('/reports').set(bearer(deviceToken)).send({ ...report, app: { version: '0.4.0', flavor: 'beta' } }).expect(400);
+    expect(bad.body.issues).toEqual([expect.objectContaining({ path: 'app.flavor' })]);
+    const sent = await h.http.post('/reports').set(bearer(deviceToken)).send(report).expect(201);
+    expect(sent.body).toEqual({ id: expect.any(String), receivedAt: expect.any(String) });
+    const stored = await new ReportsRepository(h.app.get<Database>(DB)).findById(sent.body.id);
+    expect(stored).toMatchObject({ email: 'device@example.com', report: { deviceId: tok.body.deviceId, kind: 'hang', log: report.log, diagnostics: report.diagnostics } });
+    await waitFor(async () => h.mail.sent.find((m) => m.to === 'ops@example.com' && m.subject === 'Hang: BoringTalks 0.4.0 from device@example.com'));
+    // The dashboard's session can send one too, without a device.
+    const web = await h.http.post('/reports').set(bearer(firebase)).send({ app: { version: '0.4.0', flavor: 'dev' }, system: { os: 'web' } }).expect(201);
+    expect((await new ReportsRepository(h.app.get<Database>(DB)).findById(web.body.id))?.report).toMatchObject({ deviceId: null, kind: 'user', message: '' });
+
     await h.http.delete(`/devices/${tok.body.deviceId}`).set(bearer(firebase)).expect(204);
     await h.http.get('/meetings').set(bearer(deviceToken)).expect(401);
+    await h.http.post('/reports').set(bearer(deviceToken)).send(report).expect(401);
     await h.http.delete(`/devices/${tok.body.deviceId}`).set(bearer(firebase)).expect(404);
   });
 });
@@ -364,6 +435,8 @@ describe('chains and people across meetings', () => {
     expect(second.chain?.reason).toMatch(/Same people and topic/);
     const firstNow = (await h.http.get(`/meetings/${first.id}`).set(bearer(token)).expect(200)).body as MeetingDetail;
     expect(firstNow.chain?.id).toBe(second.chain?.id);
+    // The meeting it was linked to says why too.
+    expect(firstNow.chain?.reason).toBe(second.chain?.reason);
 
     // Out of the chain: a chain of one ends, and a reprocess doesn't link it again.
     const unlinked = await h.http.patch(`/meetings/${second.id}`).set(bearer(token)).send({ chain: null }).expect(200);

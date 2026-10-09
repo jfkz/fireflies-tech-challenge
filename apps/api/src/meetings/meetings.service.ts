@@ -24,7 +24,7 @@ import { audioKey, meetingPrefix } from '../storage/keys';
 import { StorageService, UPLOAD_URL_TTL_SEC } from '../storage/storage.service';
 import { displayNames, renameSpeakers } from '../processing/speaker-names';
 import { defaultTitle, toDetail, toListItem } from './meeting.mapper';
-import { MeetingsRepository } from './meetings.repository';
+import { MeetingsRepository, type ChainMemberRow } from './meetings.repository';
 import { TranscriptService } from './transcript.service';
 
 /** An IANA zone both Node and Postgres understand ("Europe/Berlin", "UTC"). */
@@ -35,6 +35,19 @@ export function isTimeZone(tz: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Why a chain's meetings belong together, shown on every one of them: the meeting's own reason, else
+ * that of the nearest other meeting that has one (the meeting a chain started from has none).
+ */
+export function chainReason(meeting: Pick<MeetingRow, 'id' | 'startedAt' | 'chainReason'>, members: readonly ChainMemberRow[]): string | null {
+  if (meeting.chainReason) return meeting.chainReason;
+  const at = meeting.startedAt.getTime();
+  const away = (m: ChainMemberRow) => Math.abs(Date.parse(m.startedAt) - at);
+  // Members come oldest first and the sort is stable, so a tie goes to the earlier meeting.
+  const nearest = members.filter((m) => m.id !== meeting.id && m.reason).sort((a, b) => away(a) - away(b));
+  return nearest[0]?.reason ?? null;
 }
 
 /** How many speakers and topics the filter bar offers. */
@@ -165,7 +178,13 @@ export class MeetingsService {
     this.assertEditable(meeting);
     const key = audioKey(meeting.userId, meeting.id, body.contentType);
     const url = await this.storage.presignPut(key, body.contentType);
-    await this.repo.update(meeting.id, { audioKey: key, audioContentType: body.contentType, hasAudio: false });
+    await this.repo.update(meeting.id, {
+      audioKey: key,
+      audioContentType: body.contentType,
+      hasAudio: false,
+      audioChannels: body.channels === 'mic-system' ? 'mic-system' : null,
+      playbackKey: null,
+    });
     return { url, key, headers: { 'Content-Type': body.contentType }, expiresInSec: UPLOAD_URL_TTL_SEC };
   }
 
@@ -185,13 +204,15 @@ export class MeetingsService {
   }
 
   /**
-   * Runs the pipeline again. A meeting the server transcribed (browser recording, upload) starts
-   * from its audio, so transcription improvements (telling voices apart) reach it; a Mac recording
-   * keeps its transcript and is summarized again.
+   * Runs the pipeline again. A meeting the server transcribed (browser recording, upload, a Mac
+   * recording with both sides on their own channels) starts from its audio, so transcription
+   * improvements (telling voices apart) reach it; a Mac recording transcribed on the Mac keeps its
+   * transcript and is summarized again.
    */
   async reprocess(user: UserRow, id: string): Promise<MeetingDetail> {
     const meeting = await this.owned(user, id);
-    return this.detail(await this.startProcessing(meeting, undefined, meeting.source === 'browser' || meeting.source === 'upload'));
+    const fromAudio = meeting.source === 'browser' || meeting.source === 'upload' || meeting.audioChannels === 'mic-system';
+    return this.detail(await this.startProcessing(meeting, undefined, fromAudio));
   }
 
   private async startProcessing(meeting: MeetingRow, durationSec?: number, fromAudio = false): Promise<MeetingRow> {
@@ -212,6 +233,18 @@ export class MeetingsService {
     return started;
   }
 
+  /**
+   * The audio the dashboard plays. A two-channel Mac recording (the user on one side, the call on
+   * the other) is only ever played as the worker's mono mix of both, never as the raw file.
+   */
+  private playbackUrl(meeting: MeetingRow): Promise<string | null> {
+    if (!meeting.hasAudio || !meeting.audioKey) return Promise.resolve(null);
+    if (meeting.audioChannels === 'mic-system') {
+      return meeting.playbackKey ? this.storage.presignGet(meeting.playbackKey) : Promise.resolve(null);
+    }
+    return this.storage.presignGet(meeting.audioKey);
+  }
+
   private assertEditable(meeting: MeetingRow): void {
     if (!EDITABLE.includes(meeting.status)) {
       throw new ConflictException(`The meeting is ${meeting.status}; wait until processing finishes`);
@@ -228,10 +261,13 @@ export class MeetingsService {
     const [summary, segments, audioUrl, chained] = await Promise.all([
       this.repo.getSummary(meeting.id),
       this.repo.getSegments(meeting.id),
-      meeting.hasAudio && meeting.audioKey ? this.storage.presignGet(meeting.audioKey) : Promise.resolve(null),
+      this.playbackUrl(meeting),
       meeting.chainId ? this.repo.chainMeetings(meeting.userId, meeting.chainId) : Promise.resolve([]),
     ]);
-    const chain = meeting.chainId && chained.length >= 2 ? { id: meeting.chainId, meetings: chained, reason: meeting.chainReason } : null;
+    const chain =
+      meeting.chainId && chained.length >= 2
+        ? { id: meeting.chainId, meetings: chained.map(({ id, title, startedAt }) => ({ id, title, startedAt })), reason: chainReason(meeting, chained) }
+        : null;
     return toDetail(meeting, summary, segments, audioUrl, chain);
   }
 }

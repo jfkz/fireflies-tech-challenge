@@ -4,7 +4,7 @@ import type { SummaryWithItems } from './meetings.repository';
 import { meeting, seg, user } from '../testing/fixtures';
 import { defaultTitle, toDetail } from './meeting.mapper';
 import { MeetingsController } from './meetings.controller';
-import { canStart, MeetingsService } from './meetings.service';
+import { canStart, chainReason, MeetingsService } from './meetings.service';
 import { TranscriptService } from './transcript.service';
 
 const summaryRow = (o: Partial<SummaryWithItems> = {}): SummaryWithItems => ({
@@ -68,6 +68,23 @@ describe('mapper', () => {
   });
 });
 
+describe('chainReason', () => {
+  const at = (day: string) => `2026-10-${day}T10:00:00.000Z`;
+  const member = (n: number, day: string, reason: string | null) => ({ id: `m${n}`, title: `M${n}`, startedAt: at(day), reason });
+  const self = (reason: string | null) => ({ id: 'm3', startedAt: new Date(at('05')), chainReason: reason });
+
+  it("keeps the meeting's own reason", () => {
+    expect(chainReason(self('Own'), [member(1, '01', 'Other'), member(3, '05', 'Own')])).toBe('Own');
+  });
+
+  it('borrows the nearest reason, the earlier one on a tie, and has none when nobody says', () => {
+    const members = [member(1, '01', 'Far'), member(2, '03', 'Before'), member(3, '05', null), member(4, '07', 'After'), member(5, '08', null)];
+    expect(chainReason(self(null), members)).toBe('Before');
+    expect(chainReason(self(null), members.filter((m) => m.id !== 'm2'))).toBe('After');
+    expect(chainReason(self(null), [member(3, '05', null), member(5, '08', null)])).toBeNull();
+  });
+});
+
 describe('canStart', () => {
   it('follows the shared status machine, also through "uploaded"', () => {
     expect(canStart('recording', 'summarizing')).toBe(true);
@@ -128,6 +145,17 @@ describe('MeetingsService', () => {
     repo.findOwned.mockResolvedValue(meeting({ hasAudio: true, audioKey: 'k' }));
     expect((await service.get(user(), meeting().id)).audioUrl).toBe('https://r2/get');
     repo.findOwned.mockResolvedValue(meeting({ audioKey: 'k' }));
+    expect((await service.get(user(), meeting().id)).audioUrl).toBeNull();
+    expect(storage.presignGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('plays only the mono mix of a split-channel recording, never the two-channel file', async () => {
+    const { repo, storage, service } = setup();
+    repo.findOwned.mockResolvedValue(meeting({ hasAudio: true, audioKey: 'k', audioChannels: 'mic-system', playbackKey: 'mix' }));
+    await service.get(user(), meeting().id);
+    expect(storage.presignGet).toHaveBeenCalledWith('mix');
+    // Before the worker has mixed it: no player yet.
+    repo.findOwned.mockResolvedValue(meeting({ hasAudio: true, audioKey: 'k', audioChannels: 'mic-system' }));
     expect((await service.get(user(), meeting().id)).audioUrl).toBeNull();
     expect(storage.presignGet).toHaveBeenCalledTimes(1);
   });
@@ -237,6 +265,20 @@ describe('MeetingsService', () => {
       expect(d.chain).toEqual({ id: chainId, meetings: refs, reason: 'Same admin page work' });
     });
 
+    it('shows why the chain is linked on every meeting of it, from the nearest one that says', async () => {
+      const { repo, service } = setup();
+      // This meeting started the chain, so it has no reason of its own.
+      repo.findOwned.mockResolvedValue(meeting({ chainId, chainReason: null }));
+      repo.chainMeetings.mockResolvedValue([
+        { ...refs[0], reason: 'Same admin page work' },
+        { ...refs[1], reason: null },
+      ]);
+      const d = await service.get(user(), meeting().id);
+      expect(d.chain).toEqual({ id: chainId, meetings: refs, reason: 'Same admin page work' });
+      // Only the contract's fields go out.
+      expect(d.chain?.meetings[0]).not.toHaveProperty('reason');
+    });
+
     it('shows no chain when there is none or the others are gone', async () => {
       const { repo, service } = setup();
       repo.findOwned.mockResolvedValue(meeting());
@@ -288,7 +330,9 @@ describe('MeetingsService', () => {
       headers: { 'Content-Type': 'audio/webm' },
       expiresInSec: 900,
     });
-    expect(repo.update).toHaveBeenCalledWith(meeting().id, { audioKey: res.key, audioContentType: 'audio/webm', hasAudio: false });
+    expect(repo.update).toHaveBeenCalledWith(meeting().id, { audioKey: res.key, audioContentType: 'audio/webm', hasAudio: false, audioChannels: null, playbackKey: null });
+    await service.uploadUrl(user(), meeting().id, { contentType: 'audio/mp4', sizeBytes: 1000, channels: 'mic-system' });
+    expect(repo.update).toHaveBeenLastCalledWith(meeting().id, expect.objectContaining({ audioChannels: 'mic-system', playbackKey: null }));
     repo.findOwned.mockResolvedValue(meeting({ status: 'summarizing' }));
     await expect(service.uploadUrl(user(), meeting().id, { contentType: 'audio/webm', sizeBytes: 1 })).rejects.toBeInstanceOf(ConflictException);
   });
@@ -369,6 +413,16 @@ describe('MeetingsService', () => {
     repo.startRun.mockResolvedValue(meeting({ status: 'transcribing', attempts: 2 }));
     await service.reprocess(user(), meeting().id);
     expect(repo.startRun).toHaveBeenCalledWith(meeting().id, 'ready', 'transcribing', expect.anything());
+    expect(jobs.transcribe).toHaveBeenCalledWith(meeting().id, 2);
+  });
+
+  it('reprocesses a Mac recording the server transcribed from its two channels', async () => {
+    const { repo, storage, jobs, service } = setup();
+    repo.findOwned.mockResolvedValue(meeting({ status: 'ready', attempts: 1, source: 'macos', audioKey: 'a.m4a', audioChannels: 'mic-system' }));
+    repo.hasSegments.mockResolvedValue(true);
+    storage.head.mockResolvedValue({ size: 10 });
+    repo.startRun.mockResolvedValue(meeting({ status: 'transcribing', attempts: 2 }));
+    await service.reprocess(user(), meeting().id);
     expect(jobs.transcribe).toHaveBeenCalledWith(meeting().id, 2);
   });
 

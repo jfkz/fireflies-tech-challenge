@@ -9,6 +9,9 @@ struct MenuContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
+            if let hang = model.reporter.pendingHang {
+                HangBanner(hang: hang, appName: model.flavor.displayName, report: { model.reportProblem(about: hang) }, dismiss: model.reporter.dismissHang)
+            }
             Divider()
             switch model.auth {
             case .signedIn:
@@ -34,7 +37,7 @@ struct MenuContent: View {
                 .font(.title2)
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 1) {
-                Text("BoringTalks").font(.headline)
+                Text(model.flavor.displayName).font(.headline)
                 if case .signedIn(let email) = model.auth {
                     Text(email ?? "Signed in").font(.caption).foregroundStyle(.secondary)
                 } else {
@@ -58,6 +61,7 @@ struct MenuContent: View {
                 NSApp.activate()
                 openSettings()
             }
+            Button("Report a Problem…") { model.reportProblem() }
             Spacer()
             Button("Quit") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
@@ -180,7 +184,12 @@ private struct RecordingPanel: View {
                         .buttonStyle(.borderless).font(.caption)
                 }
             }
-            if recorder.isRecording, recorder.waitingForModel {
+            if recorder.isRecording, !recorder.transcribesLocally {
+                Label("Recording you and the others separately. The transcript is made online after the meeting.",
+                      systemImage: "icloud.and.arrow.up")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if recorder.isRecording, recorder.waitingForModel {
                 Label("Recording. The speech model is still loading — the transcript catches up once it's ready.",
                       systemImage: "hourglass")
                     .font(.caption).foregroundStyle(.secondary)
@@ -189,12 +198,15 @@ private struct RecordingPanel: View {
                 ModelProgress(models: model.models)
             }
 
-            Button {
-                model.toggleLiveWindow()
-            } label: {
-                Label(model.liveWindowVisible ? "Hide live transcript" : "Show live transcript", systemImage: "text.bubble")
+            // Nothing is transcribed live when the server does it after the meeting.
+            if recorder.isRecording ? recorder.transcribesLocally : model.preferences.transcribeOnMac {
+                Button {
+                    model.toggleLiveWindow()
+                } label: {
+                    Label(model.liveWindowVisible ? "Hide live transcript" : "Show live transcript", systemImage: "text.bubble")
+                }
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
         }
     }
 
@@ -203,7 +215,7 @@ private struct RecordingPanel: View {
         case .idle: "Start meeting"
         case .starting: "Starting…"
         case .recording: "Stop"
-        case .finishing: "Finishing transcript…"
+        case .finishing: recorder.transcribesLocally ? "Finishing transcript…" : "Finishing…"
         }
     }
 
@@ -268,6 +280,39 @@ private struct StopCountdown: View {
 
     private var icon: String {
         if case .callEnded = pending.reason { "phone.down" } else { "moon.zzz" }
+    }
+}
+
+/// The app was stuck (the watchdog saw the main thread stop answering): offer to report it.
+private struct HangBanner: View {
+    let hang: Hang
+    let appName: String
+    let report: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(text, systemImage: "exclamationmark.triangle.fill")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Report…", action: report)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                Button("Dismiss", action: dismiss)
+                    .controlSize(.small)
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var text: String {
+        let when = hang.startedAt.formatted(date: Calendar.current.isDateInToday(hang.startedAt) ? .omitted : .abbreviated, time: .shortened)
+        return hang.recovered
+            ? "\(appName) stopped responding for \(ProblemReport.describe(seconds: hang.seconds)) at \(when)."
+            : "\(appName) stopped responding at \(when) and was closed while stuck."
     }
 }
 

@@ -134,6 +134,38 @@ final class CallSignalsTests: XCTestCase {
         XCTAssertEqual(signals.update(active: [zoom, chrome], now: 30, isRecording: true), [])
         XCTAssertEqual(signals.update(active: [zoom], now: 40, isRecording: true), [])
     }
+
+    func testAutoStartRecordsCallAppsButOnlyOffersBrowsers() {
+        var signals = CallSignals(appDelay: 5, browserDelay: 15)
+        signals.autoStartEnabled = true
+        XCTAssertEqual(signals.update(active: [zoom], now: 100, isRecording: false), [])
+        XCTAssertEqual(signals.update(active: [zoom], now: 105, isRecording: false), [.autoStart(app: "Zoom")])
+        XCTAssertNil(signals.pendingOffer)
+        signals.recordingStarted(now: 105)
+        XCTAssertEqual(signals.callApp, "Zoom")
+        // Stopped by hand while the call goes on: not started again for this call.
+        signals.recordingStopped()
+        XCTAssertEqual(signals.update(active: [zoom], now: 120, isRecording: false), [])
+
+        var browser = CallSignals(appDelay: 5, browserDelay: 15)
+        browser.autoStartEnabled = true
+        _ = browser.update(active: [chrome], now: 0, isRecording: false)
+        XCTAssertEqual(browser.update(active: [chrome], now: 15, isRecording: false), [.offer(app: "Chrome")])
+
+        var quiet = CallSignals()
+        quiet.autoStartEnabled = true
+        quiet.offersEnabled = false
+        _ = quiet.update(active: [chrome], now: 0, isRecording: false)
+        XCTAssertEqual(quiet.update(active: [chrome], now: 20, isRecording: false), [], "no offers: a browser is left alone")
+    }
+
+    func testAutoStartLeavesIgnoredAppsAlone() {
+        var signals = CallSignals(appDelay: 5)
+        signals.autoStartEnabled = true
+        signals.ignored = ["Zoom"]
+        _ = signals.update(active: [zoom], now: 0, isRecording: false)
+        XCTAssertEqual(signals.update(active: [zoom], now: 10, isRecording: false), [])
+    }
 }
 
 final class CallEndWatchTests: XCTestCase {

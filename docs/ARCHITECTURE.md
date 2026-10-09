@@ -58,7 +58,7 @@ So the Mac does the transcription, for free, and the backend does the describing
 | Transcription | Mac: Parakeet TDT 0.6B v3 on the Neural Engine | 1 h of audio in ~2 min on an M1, 25 languages, $0 per minute |
 | Who said what | Mac: mic = “You”; system voices told apart with WeSpeaker embeddings | Speaker labels come for free with two separate channels |
 | Title, summary, action items | Server worker: Claude Haiku 4.5 via AI Gateway | ~$0.02 per meeting-hour, one structured call |
-| Fallback transcription | Server worker: MAI-Transcribe 2 (with speakers) via AI Gateway | Only for browser recordings / uploads, $0.10 per hour |
+| Fallback transcription | Server worker: MAI-Transcribe 2 (with speakers) via AI Gateway | Browser recordings / uploads, $0.10 per hour; Macs set to transcribe online, each channel on its own |
 
 The Mac uploads a transcript of a few kilobytes plus, optionally, 32 kbps AAC audio (~14 MB/h)
 straight to R2 for playback. Numbers in [COSTS.md](COSTS.md).
@@ -88,10 +88,20 @@ sequenceDiagram
 **Browser recording / upload:** same, but without a transcript `complete` sends the meeting to the
 `transcribe` queue first (MAI-Transcribe 2: a phrase per speaker turn), then to `summarize`.
 
+**Mac recording, transcribed online** (a Settings choice): the Mac records the microphone and system
+audio on separate channels of one stereo file and asks for the upload URL with
+`channels: "mic-system"`; there is no transcript step. The worker splits the channels with ffmpeg,
+transcribes both in parallel (the microphone becomes "You", the system side keeps its speakers),
+drops the microphone's echo with the Mac's rule, and stores a mono mix for playback.
+
 **Mac sign-in (PKCE):** the app opens `boringtalks.lol/connect?challenge=…&device=…`; the signed-in
 dashboard calls `POST /devices/authorize` and redirects to `boringtalks://callback?code=…`; the app
 exchanges code + verifier at `POST /devices/token` for a long-lived, revocable `btd_…` token kept in
 the Keychain. The Mac app never sees a Firebase credential and needs no Firebase SDK.
+
+**Problem reports:** the Mac app's "Report a Problem…" (or a hang it noticed) posts its version, macOS,
+diagnostics and its own recent log to `POST /reports`; the row lands in `problem_reports`, an optional
+email goes to `REPORTS_NOTIFY_EMAIL` through the `email` queue, and `node dist/reports.js` reads them.
 
 ## Built for a crowded site
 
@@ -134,7 +144,7 @@ docs/           this documentation
 |---|---|---|
 | Web | https://boringtalks.lol | https://dev.boringtalks.lol |
 | API | https://api.boringtalks.lol | https://api.dev.boringtalks.lol |
-| DMG | https://download.boringtalks.lol (`downloads/`) | https://download.boringtalks.lol/dev/ (`downloads/dev/`) |
+| DMG | BoringTalks: https://download.boringtalks.lol (`downloads/`) | BoringTalks Dev: https://download.boringtalks.lol/dev/ (`downloads/dev/`) |
 | Storage prefix in R2 bucket `boringtalks` | `prod/` | `dev/` |
 | Deployed by | push to `main` | a ready (non-draft) pull request |
 

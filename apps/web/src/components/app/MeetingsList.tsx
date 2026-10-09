@@ -222,7 +222,12 @@ function PillRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
+/**
+ * One meeting in a list. A named person's chip opens their page; a label like "Speaker 2" (or you)
+ * and a topic narrow the list with `onToggle` (the filter bar above offers named people too).
+ */
 export function MeetingRow({ meeting: m, filters = {}, onToggle, q }: { meeting: MeetingListItem; filters?: MeetingFilters; onToggle?: Toggle; q?: string }) {
+  const me = useMe();
   return (
     <li className="group relative flex flex-col gap-2 px-5 py-4 transition-colors focus-within:bg-sun-soft hover:bg-sun-soft/60 sm:flex-row sm:items-start sm:gap-6 sm:px-6">
       <div className="min-w-0 flex-1">
@@ -247,9 +252,15 @@ export function MeetingRow({ meeting: m, filters = {}, onToggle, q }: { meeting:
           <ul className="relative z-10 mt-2.5 flex flex-wrap items-center gap-1.5" aria-label="Speakers and topics">
             {m.speakers.slice(0, 6).map((s) => (
               <li key={`s:${s}`}>
-                <Pill onClick={onToggle && (() => onToggle('speaker', s))} pressed={filters.speaker === s} title={`Meetings with ${s}`}>
-                  <SpeakerChip name={s} active={filters.speaker === s} />
-                </Pill>
+                {me.isSuccess && isPersonName(s, me.data.name) ? (
+                  <Link href={personHref(s)} title={`${s}: time together, topics, tasks`} className="inline-block rounded-full transition-transform hover:-translate-y-px">
+                    <SpeakerChip name={s} active={filters.speaker === s} />
+                  </Link>
+                ) : (
+                  <Pill onClick={onToggle && (() => onToggle('speaker', s))} pressed={filters.speaker === s} title={`Meetings with ${s}`}>
+                    <SpeakerChip name={s} active={filters.speaker === s} />
+                  </Pill>
+                )}
               </li>
             ))}
             {m.speakers.length > 6 && <li className="self-center text-xs font-extrabold text-ink-soft">+{m.speakers.length - 6} more</li>}

@@ -108,10 +108,11 @@ notes, title or people. Press **/** anywhere on the list to search. cursor pagin
 an empty state and a “nothing matches” state. Statuses refresh every 5 s while
 anything is still processing.
 
-*Filters.* Every row shows its speakers and topic tags as pills; clicking one filters
-the list to that person or topic, clicking it again removes the filter. Above the
+*Filters.* Every row shows its speakers and topic tags as pills. A named person's chip opens their
+person page (`/people/<name>`); a topic, a label like “Speaker 2” or “Others”, and you filter the
+list to it, and clicking it again removes the filter. Above the
 list, a filter bar offers the most frequent people and topics (`GET /meetings/facets`),
-highlights the active ones, and has **Clear filters**. Filters and the search text
+highlights the active ones, and has **Clear filters**; it is where you filter by a named person. Filters and the search text
 live in the URL (`/meetings?speaker=Maya&topic=Pricing&q=…`), so a filtered view can
 be bookmarked or shared; typing replaces the URL, clicking a pill adds a history entry.
 The empty result says what was filtered (“No meetings with Maya about Pricing.”). Filtered by a
@@ -131,8 +132,15 @@ account and its demo meeting on first visit.
   day →** (“today” for today's meetings) with “2 of 3 that day”; the target's title is in the
   link's tooltip and accessible name, and the end of the day is greyed out. The day's meetings
   come from `GET /meetings?from=<local midnight>&to=<next midnight>&limit=100`, sorted by start.
+- **Link to…** (always there, also on a meeting in no chain): an in-page dialog to put this meeting
+  in a chain with another one the summarizer didn't connect. It lists your meetings within 45 days,
+  nearest first (`GET /meetings?from&to&limit=100`); typing searches all of them (`?q=`, debounced).
+  The meeting itself and its chain's meetings aren't offered. Picking one sends `PATCH {chain:
+  {with: <id>}}` (kept through reprocessing) and shows the chain; a meeting already in a chain
+  leaves it. Escape, **Cancel** or a click outside closes it; errors show in the dialog.
 - Chains: a meeting the summarizer linked to earlier ones (or that was linked by hand) shows
-  **Chain · 2 of 4**, why it was linked (“Follows up on the admin page plan”), **← Previous in
+  **Chain · 2 of 4**, why the meetings are connected (“Follows up on the admin page plan”, on every
+  meeting of the chain, not only the one that was linked), **← Previous in
   chain** / **Next in chain →**, **Show all 4** (the whole chain in order, linked, this one
   highlighted), and **Remove from chain** with a confirmation dialog (`PATCH {chain: null}`; the
   meeting isn't linked again by itself).
@@ -162,8 +170,8 @@ account and its demo meeting on first visit.
 - **Delete** with an in-page confirmation dialog (`<dialog>`), never `window.confirm`.
 
 **Where.** `components/app/MeetingView.tsx`, `components/app/MeetingNav.tsx`, `lib/meeting-nav.ts`
-(local day range, day and chain neighbours), `hooks/useAudioSync.ts`, `lib/markdown.ts`,
-`lib/status.ts`, `hooks/queries.ts` (`useSameDayMeetings`).
+(local day range, day and chain neighbours, link candidates), `hooks/useAudioSync.ts`, `lib/markdown.ts`,
+`lib/status.ts`, `hooks/queries.ts` (`useSameDayMeetings`, `useLinkCandidates`).
 
 **Limits.** Unknown or foreign meeting ids show a friendly “This meeting isn’t
 here”. Presigned audio URLs expire server-side; reloading the page fetches a new one.
@@ -287,8 +295,9 @@ around (“This page left the meeting early.”).
 
 ### Version and updates
 
-**What.** Every footer (the dashboard's and the landing page's) shows the build: `v0.2.0 · abc1234`
-(the `apps/web` package version and the deployed commit; `dev` locally). Each deployment serves its
+**What.** Every footer (the dashboard's and the landing page's) shows the build: `v0.4.0 · abc1234`
+(the `apps/web` package version and the deployed commit; `dev` locally). The web app, the API and the Mac
+app share major.minor (0.4.x); `pnpm check:versions` enforces it in CI. Each deployment serves its
 own build at `GET /version.json` (uncached). An open tab checks it every 5 minutes while visible, and
 when it comes back into view (at most once a minute). When a different deployment is live, a dialog
 says “A new version is out” with **Reload now** / **Later**; **Later** leaves a “New version: reload”
@@ -331,6 +340,7 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 - **What:** opens `<web>/connect?challenge=<S256>&device=<Mac name>`; the dashboard
   redirects to `boringtalks://callback?code=…`; the app exchanges the code with
   `POST /devices/token {code, codeVerifier}` and keeps the `btd_…` token in the Keychain.
+  BoringTalks Dev adds `&app=dev` and gets its code back on `boringtalks-dev://callback`.
   **Paste code** accepts the bare code or the whole `boringtalks://` link. A 401 from any
   call signs the app out and pauses uploads.
 - **Where:** `BoringTalksKit/PKCE.swift`, `BoringTalksKit/DeviceLink.swift`
@@ -339,19 +349,39 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 - **Limits:** the verifier is kept (Keychain) until the code is used, so a relaunch between
   opening the browser and the callback still works; starting a new sign-in replaces it.
 
+### Keychain without prompts
+
+- **What:** release builds keep the sign-in in the **data protection Keychain**, under the app's
+  access group (`YS48X6MG6D.<bundle id>`), so installing an update never asks "BoringTalks wants to
+  use your confidential information stored in … in your keychain". (The login keychain ties an item
+  to the exact signature that made it: a Developer ID build reading an item a development build made
+  had to ask.) Builds without the entitlement (local, ad-hoc) still use the login keychain.
+- **Where:** `BoringTalksKit/Keychain.swift` (`KeychainStore.usesDataProtection`, from the app's
+  `com.apple.application-identifier` entitlement); `apps/macos/Signing/Distribution.entitlements` and
+  the Developer ID provisioning profile, embedded and signed in by `scripts/release.sh`;
+  `--keychain-check` prints which Keychain a build uses (release.sh refuses a build that says login).
+- **Limits:** a sign-in made by 0.3.0 or older lives in the login keychain and isn't read any more:
+  after updating to 0.3.1 you sign in once more.
+
 ### Recording a meeting
 
 - **What:** microphone = "You", everything the Mac plays = the other people (Core Audio
   process tap, so Zoom/Meet/Teams/browser all work without a virtual driver). Both sides
   share one clock; dropouts and device switches are padded with silence; device changes
   restart that side's capture automatically. Both sides are mixed into a mono AAC file
-  (16 kHz, 32 kbps, ~14 MB/hour).
+  (16 kHz, 32 kbps, ~14 MB/hour) — or, with **Transcribe: Online**, kept apart in a stereo AAC
+  file (microphone left, system audio right, 48 kbps, ~22 MB/hour) for the server to transcribe.
 - **Where:** `BoringTalks/Recording/MeetingRecorder.swift`, `RecordingChannel.swift`,
   `RecordingWriter.swift`, `BoringTalks/Speech/AudioCapture.swift`,
   `BoringTalksKit/ChannelTimeline.swift` (`ChannelTimeline`, `AudioMixer`).
 - **Limits:** if one permission is refused the other side is still recorded (with a warning
   in the menu); with both refused, Start fails with the reason. Without headphones the mic
   also hears the call (handled by echo removal, below).
+- **Never on the main thread:** Core Audio start/stop calls run on one serial queue per side
+  (`MeetingRecorder.micQueue` / `systemQueue`). Unplugging wired headphones mid-call once kept
+  `AudioOutputUnitStart` waiting 7 minutes; now a side that hasn't started within 10 s shows
+  "The microphone isn't responding…" while the meeting carries on (the gap is silence), and joins if
+  Core Audio ever comes back. Stopping never waits for Core Audio.
 
 ### Stop after silence
 
@@ -380,7 +410,12 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   it?” with **Record** (clicking the notification does the same), **Not now** and **Never for
   this app**. The menu shows the same question and the menu-bar icon turns into a phone, so it
   works with notifications off. One question per call: **Not now** lasts until the app releases
-  the mic, and an unanswered question disappears when it does. It never records without asking.
+  the mic, and an unanswered question disappears when it does. It never records without asking,
+  unless **Start recording when a call starts** is on: then a call app's call (Zoom, Teams, Webex,
+  Slack, FaceTime, Discord, Skype, WhatsApp, Telegram — not a browser, which still only gets the
+  question) is recorded as soon as it counts as a call, with a “Recording the Zoom call” notification
+  that has a **Stop** button. Apps under “Never asked” are left alone, and a recording stopped by hand
+  isn't started again during the same call. Off by default.
   Recognized: Zoom, Teams, Webex, Slack, FaceTime (and iPhone calls), Discord, Skype, WhatsApp,
   Telegram, and Chrome, Brave, Arc, Edge, Firefox, Safari, Opera, Vivaldi.
   **Stop when the call ends:** the recording, started from the question or by hand (it adopts
@@ -414,6 +449,19 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   `SpeechModels.swift` (download progress in the menu and Settings).
 - **Limits:** languages outside Parakeet's 25 come out wrong; if the model isn't ready by
   Stop, the meeting is uploaded with audio only and the server transcribes it.
+
+### Transcribe online instead
+
+- **What:** Settings › Transcription › **Online, after the meeting** skips on-device
+  transcription: no speech model is downloaded or loaded, there is no live transcript, and the
+  meeting is recorded with the microphone and system audio on their own channels. The upload asks
+  for its URL with `channels: "mic-system"`, and the worker transcribes each side by itself: the
+  microphone as “You”, the others with their voices told apart, the microphone's echo of the call
+  dropped like on the Mac. Stop after silence and the call-end stop work from the level meters.
+- **Where:** `Preferences.transcribeOnMac`, `MeetingRecorder.start(…, transcribeLocally:)`,
+  `AudioMixer` `.split` layout, `RecordingWriter(split:)`; server side under *Processing pipeline*.
+- **Limits:** costs server transcription for both sides (see COSTS.md); the transcript arrives a
+  minute or two after the meeting instead of at Stop.
 
 ### Telling the other people apart
 
@@ -465,12 +513,15 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 
 ### Settings
 
-- **What:** speech model status and download progress (with retry), language (automatic by
-  default), **Upload meeting audio** (on by default), **Keep recordings on this Mac**
-  (delete after upload / 1 / 7 / 30 days), **Stop after silence** (never / 1–60 minutes,
-  default 5), show recordings in Finder, **Calls** (offer to record, stop when the call ends,
-  apps never asked about), account and sign out,
-  API and dashboard URLs, version, quit.
+- **What:** four tabs, so the window stays short on a small screen; a tab that is still taller
+  than the screen scrolls. **Transcription:** on this Mac or online, speech model status and
+  download progress (with retry), language (automatic by default). **Recording:** Bluetooth
+  headsets in high quality, **Upload meeting audio** (on by default; always on when the server
+  transcribes), **Keep recordings on this Mac** (delete after upload / 1 / 7 / 30 days), show
+  recordings in Finder, **Stop after silence** (never / 1–60 minutes, default 5). **Calls:** start
+  recording when a call starts, offer to record other calls, stop when the call ends, apps never
+  asked about. **Account:** sign in/out, API and dashboard URLs, version, quit. The last tab is
+  remembered.
 - **Where:** `BoringTalks/UI/SettingsView.swift`, `BoringTalks/App/Preferences.swift`.
 
 ### Recent meetings
@@ -482,16 +533,45 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 
 ### Environments
 
-- **What:** production by default; `defaults write games.cutthecheese.boringtalks apiURL|webURL …`
-  or `--api-url` / `--web-url` for dev or local. Non-production hosts show a badge.
-- **Where:** `BoringTalksKit/AppConfig.swift`.
+- **What:** two apps. **BoringTalks** connects to production; **BoringTalks Dev**
+  (`games.cutthecheese.boringtalks.dev`, download `https://download.boringtalks.lol/dev/BoringTalks-Dev-latest.dmg`)
+  connects to `api.dev` / `dev.boringtalks.lol` and installs next to it: its own sign-in scheme
+  (`boringtalks-dev://`), Keychain items, settings and data folder (`Application Support/BoringTalks Dev`).
+  Either can be pointed elsewhere with `defaults write <bundle id> apiURL|webURL …` or `--api-url` /
+  `--web-url`. Non-production hosts show a badge.
+- **Where:** `BoringTalksKit/AppFlavor.swift` (`BTFlavor` in Info.plist), `BoringTalksKit/AppConfig.swift`;
+  the `BoringTalksDev` target in `project.yml` (same sources, `Dev/Info.plist`).
+
+### Report a Problem and the hang watchdog
+
+- **What:** **Report a Problem…** in the menu footer opens a window: "What happened?", an
+  **Include the log** switch (on), and **What else is sent** listing the diagnostics. **Send** posts
+  it to `POST /reports` (needs sign-in); **Save to File…** writes the same as text to Downloads.
+  Sent: the message, app version/build/flavor, macOS and Mac model, short diagnostics (recorder
+  phase and warnings, microphone, default input/output and inputs, model state, upload counts,
+  preferences, uptime, memory) and this run's log (BoringTalks' own lines plus errors from system
+  frameworks in the process, newest 1 MB). Never audio, transcripts or meeting titles.
+- **Hang watchdog:** a background queue pings the main thread every second; 5 s without an answer
+  is a hang. It is logged and saved to `last-hang.json` while it lasts, so a hang that ends in a
+  force quit is still known on the next launch. The menu then shows "BoringTalks stopped
+  responding for 7 min at 20:11." with **Report…** (the report is marked `hang`, with its start
+  and length) and **Dismiss**.
+- **Where:** `BoringTalks/App/ProblemReporter.swift`, `BoringTalks/UI/ReportWindow.swift`,
+  `AppModel.diagnostics()`, `BoringTalksKit/ProblemReport.swift`, `HangWatch.swift`
+  (`HangDetector`, `HangStore`), `Deadline.swift`.
+- **Limits:** macOS only lets an app read its own log for the current run, so a report sent after
+  a relaunch has the hang's time and length but not the log from before it.
 
 ### Command line (QA and CI)
 
 - `--transcribe <file> [--speakers] [--mic <file>] [--language xx] [--realtime]` prints the
   transcript JSON it would upload; `--icon <appiconset>` renders the icon; `--demo` and
   `--show-menu` show the live window and the menu for screenshots; `--mic-users [seconds]` prints
-  which apps use a microphone (and which call app each counts as) whenever that changes.
+  which apps use a microphone (and which call app each counts as) whenever that changes;
+  `--keychain-check` prints the app, its API and which Keychain it keeps the sign-in in.
+  `--report` opens Report a Problem. Debug builds only: `--simulate-hang <seconds>` blocks the main
+  thread 3 s after launch; `--write-report <file>` writes what a report would send and quits;
+  `--snapshot-windows <folder> <seconds>` saves the open windows as PNGs and quits.
 - **Where:** `BoringTalks/Recording/FileTranscriber.swift`, `BoringTalks/App/BoringTalksApp.swift`,
   `BoringTalks/Avatar/AppIconArt.swift`.
 
@@ -499,8 +579,9 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 
 - **What:** universal build, DMG with an Applications link, notarization with an App Store
   Connect API key, upload of the DMG and `latest.json` to the public R2 bucket.
-- **Where:** `apps/macos/scripts/` (`release.sh` runs `build.sh`, `make-dmg.sh`, notarization and
-  `publish.sh` on a developer's Mac; CI runs `test.sh`).
+- **Where:** `apps/macos/scripts/` (`release.sh prod|dev` runs `build.sh`, embeds the Developer ID
+  provisioning profile and re-signs, `make-dmg.sh`, notarization and `publish.sh` on a developer's Mac;
+  `dev` builds BoringTalks Dev into `/dev/`; CI runs `test.sh`).
 - **Limits:** without a Developer ID certificate the DMG is ad-hoc signed and not notarized;
   first launch then needs right-click → Open.
 
@@ -523,7 +604,9 @@ whether it is the same recurring meeting or a follow-up on the same work, with o
 If so it joins that meeting's chain (`meetings.chain_id`, `chain_reason`; migration 0005). A broad
 topic or one shared person isn't enough. Linking or unlinking by hand (`PATCH /meetings/:id
 { chain }`) sets `chain_locked`, so the summarizer leaves it alone after that, also on reprocess.
-A chain left with one meeting (unlinked or deleted) ends. Best effort: a failed link never fails the
+A chain left with one meeting (unlinked or deleted) ends. The reason is stored on the meeting that
+was linked; `GET /meetings/:id` shows it on every member (its own, else the nearest member's;
+`chainReason` in `meetings.service.ts`), and `null` only when all were linked by hand. Best effort: a failed link never fails the
 meeting. `node dist/link-chains.js [--user <uuid>]` links meetings summarized before chains existed.
 Limits: one chain per meeting; demo meetings never chain.
 
@@ -543,7 +626,15 @@ as rows for search. `POST /meetings` honours `Idempotency-Key`, so a client retr
 duplicate.
 
 ### Processing pipeline (worker)
-- **Transcribe and tell voices apart** (browser recordings and uploads only): MAI-Transcribe 2
+- **Two-channel Mac recordings** (`audioChannels = 'mic-system'`, from **Transcribe: Online**):
+  ffmpeg splits the file into the microphone side and the system side (mono 24 kbps MP3 each) plus a
+  mono AAC mix, which becomes the meeting's playback audio (`audio-playback.m4a`, `playback_key`) so
+  the user isn't in one ear only. The mix is made once both sides are transcribed, and the
+  dashboard is never handed the two-channel file: no player until the mix exists. Both sides go through the transcriber below in parallel; the
+  system side gets its voices told apart, every microphone segment becomes “You”, and a microphone
+  phrase that overlaps the others' and repeats ≥ 60% of their words is dropped as echo (the Mac's
+  rule, `processing/channels.ts`). **Reprocess** starts again from the audio.
+- **Transcribe and tell voices apart** (browser recordings and uploads): MAI-Transcribe 2
   (`TRANSCRIBE_MODEL`, `microsoft/mai-transcribe-2` through the AI Gateway, $0.10 an hour) with
   diarization: one phrase per speaker turn, each with its speaker (`processing/gateway-transcriber.ts`
   `transcribeDiarized`, `fromPhrases`, `joinDiarized`):
@@ -587,6 +678,16 @@ duplicate.
   "new Mac connected". Idempotent, allow-listed in dev, logged instead of sent without a key.
 - Jobs retry 5 times with backoff, collapse duplicates, and a final failure marks the meeting
   `failed` with the reason; Reprocess starts over.
+
+### Problem reports
+`POST /reports` keeps what the Mac app sends from **Report a Problem…** (or after it noticed a hang):
+the user's message, app version and flavor, macOS and Mac model, up to 100 short diagnostics and the
+app's own recent log (≤ 1,000,000 characters), with the user and the Mac that sent it, in
+`problem_reports`. 10 reports an hour per user. When `REPORTS_NOTIFY_EMAIL` is set, each one is
+emailed there (without the log) through the `email` queue. Operators read them with
+`node dist/reports.js` (latest 20, `--user <id|email>`, or `<id>` for one in full).
+**Where.** `src/reports/` (controller, service, repository), `src/reports.ts` (CLI),
+`src/email/templates/problem-report.tsx`, migration `0006_problem_reports`.
 
 ### Operations
 `GET /health` (database + Redis, version, commit), `GET /downloads/latest` (current DMG),

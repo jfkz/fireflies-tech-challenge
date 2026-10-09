@@ -22,8 +22,8 @@ Each deploy run:
 3. **Smoke tests.** Playwright `smoke` suite against the deployed web + API.
 4. **Mac app.** `macos.yml` builds and tests it on a `macos-26` runner when `apps/macos/**` changes.
    Releases run on a developer's Mac, so the signing key stays off CI: `apps/macos/scripts/release.sh
-   prod` (or `dev`) signs with Developer ID, builds the DMG, submits it for notarization and publishes
-   it to R2 with `latest.json`; once Apple accepts it, `release.sh staple prod` staples the ticket and
+   prod` (or `dev`, which builds the separate BoringTalks Dev app) signs with Developer ID and the app's
+   provisioning profile, builds the DMG, submits it for notarization and publishes it to R2 with `latest.json`; once Apple accepts it, `release.sh staple prod` staples the ticket and
    republishes it as notarized (`WAIT=1` does both in one go). The landing page's Download button reads it via `GET /downloads/latest`; links
    elsewhere (README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg.
 
@@ -59,7 +59,7 @@ the public domain can only ever reach the `downloads/` folder, never meeting aud
 `REDIS_URL` (references to the Postgres/Redis services), `NODE_ENV`, `WEB_URL`, `WEB_ORIGINS`,
 `FIREBASE_PROJECT_ID`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_KEY_PREFIX` (`prod/` / `dev/`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
 `DOWNLOADS_BASE_URL`, `AI_GATEWAY_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_ALLOWLIST` (dev),
-`SUMMARIZE_CONCURRENCY`. CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
+`SUMMARIZE_CONCURRENCY`, optional `REPORTS_NOTIFY_EMAIL` (where Mac problem reports are announced; unset today). CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
 [apps/api/README.md](../apps/api/README.md#environment).
 
 **Vercel**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL` (per environment), `NEXT_PUBLIC_FIREBASE_*`.
@@ -87,6 +87,27 @@ vercel deploy --prod --scope jfkz0              # production
 # DMG
 cd apps/macos && scripts/build.sh && scripts/make-dmg.sh build/Release/BoringTalks.app build/BoringTalks.dmg
 ```
+
+## Versions
+
+The Mac app (`MARKETING_VERSION` in `apps/macos/project.yml`), the API (`apps/api/package.json`, shown by
+`/health` through `APP_VERSION`) and the web app (`apps/web/package.json`, shown in the footer and at
+`/version.json`) share **major.minor**: a release that adds a feature bumps the minor on all three together,
+even if one of them didn't change. Patch numbers may differ (a Mac-only fix ships as 0.4.1 while the API stays
+0.4.0). `pnpm check:versions` prints the three and fails when the minors differ; CI runs it on every PR.
+
+## Problem reports
+
+The Mac app's "Report a Problem…" posts to `POST /reports`; reports live in the `problem_reports` table.
+Read them with the API image's CLI (Railway shell on the `api` service, or locally with `DATABASE_URL`):
+
+```sh
+node dist/reports.js                       # the latest 20
+node dist/reports.js --user ann@example.com
+node dist/reports.js <id>                  # one report with its diagnostics and log
+```
+
+Set `REPORTS_NOTIFY_EMAIL` to also get an email for each report (the log is not mailed).
 
 ## Rollback
 

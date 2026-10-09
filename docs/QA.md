@@ -62,6 +62,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 3.3 | With more than 20 meetings, scroll to the bottom. | **Load more** appends the next page; disappears at the end. |
 | 3.4 | Start a browser recording (section 5) and return to the list. | Its chip animates (Transcribing/Summarizing) and changes to Ready by itself. |
 | 3.6 | Click a topic pill on a row, then a person in the filter bar, then the active pill again, then **Clear filters**. | The list narrows to that topic, then that topic and person; the URL shows `?topic=…&speaker=…`; clicking an active pill removes it; Clear brings everything back. Back button walks through the filters. |
+| 3.6a | On a row, click a named person's chip (e.g. Maya), go back, then click “Speaker 2” or your own name. | Maya's person page opens; “Speaker 2” / you filter the list instead (`?speaker=…`), like on the meeting page. |
 | 3.7 | Filter to a combination with no meetings. | “No meetings with X about Y.” and a **Clear filters** button. |
 | 3.8 | Upload a recording with three people (e.g. a synthetic one made with `say`), wait for Ready. | Transcript has Speaker 1–3 per voice, then their names from the conversation; deadlines like “today or tomorrow” show the later day. A 26 MB+ or 2 h+ file transcribes too. **Reprocess** on an older upload separates its voices. |
 | 3.5 | New account with the demo deleted. | Empty state with a head (“Your calendar must be suspiciously free.”) and links to record or get the Mac app. |
@@ -84,9 +85,10 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 4.13 | **Rename speakers** → change one name → **Save names**; then Reprocess. | Chips, transcript and action item owners update at once; the name you typed survives the reprocess. Clicking a speaker or topic chip opens the filtered list. |
 | 4.11 | Phone width. | Sections stack; transcript below the summary; no overflow. |
 | 4.14 | Open the middle one of three meetings recorded on one day. | Under **All meetings**: **← Previous that day**, “2 of 3 that day”, **Next that day →** (“today” if it's today); hovering shows the target's title. Press **[** and **]**: the earlier / later meeting opens. Type `[` in Find in transcript: nothing happens. The last meeting of the day has Next greyed out; a day with one meeting shows no day buttons. |
-| 4.15 | Record a follow-up of an earlier meeting (same project, “as we said last week…”), wait for Ready. | A **Chain · 2 of 2** strip with the reason, **← Previous in chain** to the earlier meeting (which shows the chain too); **{** / **}** step through it; **Show all 2** lists both, this one highlighted. |
+| 4.15 | Record a follow-up of an earlier meeting (same project, “as we said last week…”), wait for Ready. | A **Chain · 2 of 2** strip with the reason, **← Previous in chain** to the earlier meeting (which shows the chain and the same reason too); **{** / **}** step through it; **Show all 2** lists both, this one highlighted. |
 | 4.16 | **Remove from chain** → Cancel, then again → **Remove from chain**. | An in-page dialog; confirming removes the strip here and from the other meetings; reprocessing doesn't link it again. |
 | 4.17 | Click a named speaker chip (e.g. Maya), then “Speaker 2”. | Maya's person page opens; “Speaker 2” opens the meeting list filtered by it. |
+| 4.18 | On a meeting in no chain, **Link to…**; press Escape; open it again, type part of an older meeting's title, pick it. | An in-page dialog listing meetings around this one's date, nearest first, focus in the search; Escape closes it. The search finds older meetings; picking one closes the dialog and shows **Chain · 2 of 2** here and on the other meeting; reprocessing keeps it. On a meeting already in a chain the dialog says it leaves that chain, and its chain's meetings aren't listed. |
 
 ### 4b. Tasks `/tasks`
 
@@ -193,8 +195,8 @@ defaults delete games.cutthecheese.boringtalks
 rm -rf ~/Library/Application\ Support/BoringTalks   # keeps the shared Parakeet model in …/FluidAudio
 ```
 
-Against dev: `defaults write games.cutthecheese.boringtalks apiURL https://api.dev.boringtalks.lol`
-and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
+Against dev: install **BoringTalks Dev** from https://download.boringtalks.lol/dev/BoringTalks-Dev-latest.dmg
+(bundle ID `games.cutthecheese.boringtalks.dev`, so use that in the commands above). Watch the logs while testing:
 `log stream --predicate 'subsystem == "games.cutthecheese.boringtalks"'`.
 
 ### 1. DMG install and Gatekeeper
@@ -205,6 +207,8 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | Drag the app to Applications, eject, open it from Applications | **Notarized build:** opens after the usual "downloaded from the Internet" confirmation. **Ad-hoc build:** "cannot be opened" — right-click → Open → Open works |
 | `spctl -a -vv /Applications/BoringTalks.app` | Notarized: `accepted, source=Notarized Developer ID` |
 | Look at the menu bar | The BoringTalks icon (two speech bubbles); no Dock icon |
+| Install BoringTalks Dev next to it | Both run at once; the Dev menu says "BoringTalks Dev" with an `api.dev.boringtalks.lol` badge |
+| `"/Applications/BoringTalks.app/Contents/MacOS/BoringTalks" --keychain-check` | `BoringTalks https://api.boringtalks.lol: data protection keychain` |
 
 ### 2. First launch and permissions
 
@@ -224,7 +228,9 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | **Sign in with browser** | The browser opens `…/connect?challenge=…&device=<your Mac's name>`; the menu shows "Finish signing in in your browser…" |
 | Sign in on the page and approve the Mac | The browser offers to open BoringTalks; accept. The menu now shows your email, **Start meeting** and "Recent meetings" |
 | Dashboard → Settings → Devices | This Mac is listed |
-| Quit and relaunch the app | Still signed in (token in the Keychain: Keychain Access → "BoringTalks device sign-in") |
+| Quit and relaunch the app | Still signed in, and macOS never asks for Keychain access |
+| Install a newer release over it (or a release over 0.3.0 that was signed in) | No "wants to use your confidential information" prompt. Coming from 0.3.0 or older you are asked to sign in once more |
+| BoringTalks Dev: **Sign in with browser** | Opens `dev.boringtalks.lol/connect?…&app=dev`; after approving, the page's button says **Open BoringTalks Dev** and the Dev app (not the release one) signs in |
 | **Paste code** fallback: start a sign-in, copy the code (or the `boringtalks://` link) shown by the dashboard, paste, **Connect** | Signed in the same way |
 | Paste garbage (`two words`) | "That doesn't look like a sign-in code." |
 
@@ -242,6 +248,10 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | Click the meeting | The dashboard opens `…/meetings/<id>`: a meaningful title, summary, action items, the transcript with You / Speaker 1 / Speaker 2 and timestamps that match the audio player |
 | Settings → turn **Upload meeting audio** off, record another short meeting | The dashboard has the transcript but no audio player |
 | Record while Settings shows the model still downloading (fresh install), Stop after 1 minute | If the model became ready in time: normal transcript. If not: the meeting still uploads (with audio) and the server transcribes it |
+| Settings › Transcription › **Online, after the meeting**, record the same two-voice meeting | Settings says the speech model isn't needed; the menu shows “Recording you and the others separately…” and no live transcript button; `afinfo` on the file in Recordings says **2 ch**. After Stop the meeting shows **Transcribing**, then **Ready** with You / Speaker 1 / Speaker 2, and the player plays both sides in both ears |
+| Same, without headphones (video through the speakers) | The video's words are not duplicated as “You” (the server drops the echo too) |
+| **Reprocess** that meeting on the dashboard | It goes back to Transcribing and comes back with You / Speaker N again |
+| Settings on a small screen (or `-settingsMaxHeight 360` on a debug build with `--show-settings`) | Four tabs; no tab is taller than the screen, a longer one scrolls |
 
 ### 4b. Stop after silence
 
@@ -268,8 +278,31 @@ and `webURL https://dev.boringtalks.lol`. Watch the logs while testing:
 | **Never for Zoom**, then join again | No question; Settings › Calls lists Zoom with **Ask again** |
 | Join a Meet call in Chrome | Asked after ~15 s, as “Chrome is in a call” |
 | Start a meeting by hand, then join a Zoom call, then leave it | The recording adopts the call and stops 30 s after leaving |
-| Turn off **Offer to record when a call starts** / **Stop when the call ends** | No question / the recording keeps going after the call (until Stop after silence) |
+| Turn off **Offer to record other calls** / **Stop when the call ends** | No question / the recording keeps going after the call (until Stop after silence) |
+| Settings › Calls › **Start recording when a call starts** on, join a Zoom call | After ~5 s it records without asking; a “Recording the Zoom call” notification has **Stop**, which stops and uploads |
+| Same, press **Stop** in the menu while the call goes on | Not started again for this call; the next call is recorded again |
+| Same, join a Meet call in Chrome | Not recorded by itself: “Chrome is in a call. Record it?” as before |
 | Signed out, join a call | No question |
+
+### 4d. Audio devices change mid-meeting
+
+| Step | Expected |
+|---|---|
+| Record with wired headphones (or AirPods) in a call, then unplug / take them off | The log shows "audio device changed; restarting microphone"; the menu keeps responding throughout |
+| If macOS is slow to hand the microphone back | After 10 s the menu says "The microphone isn't responding…"; the timer keeps running, and the warning goes away once the mic is back |
+| Leave the call right after unplugging | The call-end countdown still starts on time (the main thread is never held by Core Audio) |
+
+### 4e. Report a Problem and hangs
+
+| Step | Expected |
+|---|---|
+| Menu → **Report a Problem…** | A window with "What happened?", **Include the log** on, **What else is sent** listing app, audio devices, recorder state, uploads and preferences, no meeting titles |
+| Type a message, **Send** | "Sent. Thank you!" with a reference; `node dist/reports.js` on the API lists it (QA backend §9) |
+| Signed out | **Send** is disabled with "Sign in to send it…"; **Save to File…** writes `BoringTalks report <time>.txt` to Downloads and shows it in Finder |
+| Debug build: `"BoringTalks Dev" --simulate-hang 8` | After ~11 s the log has "the main thread has not answered for 5 s" and "was stuck for 8 s"; the menu shows "stopped responding for 8 s at …" with **Report…** / **Dismiss** |
+| **Report…** on that banner | The window opens with the hang described; the sent report has kind `hang` and `hang.seconds` |
+| Quit the app while a simulated hang lasts (`kill` it), relaunch | The banner says it "was closed while stuck" |
+| **Dismiss** | The banner goes away and stays away after a relaunch |
 
 ### 5. Offline upload, then reconnect
 
@@ -353,5 +386,18 @@ deploy, and against production after a merge.
 
 ### 8. Download
 1. On the landing page, click Download for Mac.
-   **Expected:** `BoringTalks-<version>.dmg` from `download.boringtalks.lol` (dev: `/dev/`), version
+   **Expected:** `BoringTalks-<version>.dmg` from `download.boringtalks.lol` (dev: `/dev/BoringTalks-Dev-<version>.dmg`), version
    and size match `GET /downloads/latest`.
+
+### 9. Problem reports
+1. Send a report from the Mac app (Report a Problem…), then on the API service run `node dist/reports.js`.
+   **Expected:** the report is first in the list with your email, `user`, the app version; `node dist/reports.js <id>`
+   prints the message, diagnostics and the log.
+2. With `REPORTS_NOTIFY_EMAIL` set (dev only), send another.
+   **Expected:** an email "Problem report: BoringTalks <version> from <you>" arrives there, without the log.
+3. `curl -X POST <api>/reports` without a token.
+   **Expected:** `401`.
+
+### 10. Versions
+1. Compare `GET /health` `version`, the web footer and the Mac app's About/menu version.
+   **Expected:** all three share major.minor (0.4.x); `pnpm check:versions` passes.

@@ -24,6 +24,9 @@ export type MeetingHit = MeetingWithCount & { match: SearchMatch | null };
 /** A meeting the chain linker may connect another one to. */
 export type ChainCandidateRow = Pick<MeetingRow, 'id' | 'title' | 'description' | 'startedAt' | 'speakers' | 'topics' | 'chainId'>;
 
+/** A meeting of a chain, with why it was linked (null for the one it started from, or linked by hand). */
+export type ChainMemberRow = MeetingRef & { reason: string | null };
+
 /** How far apart (days) two meetings of one chain may be, for the summarizer to link them. */
 export const CHAIN_WINDOW_DAYS = 45;
 
@@ -353,10 +356,10 @@ export class MeetingsRepository {
       .limit(limit);
   }
 
-  /** The meetings of a chain, oldest first. */
-  async chainMeetings(userId: string, chainId: string): Promise<MeetingRef[]> {
+  /** The meetings of a chain, oldest first, each with its own reason. */
+  async chainMeetings(userId: string, chainId: string): Promise<ChainMemberRow[]> {
     const rows = await this.db
-      .select({ id: meetings.id, title: meetings.title, startedAt: meetings.startedAt })
+      .select({ id: meetings.id, title: meetings.title, startedAt: meetings.startedAt, reason: meetings.chainReason })
       .from(meetings)
       .where(and(eq(meetings.userId, userId), eq(meetings.chainId, chainId)))
       .orderBy(asc(meetings.startedAt), asc(meetings.id));
