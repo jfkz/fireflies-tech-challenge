@@ -169,13 +169,13 @@ describe('PipelineService.transcribe: microphone and system audio on their own c
     await expect(t.pipeline.transcribe({ meetingId: m.id, run: 1 })).rejects.toThrow('No speech');
   });
 
-  it('keeps the mono mix to play even when transcription fails', async () => {
+  it('mixes only after both sides are transcribed', async () => {
     const t = setup();
     const m = split(t);
     t.transcriber.transcribe.mockRejectedValue(new Error('gateway down'));
     await expect(t.pipeline.transcribe({ meetingId: m.id, run: 1 })).rejects.toThrow('gateway down');
-    expect(t.storage.putBytes).toHaveBeenCalledWith(expect.stringContaining('audio-playback.m4a'), mix, 'audio/mp4');
-    expect(t.meetings.update).toHaveBeenCalledWith(m.id, { playbackKey: expect.stringContaining('audio-playback.m4a') });
+    expect(t.storage.putBytes).not.toHaveBeenCalled();
+    expect(t.meetings.update).not.toHaveBeenCalled();
   });
 });
 

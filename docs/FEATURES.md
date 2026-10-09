@@ -629,9 +629,8 @@ duplicate.
 - **Two-channel Mac recordings** (`audioChannels = 'mic-system'`, from **Transcribe: Online**):
   ffmpeg splits the file into the microphone side and the system side (mono 24 kbps MP3 each) plus a
   mono AAC mix, which becomes the meeting's playback audio (`audio-playback.m4a`, `playback_key`) so
-  the user isn't in one ear only. The mix is saved before transcription starts (so a failed
-  transcription still has it), and the dashboard is never handed the two-channel file: no player
-  until the mix exists. Both sides go through the transcriber below in parallel; the
+  the user isn't in one ear only. The mix is made once both sides are transcribed, and the
+  dashboard is never handed the two-channel file: no player until the mix exists. Both sides go through the transcriber below in parallel; the
   system side gets its voices told apart, every microphone segment becomes “You”, and a microphone
   phrase that overlaps the others' and repeats ≥ 60% of their words is dropped as echo (the Mac's
   rule, `processing/channels.ts`). **Reprocess** starts again from the audio.

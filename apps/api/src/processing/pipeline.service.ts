@@ -60,14 +60,14 @@ export class PipelineService {
    */
   private async transcribeSplit(meeting: MeetingRow, audio: Uint8Array): Promise<TranscribeResult> {
     const sides = await splitChannels(audio);
-    // The one file the dashboard plays: saved first, so it is there even if transcription fails.
-    const key = playbackKey(meeting.userId, meeting.id);
-    await this.storage.putBytes(key, sides.mix, PLAYBACK_MEDIA_TYPE);
-    await this.meetings.update(meeting.id, { playbackKey: key });
     const [mic, system] = await Promise.all([
       this.transcriber.transcribe({ audio: sides.mic, mediaType: SPEECH_MEDIA_TYPE, language: meeting.language }),
       this.listen(sides.system, SPEECH_MEDIA_TYPE, meeting.language),
     ]);
+    // The one file the dashboard plays, once the transcript is there.
+    const key = playbackKey(meeting.userId, meeting.id);
+    await this.storage.putBytes(key, sides.mix, PLAYBACK_MEDIA_TYPE);
+    await this.meetings.update(meeting.id, { playbackKey: key });
     this.logger.log({ meetingId: meeting.id, mic: mic.segments.length, system: system.segments.length }, 'transcribed both sides');
     return {
       segments: mergeChannels(mic.segments, system.segments),
