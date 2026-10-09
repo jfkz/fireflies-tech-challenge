@@ -241,6 +241,11 @@ Then `PUT` the bytes to `url` with exactly those `headers`. The audio never pass
 Allowed types: `audio/mp4`, `audio/m4a`, `audio/x-m4a`, `audio/webm`, `audio/ogg`, `audio/mpeg`,
 `audio/wav`; max 200 MB. `409` while the meeting is being processed.
 
+Optional `"channels": "mic-system"` says the file has the microphone (the user) on the left channel
+and system audio (everyone else) on the right, as the Mac app records with **Transcribe: Online**.
+The worker then transcribes each side by itself (the microphone as `You`), drops the microphone's
+echo of the call, and serves a mono mix as `audioUrl`. Leave it out (or `"mixed"`) for anything else.
+
 ### `PUT /meetings/:id/transcript` (`TranscriptUpload`) → `204` (replaces)
 ```json
 { "language": "en", "durationSec": 1830,
@@ -265,7 +270,8 @@ retried `complete` is harmless; use `reprocess` to run a ready meeting again.
 Poll `GET /meetings/:id` until `status` is `ready` or `failed`.
 
 ### `POST /meetings/:id/reprocess` → `MeetingDetail`
-Runs the pipeline again: from transcription when there is no transcript, else from the summary.
+Runs the pipeline again: from transcription when there is no transcript, or when the server made
+the transcript (browser recordings, uploads, two-channel Mac recordings); else from the summary.
 Allowed from `ready` and `failed`.
 
 ## Tasks

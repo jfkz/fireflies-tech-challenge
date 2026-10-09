@@ -149,6 +149,13 @@ describe('MeetingsService', () => {
     expect(storage.presignGet).toHaveBeenCalledTimes(1);
   });
 
+  it('plays the mono mix of a split-channel recording', async () => {
+    const { repo, storage, service } = setup();
+    repo.findOwned.mockResolvedValue(meeting({ hasAudio: true, audioKey: 'k', audioChannels: 'mic-system', playbackKey: 'mix' }));
+    await service.get(user(), meeting().id);
+    expect(storage.presignGet).toHaveBeenCalledWith('mix');
+  });
+
   describe('list', () => {
     it('returns a next cursor only when there is another page', async () => {
       const { repo, service } = setup();
@@ -319,7 +326,9 @@ describe('MeetingsService', () => {
       headers: { 'Content-Type': 'audio/webm' },
       expiresInSec: 900,
     });
-    expect(repo.update).toHaveBeenCalledWith(meeting().id, { audioKey: res.key, audioContentType: 'audio/webm', hasAudio: false });
+    expect(repo.update).toHaveBeenCalledWith(meeting().id, { audioKey: res.key, audioContentType: 'audio/webm', hasAudio: false, audioChannels: null, playbackKey: null });
+    await service.uploadUrl(user(), meeting().id, { contentType: 'audio/mp4', sizeBytes: 1000, channels: 'mic-system' });
+    expect(repo.update).toHaveBeenLastCalledWith(meeting().id, expect.objectContaining({ audioChannels: 'mic-system', playbackKey: null }));
     repo.findOwned.mockResolvedValue(meeting({ status: 'summarizing' }));
     await expect(service.uploadUrl(user(), meeting().id, { contentType: 'audio/webm', sizeBytes: 1 })).rejects.toBeInstanceOf(ConflictException);
   });
@@ -400,6 +409,16 @@ describe('MeetingsService', () => {
     repo.startRun.mockResolvedValue(meeting({ status: 'transcribing', attempts: 2 }));
     await service.reprocess(user(), meeting().id);
     expect(repo.startRun).toHaveBeenCalledWith(meeting().id, 'ready', 'transcribing', expect.anything());
+    expect(jobs.transcribe).toHaveBeenCalledWith(meeting().id, 2);
+  });
+
+  it('reprocesses a Mac recording the server transcribed from its two channels', async () => {
+    const { repo, storage, jobs, service } = setup();
+    repo.findOwned.mockResolvedValue(meeting({ status: 'ready', attempts: 1, source: 'macos', audioKey: 'a.m4a', audioChannels: 'mic-system' }));
+    repo.hasSegments.mockResolvedValue(true);
+    storage.head.mockResolvedValue({ size: 10 });
+    repo.startRun.mockResolvedValue(meeting({ status: 'transcribing', attempts: 2 }));
+    await service.reprocess(user(), meeting().id);
     expect(jobs.transcribe).toHaveBeenCalledWith(meeting().id, 2);
   });
 

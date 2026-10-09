@@ -73,6 +73,10 @@ export class StorageService implements OnApplicationShutdown {
     );
   }
 
+  async putBytes(key: string, body: Uint8Array, contentType: string): Promise<void> {
+    await this.client.send(new PutObjectCommand({ Bucket: this.bucket, Key: this.key(key), Body: body, ContentType: contentType }));
+  }
+
   /** Metadata of an object, or null when it does not exist. */
   async head(key: string): Promise<ObjectInfo | null> {
     try {

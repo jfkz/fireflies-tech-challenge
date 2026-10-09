@@ -57,6 +57,8 @@ describe('requests', () => {
     expect(UploadUrlRequest.safeParse({ contentType: 'audio/mp4', sizeBytes: MAX_AUDIO_BYTES + 1 }).success).toBe(false);
     expect(UploadUrlRequest.safeParse({ contentType: 'video/mp4', sizeBytes: 10 }).success).toBe(false);
     expect(UploadUrlRequest.safeParse({ contentType: 'audio/webm', sizeBytes: 10 }).success).toBe(true);
+    expect(UploadUrlRequest.safeParse({ contentType: 'audio/mp4', sizeBytes: 10, channels: 'mic-system' }).success).toBe(true);
+    expect(UploadUrlRequest.safeParse({ contentType: 'audio/mp4', sizeBytes: 10, channels: 'quad' }).success).toBe(false);
   });
   it('requires something to update', () => {
     expect(UpdateMeetingRequest.safeParse({}).success).toBe(false);

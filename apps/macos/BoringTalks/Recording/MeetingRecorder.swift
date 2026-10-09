@@ -4,8 +4,9 @@ import Observation
 
 /// Records one meeting: the microphone is "You", what the Mac plays is everyone
 /// else. Both channels run on one clock (seconds since Start), go to their own
-/// transcriber, and are mixed into one AAC file. Stop hands back a
-/// `PendingMeeting` for the upload queue.
+/// transcriber, and are mixed into one AAC file. When the server is to transcribe
+/// the meeting instead, nothing is transcribed here and the file keeps the two sides
+/// on their own channels. Stop hands back a `PendingMeeting` for the upload queue.
 @MainActor @Observable
 final class MeetingRecorder {
     enum Phase: Equatable {
@@ -18,6 +19,8 @@ final class MeetingRecorder {
     private(set) var warnings: [AudioChannel: String] = [:]
     /// Recording while the speech model is still loading; audio waits for it.
     private(set) var waitingForModel = false
+    /// This meeting is transcribed here (false: recorded for the server to transcribe).
+    private(set) var transcribesLocally = true
     /// The microphone recording "You" (shown in the menu).
     private(set) var microphoneName: String?
     /// See `Preferences.avoidBluetoothMic`; read when a meeting starts.
@@ -108,9 +111,10 @@ final class MeetingRecorder {
         }
     }
 
-    func start(title: String?, language: String?, uploadAudio: Bool) async throws {
+    func start(title: String?, language: String?, uploadAudio: Bool, transcribeLocally: Bool = true) async throws {
         guard phase == .idle else { return }
         phase = .starting
+        transcribesLocally = transcribeLocally
         warnings = [:]
         records = []
         live.reset()
@@ -127,12 +131,13 @@ final class MeetingRecorder {
 
         do {
             try folders.create()
-            let writer = try RecordingWriter(url: folders.recordings.appendingPathComponent("\(id.uuidString).m4a"))
+            let writer = try RecordingWriter(url: folders.recordings.appendingPathComponent("\(id.uuidString).m4a"),
+                                             split: !transcribeLocally)
             self.writer = writer
             clockStart = ProcessInfo.processInfo.systemUptime
             startedAt = Date()
             for kind in AudioChannel.allCases {
-                channels[kind] = RecordingChannel(kind: kind, clockStart: clockStart, writer: writer)
+                channels[kind] = RecordingChannel(kind: kind, clockStart: clockStart, writer: writer, transcribes: transcribeLocally)
             }
 
             // Keep both sides on the clock from the first moment: a side that is slow
@@ -163,7 +168,8 @@ final class MeetingRecorder {
         }
 
         phase = .recording
-        Self.log.notice("recording \(id, privacy: .public)")
+        Self.log.notice("recording \(id, privacy: .public)\(transcribeLocally ? "" : " for the server to transcribe", privacy: .public)")
+        guard transcribeLocally else { return }
         // Transcribe as soon as the model is there; until then the audio waits.
         waitingForModel = !models.isReady
         modelWait = Task { [weak self] in
@@ -191,7 +197,7 @@ final class MeetingRecorder {
         }
         // The model may have finished loading just now.
         let missing = endings.keys.filter { !attached.contains($0) }
-        if models.isReady, !missing.isEmpty {
+        if transcribesLocally, models.isReady, !missing.isEmpty {
             await attachTranscribers(to: missing)
             for kind in missing {
                 if let channel = channels[kind] { endings[kind] = await channel.end(at: elapsed) }
@@ -203,9 +209,9 @@ final class MeetingRecorder {
         let seconds = await writer.finish()
 
         // Sides that couldn't start count as heard (there is nothing to transcribe).
-        let transcribed = endings.allSatisfy { kind, ending in ending.transcribed || warnings[kind] != nil }
+        let transcribed = transcribesLocally && endings.allSatisfy { kind, ending in ending.transcribed || warnings[kind] != nil }
         let segments = transcribed ? SegmentAssembler.assemble(records) : []
-        if !transcribed {
+        if !transcribed, transcribesLocally {
             Self.log.notice("no local transcript; the server will transcribe the audio")
         }
         let language = meeting.language ?? LanguageGuess.detect(segments.map(\.text).joined(separator: " "))
@@ -214,7 +220,8 @@ final class MeetingRecorder {
 
         let pending = PendingMeeting(id: meeting.id, title: meeting.title, startedAt: startedAt,
                                      durationSec: Int(elapsed.rounded()), language: language, segments: segments,
-                                     audioFileName: fileName, uploadAudio: meeting.uploadAudio)
+                                     audioFileName: fileName, uploadAudio: meeting.uploadAudio,
+                                     audioChannels: transcribesLocally ? nil : .micSystem)
         reset()
         Self.log.notice("stopped: \(segments.count, privacy: .public) segments, \(Int(elapsed), privacy: .public) s")
         return pending.hasContent(audioExists: fileName != nil) ? pending : nil

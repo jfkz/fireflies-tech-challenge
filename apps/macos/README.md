@@ -10,6 +10,11 @@ BoringTalks API, which writes the title, summary and action items.
   people are split into **Speaker 1…N** with WeSpeaker voice embeddings and SpeakerKit
   (pyannote) turn detection. No audio is sent to any speech service.
 - Uploads go through a persistent queue that survives going offline and relaunching.
+- Or, with Settings › Transcription › **Online, after the meeting**, nothing is transcribed on the
+  Mac: the two sides are recorded on separate channels (stereo AAC, mic left) and the server
+  transcribes each one, keeping "You" apart.
+- Settings › Calls › **Start recording when a call starts** records Zoom/Teams/Webex/… calls
+  without asking (browsers are still only asked about).
 
 The speech and voice code comes from the author's earlier live-transcription app,
 trimmed to what a meeting recorder needs.
@@ -160,6 +165,7 @@ mic ──► MicCapture ─┐                                  ┌─► Phras
 tap ──► SystemAudio ┘   clock, gaps → silence)         └─► PhraseTranscriber + VoiceRegistry ─► "Speaker n"
                               │
                               └─► RecordingWriter: both mixed → AAC 32 kbps mono .m4a
+                                  (transcribed online: no transcribers, mic L / system R → AAC 48 kbps stereo)
 Stop ─► finish transcribers ─► SegmentAssembler ─► PendingMeeting ─► UploadQueue ─► API / R2
 ```
 

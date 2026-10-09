@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { partWindows, prepareForTranscription } from './audio-prep';
+import { partWindows, prepareForTranscription, splitChannels } from './audio-prep';
 
 const hasFfmpeg = (() => {
   try {
@@ -77,5 +77,50 @@ describe('prepareForTranscription', () => {
     const parts = await prepareForTranscription(toneWav(25), 'audio/wav', { partSeconds: 10, overlapSeconds: 2 });
     expect(parts.map((p) => p.offsetMs)).toEqual([0, 8000, 18000]);
     expect(parts.every((p) => p.mediaType === 'audio/mpeg')).toBe(true);
+  });
+});
+
+/** A stereo WAV with a tone on the left channel only (the microphone) and silence on the right. */
+function leftOnlyWav(seconds: number, layout = 'pan=stereo|c0=c0|c1=0*c0'): Uint8Array {
+  const dir = mkdtempSync(join(tmpdir(), 'bt-left-'));
+  try {
+    const file = join(dir, 'left.wav');
+    execFileSync('ffmpeg', ['-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=440:duration=${seconds}`, '-af', layout, '-ar', '16000', file]);
+    return new Uint8Array(readFileSync(file));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Channels and loudest sample (dB) of an audio file, by ffprobe and ffmpeg's volumedetect. */
+function inspect(audio: Uint8Array): { channels: number; maxDb: number } {
+  const dir = mkdtempSync(join(tmpdir(), 'bt-inspect-'));
+  try {
+    const file = join(dir, 'audio');
+    writeFileSync(file, audio);
+    const channels = Number(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=channels', '-of', 'csv=p=0', file]).toString().trim());
+    const log = spawnSync('ffmpeg', ['-hide_banner', '-i', file, '-af', 'volumedetect', '-f', 'null', '-']).stderr.toString();
+    const max = /max_volume: (-?[\d.]+|-inf) dB/.exec(log)?.[1] ?? '-inf';
+    return { channels, maxDb: max === '-inf' ? -Infinity : Number(max) };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe('splitChannels', () => {
+  it.skipIf(!hasFfmpeg)('gives each side on its own and a mono mix to play', async () => {
+    const { mic, system, mix } = await splitChannels(leftOnlyWav(2));
+    const sides = { mic: inspect(mic), system: inspect(system), mix: inspect(mix) };
+    expect(sides.mic.channels).toBe(1);
+    expect(sides.mic.maxDb).toBeGreaterThan(-30);
+    expect(sides.system.maxDb).toBeLessThan(-60);
+    expect(sides.mix).toMatchObject({ channels: 1 });
+    expect(sides.mix.maxDb).toBeGreaterThan(-30);
+  });
+
+  it.skipIf(!hasFfmpeg)('hears a mono file on both sides', async () => {
+    const { mic, system } = await splitChannels(leftOnlyWav(1, 'pan=mono|c0=c0'));
+    expect(inspect(mic).maxDb).toBeGreaterThan(-30);
+    expect(inspect(system).maxDb).toBeGreaterThan(-30);
   });
 });

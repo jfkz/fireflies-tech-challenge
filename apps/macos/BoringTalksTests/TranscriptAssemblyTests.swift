@@ -165,6 +165,35 @@ final class AudioMixerTests: XCTestCase {
         XCTAssertGreaterThan(mixed[0], 0.9)
         XCTAssertLessThan(mixed[1], -0.9)
     }
+
+    func testSplitKeepsTheMicrophoneLeftAndSystemAudioRight() {
+        var mixer = AudioMixer(layout: .split)
+        XCTAssertEqual(mixer.trackCount, 2)
+        mixer.append([0.1, 0.2, 0.3], to: .microphone)
+        XCTAssertEqual(mixer.drainTracks(), [])
+        mixer.append([0.9, 0.8], to: .system)
+        // No gains and no limiter: each side as it was heard.
+        XCTAssertEqual(mixer.drainTracks(), [[0.1, 0.2], [0.9, 0.8]])
+        XCTAssertEqual(mixer.drainTracks(flush: true), [[0.3], [0]])
+    }
+
+    func testSplitWritesSilenceForASideThatIsGone() {
+        var mixer = AudioMixer(layout: .split)
+        mixer.remove(.system)
+        mixer.append([0.5, 0.5], to: .microphone)
+        XCTAssertEqual(mixer.drainTracks(), [[0.5, 0.5], [0, 0]])
+        mixer.remove(.microphone)
+        XCTAssertEqual(mixer.drainTracks(flush: true), [])
+    }
+
+    func testMixedTracksAreOneMix() {
+        var mixer = AudioMixer()
+        mixer.gains = [.microphone: 1, .system: 1]
+        XCTAssertEqual(mixer.trackCount, 1)
+        mixer.append([0.25], to: .microphone)
+        mixer.append([0.25], to: .system)
+        XCTAssertEqual(mixer.drainTracks(), [[0.5]])
+    }
 }
 
 final class RecordingJanitorTests: XCTestCase {

@@ -248,6 +248,10 @@ Against dev: install **BoringTalks Dev** from https://download.boringtalks.lol/d
 | Click the meeting | The dashboard opens `…/meetings/<id>`: a meaningful title, summary, action items, the transcript with You / Speaker 1 / Speaker 2 and timestamps that match the audio player |
 | Settings → turn **Upload meeting audio** off, record another short meeting | The dashboard has the transcript but no audio player |
 | Record while Settings shows the model still downloading (fresh install), Stop after 1 minute | If the model became ready in time: normal transcript. If not: the meeting still uploads (with audio) and the server transcribes it |
+| Settings › Transcription › **Online, after the meeting**, record the same two-voice meeting | Settings says the speech model isn't needed; the menu shows “Recording you and the others separately…” and no live transcript button; `afinfo` on the file in Recordings says **2 ch**. After Stop the meeting shows **Transcribing**, then **Ready** with You / Speaker 1 / Speaker 2, and the player plays both sides in both ears |
+| Same, without headphones (video through the speakers) | The video's words are not duplicated as “You” (the server drops the echo too) |
+| **Reprocess** that meeting on the dashboard | It goes back to Transcribing and comes back with You / Speaker N again |
+| Settings on a small screen (or `-settingsMaxHeight 360` on a debug build with `--show-settings`) | Four tabs; no tab is taller than the screen, a longer one scrolls |
 
 ### 4b. Stop after silence
 
@@ -274,7 +278,10 @@ Against dev: install **BoringTalks Dev** from https://download.boringtalks.lol/d
 | **Never for Zoom**, then join again | No question; Settings › Calls lists Zoom with **Ask again** |
 | Join a Meet call in Chrome | Asked after ~15 s, as “Chrome is in a call” |
 | Start a meeting by hand, then join a Zoom call, then leave it | The recording adopts the call and stops 30 s after leaving |
-| Turn off **Offer to record when a call starts** / **Stop when the call ends** | No question / the recording keeps going after the call (until Stop after silence) |
+| Turn off **Offer to record other calls** / **Stop when the call ends** | No question / the recording keeps going after the call (until Stop after silence) |
+| Settings › Calls › **Start recording when a call starts** on, join a Zoom call | After ~5 s it records without asking; a “Recording the Zoom call” notification has **Stop**, which stops and uploads |
+| Same, press **Stop** in the menu while the call goes on | Not started again for this call; the next call is recorded again |
+| Same, join a Meet call in Chrome | Not recorded by itself: “Chrome is in a call. Record it?” as before |
 | Signed out, join a call | No question |
 
 ### 4d. Audio devices change mid-meeting

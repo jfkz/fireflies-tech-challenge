@@ -24,8 +24,21 @@ struct BoringTalksApp: App {
 private struct MenuBarLabel: View {
     let model: AppModel
     let recorder: MeetingRecorder
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
+        icon
+        #if DEBUG
+            // `--show-settings`: opens Settings at launch, for screenshots (with `--snapshot-windows`).
+            .task {
+                guard CommandLine.arguments.contains("--show-settings") else { return }
+                NSApp.activate()
+                openSettings()
+            }
+        #endif
+    }
+
+    @ViewBuilder private var icon: some View {
         if recorder.isRecording {
             Image(systemName: "record.circle.fill").accessibilityLabel("BoringTalks — recording")
         } else if let app = model.callOffer {

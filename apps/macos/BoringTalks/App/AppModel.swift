@@ -83,6 +83,7 @@ final class AppModel {
         notifier.onRecordCall = { [weak self] in self?.recordCall() }
         notifier.onDeclineCall = { [weak self] in self?.declineCall() }
         notifier.onIgnoreCallApp = { [weak self] app in self?.ignoreCallApp(app) }
+        notifier.onStopRecording = { [weak self] in self?.stopMeeting() }
         reporter.collectDiagnostics = { [weak self] in await self?.diagnostics() ?? [:] }
     }
 
@@ -110,7 +111,8 @@ final class AppModel {
             Task { await queue.setOnline(online) }
         }
         // Start downloading the speech model right away; it takes a while the first time.
-        Task { await models.prepare() }
+        // Not needed while the server transcribes (see `setTranscribeOnMac`).
+        if preferences.transcribeOnMac { Task { await models.prepare() } }
         startRefreshing()
         startCallDetection()
     }
@@ -233,7 +235,8 @@ final class AppModel {
                 recorder.avoidBluetoothMic = preferences.avoidBluetoothMic
                 recorder.silenceLimit = TimeInterval(preferences.silenceStopMinutes * 60)
                 if preferences.silenceStopMinutes > 0 { Task { await notifier.requestPermission() } }
-                try await recorder.start(title: titleDraft, language: preferences.languageCode, uploadAudio: preferences.uploadAudio)
+                try await recorder.start(title: titleDraft, language: preferences.languageCode, uploadAudio: preferences.uploadAudio,
+                                         transcribeLocally: preferences.transcribeOnMac)
                 callSignals.recordingStarted(now: ProcessInfo.processInfo.systemUptime)
                 clearCallOffer()
             } catch {
@@ -244,6 +247,7 @@ final class AppModel {
 
     func stopMeeting() {
         notifier.clearWarning()
+        notifier.clearAutoStartNotice()
         Task {
             let meeting = await recorder.stop()
             callSignals.recordingStopped()
@@ -285,6 +289,19 @@ final class AppModel {
         notifier.clearWarning()
     }
 
+    /// On this Mac, or (false) by the server from the two-channel audio. The model is
+    /// downloaded only when it is going to be used.
+    func setTranscribeOnMac(_ onMac: Bool) {
+        preferences.transcribeOnMac = onMac
+        if onMac { Task { await models.prepare() } }
+    }
+
+    /// Record call apps' calls without asking; notifications tell when one starts.
+    func setAutoRecordCalls(_ on: Bool) {
+        preferences.autoRecordCalls = on
+        if on { Task { await notifier.requestPermission() } }
+    }
+
     func dismissAutoStopNotice() {
         autoStopNotice = nil
     }
@@ -296,7 +313,7 @@ final class AppModel {
     private func startCallDetection() {
         micMonitor.onChange = { [weak self] in self?.evaluateCalls() }
         micMonitor.start()
-        if preferences.offerToRecordCalls { Task { await notifier.requestPermission() } }
+        if preferences.offerToRecordCalls || preferences.autoRecordCalls { Task { await notifier.requestPermission() } }
         callTask = Task { [weak self] in
             var ticks = 0
             while !Task.isCancelled {
@@ -316,6 +333,7 @@ final class AppModel {
         var signedIn = false
         if case .signedIn = auth { signedIn = true }
         callSignals.offersEnabled = preferences.offerToRecordCalls && signedIn
+        callSignals.autoStartEnabled = preferences.autoRecordCalls && signedIn
         callSignals.ignored = Set(preferences.ignoredCallApps)
         let events = callSignals.update(active: active, now: ProcessInfo.processInfo.systemUptime,
                                         isRecording: recorder.phase != .idle)
@@ -325,6 +343,11 @@ final class AppModel {
                 Self.log.notice("\(app, privacy: .public) is in a call; offering to record")
                 callOffer = app
                 notifier.offerToRecord(app: app)
+            case .autoStart(let app):
+                guard recorder.phase == .idle else { break }
+                Self.log.notice("\(app, privacy: .public) is in a call; recording it without asking")
+                startMeeting()
+                notifier.recordingCallAutomatically(app: app)
             case .withdraw:
                 clearCallOffer()
             case .callEnded(let app):
@@ -449,7 +472,9 @@ final class AppModel {
             "calls.offer": callOffer ?? "-",
             "prefs.avoidBluetoothMic": preferences.avoidBluetoothMic ? "yes" : "no",
             "prefs.silenceStopMinutes": String(preferences.silenceStopMinutes),
+            "prefs.transcribeOnMac": preferences.transcribeOnMac ? "yes" : "no",
             "prefs.offerToRecordCalls": preferences.offerToRecordCalls ? "yes" : "no",
+            "prefs.autoRecordCalls": preferences.autoRecordCalls ? "yes" : "no",
             "prefs.stopWhenCallEnds": preferences.stopWhenCallEnds ? "yes" : "no",
             "prefs.uploadAudio": preferences.uploadAudio ? "yes" : "no",
             "prefs.language": preferences.language.isEmpty ? "auto" : preferences.language,

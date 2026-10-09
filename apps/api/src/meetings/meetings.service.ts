@@ -178,7 +178,13 @@ export class MeetingsService {
     this.assertEditable(meeting);
     const key = audioKey(meeting.userId, meeting.id, body.contentType);
     const url = await this.storage.presignPut(key, body.contentType);
-    await this.repo.update(meeting.id, { audioKey: key, audioContentType: body.contentType, hasAudio: false });
+    await this.repo.update(meeting.id, {
+      audioKey: key,
+      audioContentType: body.contentType,
+      hasAudio: false,
+      audioChannels: body.channels === 'mic-system' ? 'mic-system' : null,
+      playbackKey: null,
+    });
     return { url, key, headers: { 'Content-Type': body.contentType }, expiresInSec: UPLOAD_URL_TTL_SEC };
   }
 
@@ -198,13 +204,15 @@ export class MeetingsService {
   }
 
   /**
-   * Runs the pipeline again. A meeting the server transcribed (browser recording, upload) starts
-   * from its audio, so transcription improvements (telling voices apart) reach it; a Mac recording
-   * keeps its transcript and is summarized again.
+   * Runs the pipeline again. A meeting the server transcribed (browser recording, upload, a Mac
+   * recording with both sides on their own channels) starts from its audio, so transcription
+   * improvements (telling voices apart) reach it; a Mac recording transcribed on the Mac keeps its
+   * transcript and is summarized again.
    */
   async reprocess(user: UserRow, id: string): Promise<MeetingDetail> {
     const meeting = await this.owned(user, id);
-    return this.detail(await this.startProcessing(meeting, undefined, meeting.source === 'browser' || meeting.source === 'upload'));
+    const fromAudio = meeting.source === 'browser' || meeting.source === 'upload' || meeting.audioChannels === 'mic-system';
+    return this.detail(await this.startProcessing(meeting, undefined, fromAudio));
   }
 
   private async startProcessing(meeting: MeetingRow, durationSec?: number, fromAudio = false): Promise<MeetingRow> {
@@ -241,7 +249,7 @@ export class MeetingsService {
     const [summary, segments, audioUrl, chained] = await Promise.all([
       this.repo.getSummary(meeting.id),
       this.repo.getSegments(meeting.id),
-      meeting.hasAudio && meeting.audioKey ? this.storage.presignGet(meeting.audioKey) : Promise.resolve(null),
+      meeting.hasAudio && meeting.audioKey ? this.storage.presignGet(meeting.playbackKey ?? meeting.audioKey) : Promise.resolve(null),
       meeting.chainId ? this.repo.chainMeetings(meeting.userId, meeting.chainId) : Promise.resolve([]),
     ]);
     const chain =

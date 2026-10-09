@@ -1,4 +1,8 @@
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { MeetingDetail, MeetingPage } from '@boringtalks/shared';
 import { DB, type Database } from '../src/db/db.module';
 import { DEMO_MEETING } from '../src/meetings/demo-meeting';
@@ -202,6 +206,49 @@ describe('browser flow: audio only → transcribe → summarize', () => {
     await h.http.post(`/meetings/${created.id}/complete`).set(bearer(token)).expect(409);
     await waitForStatus(token, created.id, 'ready');
     await h.http.post(`/meetings/${created.id}/complete`).set(bearer(token)).expect(409);
+  });
+});
+
+/** What the Mac records with "Transcribe online": the microphone on the left, system audio on the right. */
+function micSystemM4a(): Buffer {
+  const dir = mkdtempSync(join(tmpdir(), 'bt-e2e-'));
+  try {
+    const file = join(dir, 'meeting.m4a');
+    execFileSync('ffmpeg', [
+      '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'sine=frequency=300:duration=2',
+      '-f', 'lavfi', '-i', 'sine=frequency=500:duration=2',
+      '-filter_complex', '[0:a][1:a]join=inputs=2:channel_layout=stereo',
+      '-ar', '16000', '-c:a', 'aac', '-b:a', '48k', file,
+    ]);
+    return readFileSync(file);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+describe('Mac flow, transcribed online: two channels → transcribe each side → summarize', () => {
+  it('transcribes both sides, plays a mono mix and reprocesses from the audio', async () => {
+    const token = emulatorToken('mac-online-user');
+    const created = await createMeeting(token);
+    const audio = micSystemM4a();
+    const res = await h.http
+      .post(`/meetings/${created.id}/upload-url`)
+      .set(bearer(token))
+      .send({ contentType: 'audio/mp4', sizeBytes: audio.length, channels: 'mic-system' })
+      .expect(200);
+    expect((await fetch(res.body.url, { method: 'PUT', headers: res.body.headers, body: audio })).status).toBe(200);
+    const done = await h.http.post(`/meetings/${created.id}/complete`).set(bearer(token)).send({ durationSec: 2 }).expect(200);
+    expect(done.body.status).toBe('transcribing');
+
+    const ready = await waitForStatus(token, created.id, 'ready');
+    // The fake transcriber hears the same words on both sides, so the microphone's copy is dropped as echo.
+    expect(ready.segments.map((s) => s.speaker)).toEqual(['Speaker 1', 'Speaker 1']);
+    expect(ready.audioUrl).toContain('audio-playback.m4a');
+
+    const again = await h.http.post(`/meetings/${created.id}/reprocess`).set(bearer(token)).expect(200);
+    expect(again.body.status).toBe('transcribing');
+    await waitForStatus(token, created.id, 'ready');
   });
 });
 

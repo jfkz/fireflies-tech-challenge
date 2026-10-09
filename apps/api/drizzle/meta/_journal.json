@@ -50,6 +50,13 @@
       "when": 1791483704900,
       "tag": "0006_problem_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791582235168,
+      "tag": "0007_split_channels",
+      "breakpoints": true
     }
   ]
 }

@@ -369,7 +369,8 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   process tap, so Zoom/Meet/Teams/browser all work without a virtual driver). Both sides
   share one clock; dropouts and device switches are padded with silence; device changes
   restart that side's capture automatically. Both sides are mixed into a mono AAC file
-  (16 kHz, 32 kbps, ~14 MB/hour).
+  (16 kHz, 32 kbps, ~14 MB/hour) — or, with **Transcribe: Online**, kept apart in a stereo AAC
+  file (microphone left, system audio right, 48 kbps, ~22 MB/hour) for the server to transcribe.
 - **Where:** `BoringTalks/Recording/MeetingRecorder.swift`, `RecordingChannel.swift`,
   `RecordingWriter.swift`, `BoringTalks/Speech/AudioCapture.swift`,
   `BoringTalksKit/ChannelTimeline.swift` (`ChannelTimeline`, `AudioMixer`).
@@ -409,7 +410,12 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   it?” with **Record** (clicking the notification does the same), **Not now** and **Never for
   this app**. The menu shows the same question and the menu-bar icon turns into a phone, so it
   works with notifications off. One question per call: **Not now** lasts until the app releases
-  the mic, and an unanswered question disappears when it does. It never records without asking.
+  the mic, and an unanswered question disappears when it does. It never records without asking,
+  unless **Start recording when a call starts** is on: then a call app's call (Zoom, Teams, Webex,
+  Slack, FaceTime, Discord, Skype, WhatsApp, Telegram — not a browser, which still only gets the
+  question) is recorded as soon as it counts as a call, with a “Recording the Zoom call” notification
+  that has a **Stop** button. Apps under “Never asked” are left alone, and a recording stopped by hand
+  isn't started again during the same call. Off by default.
   Recognized: Zoom, Teams, Webex, Slack, FaceTime (and iPhone calls), Discord, Skype, WhatsApp,
   Telegram, and Chrome, Brave, Arc, Edge, Firefox, Safari, Opera, Vivaldi.
   **Stop when the call ends:** the recording, started from the question or by hand (it adopts
@@ -443,6 +449,19 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   `SpeechModels.swift` (download progress in the menu and Settings).
 - **Limits:** languages outside Parakeet's 25 come out wrong; if the model isn't ready by
   Stop, the meeting is uploaded with audio only and the server transcribes it.
+
+### Transcribe online instead
+
+- **What:** Settings › Transcription › **Online, after the meeting** skips on-device
+  transcription: no speech model is downloaded or loaded, there is no live transcript, and the
+  meeting is recorded with the microphone and system audio on their own channels. The upload asks
+  for its URL with `channels: "mic-system"`, and the worker transcribes each side by itself: the
+  microphone as “You”, the others with their voices told apart, the microphone's echo of the call
+  dropped like on the Mac. Stop after silence and the call-end stop work from the level meters.
+- **Where:** `Preferences.transcribeOnMac`, `MeetingRecorder.start(…, transcribeLocally:)`,
+  `AudioMixer` `.split` layout, `RecordingWriter(split:)`; server side under *Processing pipeline*.
+- **Limits:** costs server transcription for both sides (see COSTS.md); the transcript arrives a
+  minute or two after the meeting instead of at Stop.
 
 ### Telling the other people apart
 
@@ -494,12 +513,15 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 
 ### Settings
 
-- **What:** speech model status and download progress (with retry), language (automatic by
-  default), **Upload meeting audio** (on by default), **Keep recordings on this Mac**
-  (delete after upload / 1 / 7 / 30 days), **Stop after silence** (never / 1–60 minutes,
-  default 5), show recordings in Finder, **Calls** (offer to record, stop when the call ends,
-  apps never asked about), account and sign out,
-  API and dashboard URLs, version, quit.
+- **What:** four tabs, so the window stays short on a small screen; a tab that is still taller
+  than the screen scrolls. **Transcription:** on this Mac or online, speech model status and
+  download progress (with retry), language (automatic by default). **Recording:** Bluetooth
+  headsets in high quality, **Upload meeting audio** (on by default; always on when the server
+  transcribes), **Keep recordings on this Mac** (delete after upload / 1 / 7 / 30 days), show
+  recordings in Finder, **Stop after silence** (never / 1–60 minutes, default 5). **Calls:** start
+  recording when a call starts, offer to record other calls, stop when the call ends, apps never
+  asked about. **Account:** sign in/out, API and dashboard URLs, version, quit. The last tab is
+  remembered.
 - **Where:** `BoringTalks/UI/SettingsView.swift`, `BoringTalks/App/Preferences.swift`.
 
 ### Recent meetings
@@ -604,7 +626,14 @@ as rows for search. `POST /meetings` honours `Idempotency-Key`, so a client retr
 duplicate.
 
 ### Processing pipeline (worker)
-- **Transcribe and tell voices apart** (browser recordings and uploads only): MAI-Transcribe 2
+- **Two-channel Mac recordings** (`audioChannels = 'mic-system'`, from **Transcribe: Online**):
+  ffmpeg splits the file into the microphone side and the system side (mono 24 kbps MP3 each) plus a
+  mono AAC mix, which becomes the meeting's playback audio (`audio-playback.m4a`, `playback_key`) so
+  the user isn't in one ear only. Both sides go through the transcriber below in parallel; the
+  system side gets its voices told apart, every microphone segment becomes “You”, and a microphone
+  phrase that overlaps the others' and repeats ≥ 60% of their words is dropped as echo (the Mac's
+  rule, `processing/channels.ts`). **Reprocess** starts again from the audio.
+- **Transcribe and tell voices apart** (browser recordings and uploads): MAI-Transcribe 2
   (`TRANSCRIBE_MODEL`, `microsoft/mai-transcribe-2` through the AI Gateway, $0.10 an hour) with
   diarization: one phrase per speaker turn, each with its speaker (`processing/gateway-transcriber.ts`
   `transcribeDiarized`, `fromPhrases`, `joinDiarized`):

@@ -6,14 +6,16 @@ import { MeetingsRepository } from '../meetings/meetings.repository';
 import { TranscriptService } from '../meetings/transcript.service';
 import { JobsService } from '../queues/jobs.service';
 import type { MeetingJob } from '../queues/queues';
-import { summaryKey } from '../storage/keys';
+import { playbackKey, summaryKey } from '../storage/keys';
 import { StorageService } from '../storage/storage.service';
 import { UsersRepository } from '../users/users.repository';
+import { PLAYBACK_MEDIA_TYPE, SPEECH_MEDIA_TYPE, splitChannels } from './audio-prep';
+import { mergeChannels } from './channels';
 import { displayNames, resolveSpeakerNames } from './speaker-names';
 import { ChainLinker, linkIntoChain } from './chain-linker';
 import { Diarizer } from './diarizer';
 import { Summarizer } from './summarizer';
-import { Transcriber } from './transcriber';
+import { Transcriber, type TranscribeResult } from './transcriber';
 
 /** How many of the user's existing topic tags the summarizer is shown, to reuse them. */
 const KNOWN_TOPICS = 30;
@@ -40,18 +42,45 @@ export class PipelineService {
     if (!meeting) return 'stale';
     if (!meeting.audioKey) throw new UnrecoverableError('The meeting has no audio');
     const audio = await this.storage.getBytes(meeting.audioKey);
-    const result = await this.transcriber.transcribe({
-      audio,
-      mediaType: meeting.audioContentType ?? 'audio/mp4',
-      language: meeting.language,
-    });
+    const result =
+      meeting.audioChannels === 'mic-system'
+        ? await this.transcribeSplit(meeting, audio)
+        : await this.listen(audio, meeting.audioContentType ?? 'audio/mp4', meeting.language);
     if (result.segments.length === 0) throw new UnrecoverableError('No speech was found in the audio');
-    // A model that doesn't tell voices apart gives one; then listen again to tell the people apart.
-    const segments = result.diarized ? result.segments : await this.diarizer.diarize({ audio, segments: result.segments });
-    await this.transcripts.store(meeting, { ...result, segments });
+    await this.transcripts.store(meeting, result);
     const next = await this.meetings.transition(meeting.id, 'transcribing', { status: 'summarizing' });
     if (next) await this.jobs.summarize(next.id, next.attempts);
     return 'done';
+  }
+
+  /**
+   * A Mac recording with the microphone and system audio on their own channels: each side is
+   * transcribed by itself, the microphone as "You" and the others with their voices told apart,
+   * then merged (echo dropped) like the Mac does it. The dashboard plays a mono mix.
+   */
+  private async transcribeSplit(meeting: MeetingRow, audio: Uint8Array): Promise<TranscribeResult> {
+    const sides = await splitChannels(audio);
+    const [mic, system] = await Promise.all([
+      this.transcriber.transcribe({ audio: sides.mic, mediaType: SPEECH_MEDIA_TYPE, language: meeting.language }),
+      this.listen(sides.system, SPEECH_MEDIA_TYPE, meeting.language),
+    ]);
+    const key = playbackKey(meeting.userId, meeting.id);
+    await this.storage.putBytes(key, sides.mix, PLAYBACK_MEDIA_TYPE);
+    await this.meetings.update(meeting.id, { playbackKey: key });
+    this.logger.log({ meetingId: meeting.id, mic: mic.segments.length, system: system.segments.length }, 'transcribed both sides');
+    return {
+      segments: mergeChannels(mic.segments, system.segments),
+      language: meeting.language ?? system.language ?? mic.language,
+      durationSec: system.durationSec ?? mic.durationSec,
+      diarized: true,
+    };
+  }
+
+  /** Speech to text with the speakers told apart: by the model itself, or by listening again. */
+  private async listen(audio: Uint8Array, mediaType: string, language: string | null): Promise<TranscribeResult> {
+    const result = await this.transcriber.transcribe({ audio, mediaType, language });
+    if (result.diarized || result.segments.length === 0) return result;
+    return { ...result, segments: await this.diarizer.diarize({ audio, segments: result.segments }) };
   }
 
   async summarize(job: MeetingJob): Promise<'done' | 'stale'> {

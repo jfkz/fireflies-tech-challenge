@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { DeviceApp, MeetingSource, MeetingStatus, ProblemReportKind } from '@boringtalks/shared';
+import type { AudioChannels, DeviceApp, MeetingSource, MeetingStatus, ProblemReportKind } from '@boringtalks/shared';
 
 /** Who named a speaker: the summarizer from the conversation, or the user by hand (never overwritten). */
 export interface SpeakerNameEntry {
@@ -87,6 +87,10 @@ export const meetings = pgTable(
     audioContentType: text('audio_content_type'),
     /** True once the audio object was seen in storage (HeadObject). */
     hasAudio: boolean('has_audio').notNull().default(false),
+    /** 'mic-system' when the Mac recorded the microphone and system audio on separate channels; null = mixed. */
+    audioChannels: text('audio_channels').$type<AudioChannels>(),
+    /** A mono mix of a split-channel recording, made by the worker for playback. */
+    playbackKey: text('playback_key'),
     transcriptKey: text('transcript_key'),
     /** Distinct speakers' display names in order of appearance, cached for the list view and the speaker filter. */
     speakers: text('speakers').array().notNull().default(sql`'{}'::text[]`),

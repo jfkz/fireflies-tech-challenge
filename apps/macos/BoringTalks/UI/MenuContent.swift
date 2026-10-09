@@ -184,7 +184,12 @@ private struct RecordingPanel: View {
                         .buttonStyle(.borderless).font(.caption)
                 }
             }
-            if recorder.isRecording, recorder.waitingForModel {
+            if recorder.isRecording, !recorder.transcribesLocally {
+                Label("Recording you and the others separately. The transcript is made online after the meeting.",
+                      systemImage: "icloud.and.arrow.up")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if recorder.isRecording, recorder.waitingForModel {
                 Label("Recording. The speech model is still loading — the transcript catches up once it's ready.",
                       systemImage: "hourglass")
                     .font(.caption).foregroundStyle(.secondary)
@@ -193,12 +198,15 @@ private struct RecordingPanel: View {
                 ModelProgress(models: model.models)
             }
 
-            Button {
-                model.toggleLiveWindow()
-            } label: {
-                Label(model.liveWindowVisible ? "Hide live transcript" : "Show live transcript", systemImage: "text.bubble")
+            // Nothing is transcribed live when the server does it after the meeting.
+            if recorder.isRecording ? recorder.transcribesLocally : model.preferences.transcribeOnMac {
+                Button {
+                    model.toggleLiveWindow()
+                } label: {
+                    Label(model.liveWindowVisible ? "Hide live transcript" : "Show live transcript", systemImage: "text.bubble")
+                }
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
         }
     }
 
@@ -207,7 +215,7 @@ private struct RecordingPanel: View {
         case .idle: "Start meeting"
         case .starting: "Starting…"
         case .recording: "Stop"
-        case .finishing: "Finishing transcript…"
+        case .finishing: recorder.transcribesLocally ? "Finishing transcript…" : "Finishing…"
         }
     }
 

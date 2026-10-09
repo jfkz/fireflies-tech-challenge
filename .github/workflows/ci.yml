@@ -55,6 +55,8 @@ jobs:
       - run: mkdir -p .data/minio && chmod 777 .data/minio
       - run: docker compose up -d --wait postgres redis minio && docker compose up minio-setup
       - run: pnpm turbo run build --filter @boringtalks/api
+      # The worker splits two-channel Mac recordings with ffmpeg, as in the API image.
+      - run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
       - run: pnpm --filter @boringtalks/api test:e2e
       - if: failure()
         run: docker compose logs --tail 200

@@ -7,9 +7,11 @@ import BoringTalksKit
 ///
 /// Until the speech model is ready the audio waits in a backlog and is
 /// transcribed as soon as it is (up to 20 minutes; past that the meeting is left
-/// for the server to transcribe from the audio).
+/// for the server to transcribe from the audio). A channel that isn't transcribed here
+/// (`transcribes` off: the server does it) keeps no backlog.
 final class RecordingChannel: @unchecked Sendable {
     let kind: AudioChannel
+    let transcribes: Bool
     let meter = LevelMeter()
     private let clockStart: TimeInterval
     private let writer: RecordingWriter
@@ -28,8 +30,9 @@ final class RecordingChannel: @unchecked Sendable {
 
     private static let backlogLimit = SpeechFormat.rate * 60 * 20
 
-    init(kind: AudioChannel, clockStart: TimeInterval, writer: RecordingWriter) {
+    init(kind: AudioChannel, clockStart: TimeInterval, writer: RecordingWriter, transcribes: Bool = true) {
         self.kind = kind
+        self.transcribes = transcribes
         self.clockStart = clockStart
         self.writer = writer
         queue = DispatchQueue(label: "games.cutthecheese.boringtalks.\(kind.rawValue)", qos: .userInitiated)
@@ -102,7 +105,7 @@ final class RecordingChannel: @unchecked Sendable {
         writer.append(chunk, from: kind)
         if let transcriber {
             transcriber.feed(chunk)
-        } else if !droppedBacklog {
+        } else if transcribes, !droppedBacklog {
             backlog.append(chunk)
             backlogSamples += chunk.count
             if backlogSamples > Self.backlogLimit {
