@@ -141,6 +141,8 @@ export type MeetingDetail = z.infer<typeof MeetingDetail>;
 export const MeetingPage = z.object({
   items: z.array(MeetingListItem),
   nextCursor: z.string().nullable(),
+  /** How many meetings match in all; only on a numbered page (`page` in the query). */
+  total: z.number().int().nonnegative().optional(),
 });
 export type MeetingPage = z.infer<typeof MeetingPage>;
 
@@ -219,6 +221,8 @@ export type UpdateMeetingRequest = z.infer<typeof UpdateMeetingRequest>;
 export const ListMeetingsQuery = z
   .object({
     cursor: z.string().optional(),
+    /** A numbered page (from 1) instead of a cursor; the response then carries `total`. */
+    page: z.coerce.number().int().min(1).max(10_000).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(20),
     q: z.string().trim().max(200).optional(),
     /** Only meetings this person spoke in (display name, exact). */
@@ -229,7 +233,8 @@ export const ListMeetingsQuery = z
     from: z.string().datetime({ offset: true }).optional(),
     to: z.string().datetime({ offset: true }).optional(),
   })
-  .refine((v) => !v.from || !v.to || Date.parse(v.from) < Date.parse(v.to), { message: '`from` must be before `to`', path: ['to'] });
+  .refine((v) => !v.from || !v.to || Date.parse(v.from) < Date.parse(v.to), { message: '`from` must be before `to`', path: ['to'] })
+  .refine((v) => !v.cursor || !v.page, { message: 'Use either `cursor` or `page`', path: ['page'] });
 export type ListMeetingsQuery = z.infer<typeof ListMeetingsQuery>;
 
 /** A speaker or topic with how many meetings it appears in, for the filter bar. */

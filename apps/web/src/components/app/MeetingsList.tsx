@@ -11,11 +11,11 @@ import { SpeakerChip } from '@/components/ui/SpeakerChip';
 import { StatusChip } from '@/components/ui/StatusChip';
 import { Marked } from '@/components/ui/Marked';
 import { TopicPill } from '@/components/ui/TopicPill';
-import { useMe, useMeetingFacets, useMeetings, type MeetingFilters } from '@/hooks/queries';
+import { MEETINGS_PER_PAGE, useMe, useMeetingFacets, useMeetingsPage, type MeetingFilters } from '@/hooks/queries';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { stillPose } from '@/lib/avatar/pose';
 import { LISTENER } from '@/lib/avatar/styles';
-import { filtersFromParams, filtersToSearch, hasFilters } from '@/lib/filters';
+import { filtersFromParams, filtersToSearch, hasFilters, pageFromParams, pageHref, pageRange } from '@/lib/filters';
 import { formatMeetingDate } from '@/lib/format';
 import { isTyping } from '@/lib/meeting-nav';
 import { isPersonName, personHref } from '@/lib/people';
@@ -29,12 +29,20 @@ export function MeetingsList() {
   const [search, setSearch] = useState(filters.q ?? '');
   const q = useDebouncedValue(search.trim(), 300);
   const me = useMe();
-  const list = useMeetings({ ...filters, q }, me.isSuccess);
+  const page = pageFromParams(params);
+  const list = useMeetingsPage({ ...filters, q }, page, me.isSuccess);
   const facets = useMeetingFacets(me.isSuccess);
-  const items = list.data?.pages.flatMap((p) => p.items) ?? [];
+  const items = list.data?.items ?? [];
+  const total = list.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / MEETINGS_PER_PAGE));
   const filtered = hasFilters({ ...filters, q });
   const loadFailed = list.isError && !list.data;
-  const moreFailed = list.isFetchNextPageError;
+  // Past the last page (a meeting was deleted, or an old link): go to the last one there is.
+  const pastEnd = !list.isPlaceholderData && list.isSuccess && items.length === 0 && page > 1;
+
+  useEffect(() => {
+    if (pastEnd) router.replace(pageHref(pathname, filtersFromParams(params), pageCount), { scroll: false });
+  }, [pastEnd, pageCount, params, pathname, router]);
 
   // Typing replaces the URL (no history entry per keystroke); clicking a pill pushes one.
   useEffect(() => {
@@ -103,29 +111,27 @@ export function MeetingsList() {
           <ErrorNote onRetry={() => me.refetch()}>{me.error.message}</ErrorNote>
         ) : loadFailed ? (
           <ErrorNote onRetry={() => list.refetch()}>{list.error?.message ?? 'Could not load meetings.'}</ErrorNote>
-        ) : list.isPending ? (
+        ) : list.isPending || pastEnd ? (
           <ListSkeleton />
         ) : items.length === 0 ? (
           filtered ? <NoResults filters={{ ...filters, q }} onClear={clear} /> : <EmptyState />
         ) : (
           <>
-            <ul className="sticker divide-y-2 divide-ink/10 overflow-hidden" aria-label="Meetings" aria-busy={list.isFetching}>
+            <ul
+              className={`sticker divide-y-2 divide-ink/10 overflow-hidden transition-opacity ${list.isPlaceholderData ? 'opacity-60' : ''}`}
+              aria-label="Meetings"
+              aria-busy={list.isFetching}
+            >
               {items.map((m) => (
                 <MeetingRow key={m.id} meeting={m} filters={filters} onToggle={toggle} q={q} />
               ))}
             </ul>
-            {list.hasNextPage && (
-              <div className="mt-6 flex justify-center">
-                <button type="button" className="btn btn-secondary" onClick={() => list.fetchNextPage()} disabled={list.isFetchingNextPage}>
-                  {list.isFetchingNextPage ? 'Loading…' : 'Load more'}
-                </button>
-              </div>
-            )}
-            {moreFailed && (
+            {list.isError && (
               <div className="mt-4">
-                <ErrorNote onRetry={() => list.fetchNextPage()}>{list.error?.message ?? 'Could not load more meetings.'}</ErrorNote>
+                <ErrorNote onRetry={() => list.refetch()}>{list.error.message}</ErrorNote>
               </div>
             )}
+            <Pagination page={page} pageCount={pageCount} total={total} shown={items.length} href={(n) => pageHref(pathname, { ...filters, q }, n)} />
           </>
         )}
       </div>
@@ -134,6 +140,66 @@ export function MeetingsList() {
 }
 
 type Toggle = (key: 'speaker' | 'topic', value: string) => void;
+
+/** "21–40 of 93" and links to the previous, next and nearby pages; nothing when it all fits on one. */
+export function Pagination({ page, pageCount, total, shown, href }: { page: number; pageCount: number; total: number; shown: number; href: (page: number) => string }) {
+  if (pageCount <= 1) return null;
+  const first = (page - 1) * MEETINGS_PER_PAGE + 1;
+  const step = 'btn btn-secondary btn-sm';
+  const off = 'btn btn-secondary btn-sm pointer-events-none opacity-40';
+  return (
+    <nav aria-label="Pages" className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-3 sm:justify-between">
+      <p className="text-sm font-bold text-ink-soft tabular-nums">
+        {first}–{first + shown - 1} of {total}
+      </p>
+      <div className="flex items-center gap-1.5">
+        {page > 1 ? (
+          <Link href={href(page - 1)} className={step} rel="prev">
+            ← Newer
+          </Link>
+        ) : (
+          <span className={off} aria-hidden>
+            ← Newer
+          </span>
+        )}
+        <ul className="hidden items-center gap-1 sm:flex">
+          {pageRange(page, pageCount).map((n, i) =>
+            n === null ? (
+              <li key={`gap${i}`} className="px-1 font-extrabold text-ink-soft" aria-hidden>
+                …
+              </li>
+            ) : (
+              <li key={n}>
+                <Link
+                  href={href(n)}
+                  aria-current={n === page ? 'page' : undefined}
+                  aria-label={`Page ${n}`}
+                  className={`inline-flex h-9 min-w-9 items-center justify-center rounded-full px-2 text-sm font-extrabold tabular-nums transition-colors ${
+                    n === page ? 'border-[2.5px] border-ink bg-sun' : 'text-ink hover:bg-ink/5'
+                  }`}
+                >
+                  {n}
+                </Link>
+              </li>
+            ),
+          )}
+        </ul>
+        <span className="px-2 text-sm font-extrabold text-ink-soft tabular-nums sm:hidden">
+          {page} / {pageCount}
+        </span>
+        {page < pageCount ? (
+          <Link href={href(page + 1)} className={step} rel="next">
+            Older →
+          </Link>
+        ) : (
+          <span className={off} aria-hidden>
+            Older →
+          </span>
+        )}
+      </div>
+    </nav>
+  );
+}
 
 /** How many people and topics show before "more". */
 const FACETS_SHOWN = 8;

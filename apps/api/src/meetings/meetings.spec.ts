@@ -23,6 +23,7 @@ const summaryRow = (o: Partial<SummaryWithItems> = {}): SummaryWithItems => ({
 function setup() {
   const repo = {
     list: vi.fn(),
+    count: vi.fn(),
     create: vi.fn(),
     createOnce: vi.fn(),
     findByClientKey: vi.fn(),
@@ -168,12 +169,25 @@ describe('MeetingsService', () => {
       const page = await service.list(user(), { limit: 2 });
       expect(page.items.map((i) => i.actionItemCount)).toEqual([1, 2]);
       expect(page.nextCursor).toBe(encodeCursor({ startedAt: rows[1].startedAt, id: rows[1].id }));
-      expect(repo.list).toHaveBeenCalledWith(user().id, { cursor: null, limit: 3, q: undefined });
+      expect(repo.list).toHaveBeenCalledWith(user().id, { cursor: null, limit: 3, offset: 0, q: undefined });
+      expect(repo.count).not.toHaveBeenCalled();
       expect(page.items[0].topics).toEqual([]);
 
       repo.list.mockResolvedValue(rows.slice(0, 1));
       expect((await service.list(user(), { limit: 2, q: 'x', cursor: page.nextCursor! })).nextCursor).toBeNull();
       expect(repo.list.mock.calls[1][1]).toMatchObject({ q: 'x', cursor: { id: rows[1].id } });
+    });
+
+    it('returns a numbered page with the total and no cursor', async () => {
+      const { repo, service } = setup();
+      const rows = [1, 2, 3].map((i) => ({ ...meeting({ id: `00000000-0000-4000-8000-00000000000${i}` }), actionItemCount: 0 }));
+      repo.list.mockResolvedValue(rows);
+      repo.count.mockResolvedValue(7);
+      const page = await service.list(user(), { limit: 2, page: 3, topic: 'Pricing' });
+      expect(page).toMatchObject({ nextCursor: null, total: 7 });
+      expect(page.items).toHaveLength(2);
+      expect(repo.list.mock.calls[0][1]).toMatchObject({ cursor: null, limit: 3, offset: 4, topic: 'Pricing' });
+      expect(repo.count).toHaveBeenCalledWith(user().id, expect.objectContaining({ topic: 'Pricing' }));
     });
 
     it('passes speaker, topic and date filters through', async () => {

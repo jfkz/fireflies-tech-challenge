@@ -67,6 +67,12 @@ describe('MeetingsRepository', () => {
     const second = await meetings.list(userId, { cursor, limit: 10 });
     expect(second.map((m) => m.title)).toEqual(['Page meeting 3', 'Page meeting 2', 'Page meeting 1']);
     expect(second.every((m) => m.actionItemCount === 0)).toBe(true);
+
+    const third = await meetings.list(userId, { cursor: null, limit: 2, offset: 2 });
+    expect(third.map((m) => m.title)).toEqual(['Page meeting 3', 'Page meeting 2']);
+    expect(await meetings.count(userId, {})).toBe(5);
+    expect(await meetings.count(userId, { from: new Date('2026-01-04T00:00:00Z') })).toBe(2);
+    expect(await meetings.count(userId, { q: '!!!' })).toBe(0);
   });
 
   it('stores transcripts, summaries and finds them by full-text search', async () => {

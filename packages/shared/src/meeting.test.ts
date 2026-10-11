@@ -70,6 +70,11 @@ describe('requests', () => {
     expect(ListMeetingsQuery.parse({}).limit).toBe(20);
     expect(ListMeetingsQuery.safeParse({ limit: '500' }).success).toBe(false);
   });
+  it('takes a numbered page or a cursor, not both', () => {
+    expect(ListMeetingsQuery.parse({ page: '3' }).page).toBe(3);
+    expect(ListMeetingsQuery.safeParse({ page: '0' }).success).toBe(false);
+    expect(ListMeetingsQuery.safeParse({ page: '2', cursor: 'c' }).success).toBe(false);
+  });
   it('validates PKCE values', () => {
     const challenge = 'a'.repeat(43);
     expect(AuthorizeDeviceRequest.safeParse({ codeChallenge: challenge, deviceName: 'MacBook' }).success).toBe(true);

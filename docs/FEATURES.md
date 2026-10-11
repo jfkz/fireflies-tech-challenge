@@ -104,8 +104,10 @@ over titles, notes, action items, people, topics and transcripts via `q`, matchi
 words as you type them (“pric” finds “pricing”), with “quoted phrases” and -exclusions. Each
 result shows where it matched with the words highlighted: the first matching transcript line with
 who said it, when, and how many lines match (a click opens the meeting at that moment), or the
-notes, title or people. Press **/** anywhere on the list to search. cursor pagination with “Load more”,
-an empty state and a “nothing matches” state. Statuses refresh every 5 s while
+notes, title or people. Press **/** anywhere on the list to search. Numbered pages of 20 (“21–40 of 93”,
+← Newer / Older → and the nearby page numbers; on a phone just “2 / 5”), kept in the URL as `?page=` with
+the filters; a filter or search goes back to page 1, and a page past the end (after a delete, or an old
+link) goes to the last one. The current page stays on screen, dimmed, while the next loads. An empty state and a “nothing matches” state. Statuses refresh every 5 s while
 anything is still processing.
 
 *Filters.* Every row shows its speakers and topic tags as pills. A named person's chip opens their
@@ -591,7 +593,7 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 ## Backend features (apps/api)
 
 ### Meetings API
-Create, list (keyset pagination, full-text search over titles, descriptions and transcripts), read,
+Create, list (keyset or numbered-page pagination, full-text search over titles, descriptions and transcripts), read,
 rename, toggle action items, delete (removes stored audio and transcripts too), reprocess. Every
 route is per-user: someone else's meeting is a 404. Contract and examples: [API.md](API.md).
 

@@ -407,6 +407,10 @@ describe('pagination and search', () => {
     } while (cursor);
     // The demo meeting is the newest (yesterday), then Pager 4..0.
     expect(seen).toEqual([DEMO_MEETING.title, 'Pager 4', 'Pager 3', 'Pager 2', 'Pager 1', 'Pager 0']);
+    const numbered = (await h.http.get('/meetings?limit=4&page=2').set(bearer(token)).expect(200)).body as MeetingPage;
+    expect(numbered).toMatchObject({ total: 6, nextCursor: null });
+    expect(numbered.items.map((i) => i.title)).toEqual(['Pager 1', 'Pager 0']);
+    await h.http.get('/meetings?page=2&cursor=x').set(bearer(token)).expect(400);
 
     const found = (await h.http.get('/meetings?q=quokka').set(bearer(token)).expect(200)).body as MeetingPage;
     expect(found.items.map((i) => i.title)).toEqual(['Pager 2']);

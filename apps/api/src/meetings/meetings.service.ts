@@ -76,20 +76,25 @@ export class MeetingsService {
   async list(user: UserRow, query: ListMeetingsQuery): Promise<MeetingPage> {
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
     if (query.cursor && !cursor) throw validationError([{ path: 'cursor', message: 'Invalid cursor' }]);
-    const rows = await this.repo.list(user.id, {
-      cursor,
-      limit: query.limit + 1,
+    const filters = {
       q: query.q || undefined,
       speaker: query.speaker,
       topic: query.topic,
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
-    });
+    };
+    const offset = query.page ? (query.page - 1) * query.limit : 0;
+    const [rows, total] = await Promise.all([
+      this.repo.list(user.id, { ...filters, cursor, limit: query.limit + 1, offset }),
+      query.page ? this.repo.count(user.id, filters) : undefined,
+    ]);
     const page = rows.slice(0, query.limit);
     const last = page[page.length - 1];
     return {
       items: page.map((r) => toListItem(r, r.actionItemCount, r.match)),
-      nextCursor: rows.length > query.limit && last ? encodeCursor({ startedAt: last.startedAt, id: last.id }) : null,
+      // A numbered page is followed by number, not by cursor.
+      nextCursor: !query.page && rows.length > query.limit && last ? encodeCursor({ startedAt: last.startedAt, id: last.id }) : null,
+      ...(total !== undefined && { total }),
     };
   }
 

@@ -121,13 +121,15 @@ export async function mockApi(
       const from = url.searchParams.get('from');
       const to = url.searchParams.get('to');
       const limit = Number(url.searchParams.get('limit') ?? 20);
-      const start = Number(url.searchParams.get('cursor') ?? 0);
+      const page = url.searchParams.get('page');
+      const start = page ? (Number(page) - 1) * limit : Number(url.searchParams.get('cursor') ?? 0);
       const all = state.meetings
         .filter((m) => !q || [m.title, m.description ?? '', ...m.segments.map((s) => s.text)].join(' ').toLowerCase().includes(q))
         .filter((m) => (!speaker || m.speakers.includes(speaker)) && (!topic || m.topics.includes(topic)))
         .filter((m) => (!from || m.startedAt >= new Date(from).toISOString()) && (!to || m.startedAt < new Date(to).toISOString()))
         .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
       const items = all.slice(start, start + limit).map(toListItem);
+      if (page) return json(route, 200, { items, nextCursor: null, total: all.length });
       const next = start + limit < all.length ? String(start + limit) : null;
       return json(route, 200, { items, nextCursor: next });
     }

@@ -61,6 +61,37 @@ test('search is debounced and sends q', async ({ page, api }) => {
   expect(api.callsTo('GET', /^\/meetings$/).at(-1)?.query.q).toBe('launch email');
 });
 
+test('pages through more than 20 meetings, and a filter goes back to page 1', async ({ page, api }) => {
+  for (let i = 1; i <= 45; i++) {
+    api.meetings.push(
+      demoMeeting({ title: `Standup ${i}`, topics: i % 2 ? ['Odd'] : ['Even'], startedAt: new Date(Date.now() - i * 3600_000).toISOString() }),
+    );
+  }
+  await signUp(page);
+  const pages = page.getByRole('navigation', { name: 'Pages' });
+  await expect(pages.getByText('1–20 of 45')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Standup 1', exact: true })).toBeVisible();
+
+  await pages.getByRole('link', { name: 'Older →' }).click();
+  await expect(page).toHaveURL(/\/meetings\?page=2$/);
+  await expect(pages.getByText('21–40 of 45')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Standup 21', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Standup 1', exact: true })).toBeHidden();
+
+  await pages.getByRole('link', { name: 'Page 3' }).click();
+  await expect(pages.getByText('41–45 of 45')).toBeVisible();
+  await expect(pages.getByRole('link', { name: 'Page 3' })).toHaveAttribute('aria-current', 'page');
+
+  await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: 'Even' }).click();
+  await expect(page).toHaveURL(/\/meetings\?topic=Even$/);
+  await expect(pages.getByText('1–20 of 22')).toBeVisible();
+  await expect(pages.getByRole('link', { name: 'Older →' })).toHaveAttribute('href', '/meetings?topic=Even&page=2');
+
+  await page.goto('/meetings?page=99');
+  await expect(page).toHaveURL(/\/meetings\?page=3$/);
+  await expect(pages.getByText('41–45 of 45')).toBeVisible();
+});
+
 test('delete asks in an in-page dialog, then removes the meeting', async ({ page, api }) => {
   await signUp(page);
   await page.getByRole('link', { name: /Pricing review/ }).click();

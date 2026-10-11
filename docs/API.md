@@ -118,9 +118,13 @@ The speakers and topics of the user's meetings, most frequent first (24 of each)
 
 ## Meetings
 
-### `GET /meetings?cursor=&limit=&q=&speaker=&topic=&from=&to=` → `MeetingPage`
+### `GET /meetings?cursor=&page=&limit=&q=&speaker=&topic=&from=&to=` → `MeetingPage`
 Newest first (`started_at desc, id desc`), keyset pagination. `limit` 1–100 (default 20). Pass the
 returned `nextCursor` (opaque) to get the next page; it is `null` on the last page.
+
+For numbered pages pass `page` (from 1) instead of `cursor` (both → 400): it skips `(page-1)·limit`
+meetings, adds `total` (how many match the filters in all) and returns `nextCursor: null`. A page past
+the end has no items but still the `total`.
 
 `q` searches titles, descriptions, the notes (summary, key topics, decisions, action items and
 their owners), speakers, topic tags and every transcript line. Each word matches as the start of a

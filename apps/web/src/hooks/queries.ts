@@ -1,7 +1,7 @@
 'use client';
 
 import type { ListTasksQuery, MeetingDetail, MeetingPage, MeetingStatsQuery, PersonDetail, TaskItem, TaskPage, UpdateMeetingRequest } from '@boringtalks/shared';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { publicApi, useAuth } from '@/components/providers/AuthProvider';
 import { aroundRange, LINK_WINDOW_DAYS, localDayRange } from '@/lib/meeting-nav';
 import { isProcessing, meetingPollInterval } from '@/lib/status';
@@ -12,6 +12,9 @@ export const keys = {
   meetings: (uid: string | undefined, filters: MeetingFilters) => ['meetings', uid, 'list', filters] as const,
   /** Every filtered list (the infinite queries). */
   meetingLists: (uid: string | undefined) => ['meetings', uid, 'list'] as const,
+  /** One numbered page of the meeting list (not under `meetingLists`: no `pages` array to patch). */
+  meetingPage: (uid: string | undefined, filters: MeetingFilters, page: number) => ['meetings', uid, 'page', filters, page] as const,
+  meetingPages: (uid: string | undefined) => ['meetings', uid, 'page'] as const,
   facets: (uid: string | undefined) => ['meetings', uid, 'facets'] as const,
   stats: (uid: string | undefined, q: MeetingStatsQuery) => ['meetings', uid, 'stats', q] as const,
   tasks: (uid: string | undefined, status: TaskStatus, owner?: string) => ['tasks', uid, status, owner ?? null] as const,
@@ -125,6 +128,22 @@ export function useMeetings(filters: MeetingFilters, ready = true) {
     // Keep the status chips moving while anything in the list is still being processed.
     refetchInterval: (query) =>
       query.state.data?.pages.some((p) => p.items.some((m) => isProcessing(m.status))) ? 5000 : false,
+  });
+}
+
+/** Meetings on the meeting list's page. */
+export const MEETINGS_PER_PAGE = 20;
+
+/** One numbered page of the meeting list, with the total. The previous page stays on screen while the next loads. */
+export function useMeetingsPage(filters: MeetingFilters, page: number, ready = true) {
+  const { api, user } = useAuth();
+  const clean = Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) as MeetingFilters;
+  return useQuery({
+    queryKey: keys.meetingPage(user?.uid, clean, page),
+    queryFn: ({ signal }) => api.listMeetings({ page, limit: MEETINGS_PER_PAGE, ...clean }, signal),
+    enabled: !!user && ready,
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) => (query.state.data?.items.some((m) => isProcessing(m.status)) ? 5000 : false),
   });
 }
 
@@ -282,6 +301,8 @@ export function useDeleteMeeting() {
       qc.setQueriesData<InfiniteData<MeetingPage>>({ queryKey: keys.meetingLists(user?.uid) }, (data) =>
         data ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.filter((m) => m.id !== id) })) } : data,
       );
+      // Numbered pages shift by one, so they reload instead.
+      void qc.invalidateQueries({ queryKey: keys.meetingPages(user?.uid) });
       void qc.invalidateQueries({ queryKey: keys.facets(user?.uid) });
     },
   });
