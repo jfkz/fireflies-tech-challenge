@@ -5,12 +5,13 @@ import { INK, MEN, WOMEN } from '@/lib/avatar/styles';
 /**
  * The app icon, drawn in SVG:
  * two heads in a periwinkle rounded square, one of them mid-sentence.
+ * Inside a `.logo` link it comes alive on hover (globals.css): the heads lean in, the bubble pops and its dots type.
  */
 export function AppIcon({ className, title }: { className?: string; title?: string }) {
   return (
     <svg
       viewBox="100 100 824 824"
-      className={className}
+      className={`logo-icon ${className ?? ''}`}
       role={title ? 'img' : undefined}
       aria-label={title}
       aria-hidden={title ? undefined : true}
@@ -26,22 +27,28 @@ export function AppIcon({ className, title }: { className?: string; title?: stri
       </defs>
       <rect x={100} y={100} width={824} height={824} rx={185} fill="url(#bt-icon-bg)" />
       <g clipPath="url(#bt-icon-clip)">
-        <Avatar style={MEN[0]} pose={stillPose()} look={1} x={147} y={494} width={430} height={430} />
-        <Avatar style={WOMEN[0]} pose={stillPose({ mouth: 0.55 })} look={-0.4} x={407} y={454} width={470} height={470} />
+        <g className="logo-head-left">
+          <Avatar style={MEN[0]} pose={stillPose()} look={1} x={147} y={494} width={430} height={430} />
+        </g>
+        <g className="logo-head-right">
+          <Avatar style={WOMEN[0]} pose={stillPose({ mouth: 0.55 })} look={-0.4} x={407} y={454} width={470} height={470} />
+        </g>
       </g>
-      <rect x={517} y={192} width={330} height={170} rx={70} fill="#fff" stroke={INK} strokeWidth={14} />
-      <path d="M580 340Q580 396 541.5 422Q597.5 393 650 340Z" fill="#fff" />
-      <path
-        d="M580 355Q580 396 541.5 422Q597.5 393 650 355"
-        fill="none"
-        stroke={INK}
-        strokeWidth={14}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      {[616, 682, 748].map((cx) => (
-        <circle key={cx} cx={cx} cy={277} r={20} fill={INK} />
-      ))}
+      <g className="logo-bubble">
+        <rect x={517} y={192} width={330} height={170} rx={70} fill="#fff" stroke={INK} strokeWidth={14} />
+        <path d="M580 340Q580 396 541.5 422Q597.5 393 650 340Z" fill="#fff" />
+        <path
+          d="M580 355Q580 396 541.5 422Q597.5 393 650 355"
+          fill="none"
+          stroke={INK}
+          strokeWidth={14}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        {[616, 682, 748].map((cx) => (
+          <circle key={cx} className="logo-dot" cx={cx} cy={277} r={20} fill={INK} />
+        ))}
+      </g>
     </svg>
   );
 }

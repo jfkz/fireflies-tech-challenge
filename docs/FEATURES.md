@@ -11,6 +11,10 @@ What BoringTalks does, by part. Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 Every feature of the website and dashboard: what it does, where it lives, and
 its limits. Paths are relative to `apps/web/src`.
 
+The logo in every header (`components/brand/Logo.tsx`) plays on hover or keyboard focus: the icon tilts
+up, its two heads lean in, the speech bubble pops and its dots type (CSS in `app/globals.css`; still with
+reduced motion).
+
 ### Landing page `/`
 
 **What.** A long, funny scroll story with a cast of cartoon heads, then the
