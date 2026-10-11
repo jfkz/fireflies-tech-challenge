@@ -296,7 +296,10 @@ around (“This page left the meeting early.”).
 ### Version and updates
 
 **What.** Every footer (the dashboard's and the landing page's) shows the build: `v0.4.0 · abc1234`
-(the `apps/web` package version and the deployed commit; `dev` locally). The web app, the API and the Mac
+(the `apps/web` package version and the deployed commit; `dev` locally). The dashboard's footer goes on
+with the API's and the Mac app's versions on the same line, `v0.5.1 · abc1234 · API v0.5.2 · Mac v0.5.0`
+(from `GET /health` and `GET /downloads/latest`, asked once per page load; hovering shows the API's
+commit and the Mac build number; a part that doesn't answer is left out). The web app, the API and the Mac
 app share major.minor (0.4.x); `pnpm check:versions` enforces it in CI. Each deployment serves its
 own build at `GET /version.json` (uncached). An open tab checks it every 5 minutes while visible, and
 when it comes back into view (at most once a minute). When a different deployment is live, a dialog
@@ -305,7 +308,7 @@ link next to the version in the footer and doesn't ask again for that build. Whi
 recorder has a recording that hasn't reached the server yet (recording, recorded, uploading), or a
 file upload is running, the dialog waits until it has.
 
-**Where.** `lib/version.ts` (build info, hold-off), `app/version.json/route.ts`,
+**Where.** `lib/version.ts` (build info, hold-off, `fetchServices`), `app/version.json/route.ts`,
 `components/app/UpdatePrompt.tsx` (`UpdatePrompt`, mounted in the root layout; `VersionTag`),
 `next.config.ts` (`NEXT_PUBLIC_APP_VERSION`, `NEXT_PUBLIC_BUILD_COMMIT` from `GITHUB_SHA`).
 

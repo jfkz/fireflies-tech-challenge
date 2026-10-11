@@ -164,7 +164,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 
 | # | Steps | Expected |
 |---|---|---|
-| 7b.1 | Open `/` and `/meetings`; open `/version.json`. | Both footers show `v<version> · <7-char commit>`; `/version.json` returns the same build with `Cache-Control: no-store`. |
+| 7b.1 | Open `/` and `/meetings`; open `/version.json`. | Both footers show `v<version> · <7-char commit>`; the dashboard's goes on with `· API v<version> · Mac v<version>`, matching the API's `/health` and the Mac download on offer (hover: API commit, Mac build). `/version.json` returns the web build with `Cache-Control: no-store`. |
 | 7b.2 | Keep a dashboard tab open while a new commit deploys to the same environment, then wait 5 minutes (or switch to another tab and back after a minute). | “A new version is out” with the new build. **Reload now** reloads into it (the footer shows the new commit). |
 | 7b.3 | Repeat, but choose **Later**. | The dialog closes and doesn't come back for that build; the footer shows **New version: reload**, which reloads. |
 | 7b.4 | Start a browser recording on `/record` before the deploy lands. | No dialog while recording, after Stop or while uploading; it appears once the meeting is saved (or the take discarded). |
