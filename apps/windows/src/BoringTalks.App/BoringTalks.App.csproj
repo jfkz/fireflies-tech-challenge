@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The tray app: WPF UI, audio capture (WASAPI), and the Windows plumbing (credentials, notifications, sign-in links). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>BoringTalks</AssemblyName>
+    <RootNamespace>BoringTalks.App</RootNamespace>
+    <ApplicationIcon>..\..\assets\BoringTalks.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>BoringTalks.App.Program</StartupObject>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- WPF code-behind and XAML event handlers. -->
+    <NoWarn>$(NoWarn);CA1001;CA1063;CA1816;CA2000;CA1416;CA1508;CA1515;CA1060;CA1401;CA2101;CA5392;SYSLIB1054;SYSLIB1096</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- WPF leaves these out of the implicit usings. -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NAudio" />
+    <PackageReference Include="H.NotifyIcon.Wpf" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" />
+    <PackageReference Include="Velopack" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BoringTalks.Core\BoringTalks.Core.csproj" />
+    <ProjectReference Include="..\BoringTalks.Speech\BoringTalks.Speech.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="..\..\assets\*.ico" LinkBase="Assets" />
+    <Resource Include="..\..\assets\*.png" LinkBase="Assets" />
+  </ItemGroup>
+</Project>

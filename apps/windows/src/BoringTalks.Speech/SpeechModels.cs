@@ -56,7 +56,7 @@ public sealed class SpeechModels(ModelStore store, Action<string>? log = null) :
         Set(new ModelState.Loading(downloading ? "Downloading the speech model" : "Loading the speech model", downloading ? 0 : null));
         try
         {
-            await store.EnsureAsync(ModelCatalog.Speech, new Progress<double>(f => Set(new ModelState.Loading("Downloading the speech model", f))));
+            if (downloading) await store.EnsureAsync(ModelCatalog.Speech, new Progress<double>(f => Set(new ModelState.Loading("Downloading the speech model", f))));
             Set(new ModelState.Loading("Loading the speech model", null));
             Engine = new ParakeetEngine(store.Folder, threads: Math.Max(2, Math.Min(4, Environment.ProcessorCount / 2)));
         }

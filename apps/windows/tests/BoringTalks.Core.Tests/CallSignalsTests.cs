@@ -236,4 +236,19 @@ public sealed class MicrophoneConsentStoreTests
         var apps = MicrophoneConsentStore.InUse(entries, self).Select(id => CallApps.Identify(id)?.Name);
         Assert.Equal(["Zoom", "Teams"], apps);
     }
+
+    [Fact]
+    public void Ignores_records_left_over_from_a_crash_or_an_old_version()
+    {
+        var entries = new[]
+        {
+            // Slack 4.26 crashed in a huddle in 2022; the record still says "in use".
+            new MicrophoneConsentStore.Entry(@"C:#Users#me#AppData#Local#slack#app-4.26.1#slack.exe", false, 132_987_687_587_212_260, 0),
+            // Zoom crashed today, so it isn't running.
+            new MicrophoneConsentStore.Entry(Zoom, false, 134_050_000_000_000_000, 0),
+            new MicrophoneConsentStore.Entry("MSTeams_8wekyb3d8bbwe", true, 134_050_000_000_000_000, 0),
+        };
+        var running = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { @"C:\Users\me\AppData\Local\slack\app-4.52.178\slack.exe" };
+        Assert.Equal(["MSTeams_8wekyb3d8bbwe"], MicrophoneConsentStore.InUse(entries, since: 134_000_000_000_000_000, isRunning: running.Contains));
+    }
 }

@@ -8,6 +8,10 @@ namespace BoringTalks.Core.Calls;
 /// apps are under <c>NonPackaged</c>, named by their path with '#' for '\'
 /// ("C:#Users#me#AppData#Roaming#Zoom#bin#Zoom.exe"). An app is using the microphone
 /// while its <c>LastUsedTimeStart</c> is set and its <c>LastUsedTimeStop</c> is 0.
+/// <para>
+/// An app that crashed (or updated) mid-call leaves its record "in use" for good, so a record only
+/// counts when it started since Windows booted and, for a desktop app, that executable is running.
+/// </para>
 /// </summary>
 public static class MicrophoneConsentStore
 {
@@ -24,9 +28,12 @@ public static class MicrophoneConsentStore
     /// Apps holding the microphone right now, except <paramref name="self"/> (this app's
     /// own executable path), which would otherwise look like a call app while recording.
     /// </summary>
-    public static IReadOnlyList<string> InUse(IEnumerable<Entry> entries, string? self = null) =>
+    /// <param name="since">Windows' boot time as a FILETIME; older records are left over from before.</param>
+    /// <param name="isRunning">Whether a desktop app's executable is running; null to trust every record.</param>
+    public static IReadOnlyList<string> InUse(IEnumerable<Entry> entries, string? self = null, long since = 0, Func<string, bool>? isRunning = null) =>
         [.. entries
-            .Where(e => e.LastUsedTimeStart > 0 && e.LastUsedTimeStop == 0)
+            .Where(e => e.LastUsedTimeStart > since && e.LastUsedTimeStop == 0)
+            .Where(e => e.IsPackaged || isRunning is null || isRunning(Identity(e)))
             .Select(Identity)
             .Where(id => self is null || !id.Equals(self, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)];
