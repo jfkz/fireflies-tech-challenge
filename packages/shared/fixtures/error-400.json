@@ -1,0 +1,5 @@
+{
+  "statusCode": 400,
+  "message": "Validation failed",
+  "issues": [{ "path": "segments.0.text", "message": "String must contain at least 1 character(s)" }]
+}

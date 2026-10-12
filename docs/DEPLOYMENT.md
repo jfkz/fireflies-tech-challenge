@@ -24,7 +24,7 @@ Each deploy run:
    Releases run on a developer's Mac, so the signing key stays off CI: `apps/macos/scripts/release.sh
    prod` (or `dev`) signs with Developer ID, builds the DMG, submits it for notarization and publishes
    it to R2 with `latest.json`; once Apple accepts it, `release.sh staple prod` staples the ticket and
-   republishes it as notarized (`WAIT=1` does both in one go). The landing page's Download button reads it via `GET /downloads/latest`; links
+   republishes it as notarized (`WAIT=1` does both in one go). The landing page's download card reads it (and `latest-windows.json`) via `GET /downloads`; links
    elsewhere (README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg.
 
 ## Infrastructure
@@ -36,7 +36,7 @@ Each deploy run:
 | Worker | Railway service `worker` | same image, `node dist/worker.js` | same |
 | Postgres, Redis | Railway services, one per environment | | |
 | Object storage | Cloudflare R2 bucket `boringtalks` | `prod/` | `dev/` |
-| DMGs | same bucket, `downloads/`, served at `download.boringtalks.lol` | `downloads/` → `/` | `downloads/dev/` → `/dev/` |
+| Installers (DMG, Setup.exe) | same bucket, `downloads/`, served at `download.boringtalks.lol` | `downloads/` → `/` | `downloads/dev/` → `/dev/` |
 | Auth | Firebase project `boringtalks-fe45f` (Email/Password, Google) | shared | shared |
 
 Google sign-in uses the site's own domain as Firebase's auth domain: `next.config.ts` proxies

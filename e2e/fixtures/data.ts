@@ -117,6 +117,7 @@ export function device(name = 'Mike’s MacBook Pro'): Device {
 
 export function latestDownload(overrides: Partial<LatestDownload> = {}): LatestDownload {
   return LatestDownload.parse({
+    platform: 'macos',
     version: '1.0.3',
     build: '42',
     url: 'https://download.boringtalks.lol/BoringTalks-1.0.3.dmg',
@@ -124,6 +125,20 @@ export function latestDownload(overrides: Partial<LatestDownload> = {}): LatestD
     minimumOs: '26.0',
     notarized: true,
     publishedAt: '2026-10-05T12:00:00.000Z',
+    ...overrides,
+  });
+}
+
+export function windowsDownload(overrides: Partial<LatestDownload> = {}): LatestDownload {
+  return LatestDownload.parse({
+    platform: 'windows',
+    version: '0.1.0',
+    build: '61',
+    url: 'https://download.boringtalks.lol/BoringTalks-Setup-0.1.0.exe',
+    sizeBytes: 92_000_000,
+    minimumOs: '10.0.19041',
+    notarized: false,
+    publishedAt: '2026-10-12T12:00:00.000Z',
     ...overrides,
   });
 }

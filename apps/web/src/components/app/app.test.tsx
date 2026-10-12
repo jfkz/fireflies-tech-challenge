@@ -87,7 +87,7 @@ describe('ConnectView', () => {
     const open = vi.fn();
     renderWithProviders(<ConnectView open={open} />, { auth: authValue({ api: fakeApi({ authorizeDevice }) }) });
     expect(screen.getByRole('heading', { name: 'Connect Studio Mac to your BoringTalks account?' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Connect this Mac' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect this computer' }));
     await screen.findByRole('heading', { name: 'You can go back to the app.' });
     expect(authorizeDevice).toHaveBeenCalledWith({ codeChallenge: CHALLENGE, deviceName: 'Studio Mac' }, expect.anything());
     expect(open).toHaveBeenCalledWith('boringtalks://callback?code=C0DE');
@@ -101,11 +101,11 @@ describe('ConnectView', () => {
     const authorizeDevice = vi.fn(async (_body: unknown) => ({ code: 'X', expiresInSec: 60, redirectUrl: 'https://evil.test/' }));
     const open = vi.fn();
     renderWithProviders(<ConnectView open={open} />, { auth: authValue({ api: fakeApi({ authorizeDevice }) }) });
-    fireEvent.click(screen.getByRole('button', { name: 'Connect this Mac' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect this computer' }));
     await screen.findByRole('heading', { name: 'You can go back to the app.' });
     expect(open).not.toHaveBeenCalled();
     expect(screen.queryByRole('link', { name: 'Open BoringTalks' })).toBeNull();
-    expect(authorizeDevice.mock.calls[0][0]).toEqual({ codeChallenge: CHALLENGE, deviceName: 'Mac' });
+    expect(authorizeDevice.mock.calls[0][0]).toEqual({ codeChallenge: CHALLENGE, deviceName: 'Computer' });
   });
 
   it('tells the app when the person declines', () => {
@@ -123,7 +123,7 @@ describe('ConnectView', () => {
     nav.search = new URLSearchParams({ challenge: CHALLENGE });
     const authorizeDevice = vi.fn(async () => Promise.reject(new Error('Code expired')));
     renderWithProviders(<ConnectView open={vi.fn()} />, { auth: authValue({ api: fakeApi({ authorizeDevice }) }) });
-    fireEvent.click(screen.getByRole('button', { name: 'Connect this Mac' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect this computer' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Code expired');
   });
 });
@@ -368,14 +368,28 @@ describe('MeetingView', () => {
 });
 
 describe('SettingsView', () => {
-  it('toggles email, revokes a Mac and signs out', async () => {
+  it('offers the visitor’s own desktop app first', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141.0 Safari/537.36');
+    const windows = { platform: 'windows', version: '0.1.0', build: '7', url: 'https://d.test/BoringTalks-Setup-0.1.0.exe', sizeBytes: 9, minimumOs: '10.0.19041', notarized: false, publishedAt: '2026-10-01T10:00:00.000Z' };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ macos: null, windows }), { status: 200 })));
+    const api = fakeApi({ me: vi.fn(async () => ME), listDevices: vi.fn(async () => []) });
+    renderWithProviders(<SettingsView />, { auth: authValue({ api }) });
+    expect(await screen.findByText('Version 0.1.0 for Windows 10 or later.')).toBeInTheDocument();
+    const names = screen.getAllByText(/^BoringTalks for /).map((n) => n.textContent);
+    expect(names).toEqual(['BoringTalks for Windows', 'BoringTalks for Mac']);
+    expect(screen.getByRole('link', { name: 'Download' })).toHaveAttribute('href', windows.url);
+    expect(screen.getByText('Not released yet.')).toBeInTheDocument();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('toggles email, revokes a computer and signs out', async () => {
     const device = { id: '00000000-0000-4000-8000-0000000000d1', name: 'Studio Mac', createdAt: '2026-10-01T10:00:00.000Z', lastSeenAt: null };
     const api = fakeApi({
       me: vi.fn(async () => ME),
       updateSettings: vi.fn(async (b) => ({ ...ME, ...b })),
       listDevices: vi.fn().mockResolvedValueOnce([device]).mockResolvedValue([]),
       revokeDevice: vi.fn(async () => undefined),
-      latestDownload: vi.fn(),
     });
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
     const auth = authValue({ api });
@@ -391,7 +405,7 @@ describe('SettingsView', () => {
     const dialog = screen.getByRole('dialog', { name: 'Disconnect Studio Mac?' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
     await waitFor(() => expect(api.revokeDevice).toHaveBeenCalledWith('00000000-0000-4000-8000-0000000000d1'));
-    expect(await screen.findByText(/No Macs connected yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/No computers connected yet/)).toBeInTheDocument();
 
     // Your name: saved trimmed, and the button settles on "Saved".
     const name = screen.getByLabelText(/What should meetings call you/);

@@ -7,15 +7,15 @@ export type ConnectParams =
 const challengeSchema = AuthorizeDeviceRequest.shape.codeChallenge;
 
 /**
- * Reads `/connect?challenge=…&device=…` as opened by the Mac app. The challenge
- * must be a PKCE value; the device name is cleaned up and defaults to "your Mac".
+ * Reads `/connect?challenge=…&device=…` as opened by the desktop app. The challenge
+ * must be a PKCE value; the device name is cleaned up and defaults to "your computer".
  */
 export function parseConnectParams(params: { get(name: string): string | null }): ConnectParams {
   const challenge = params.get('challenge')?.trim();
   if (!challenge) return { ok: false, reason: 'missing' };
   if (!challengeSchema.safeParse(challenge).success) return { ok: false, reason: 'invalid' };
   const raw = (params.get('device') ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
-  const deviceName = raw ? raw.slice(0, 80) : 'your Mac';
+  const deviceName = raw ? raw.slice(0, 80) : 'your computer';
   return { ok: true, challenge, deviceName };
 }
 

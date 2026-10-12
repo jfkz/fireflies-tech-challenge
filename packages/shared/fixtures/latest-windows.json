@@ -1,0 +1,10 @@
+{
+  "platform": "windows",
+  "version": "0.1.0",
+  "build": "406080",
+  "url": "https://download.boringtalks.lol/BoringTalks-Setup-0.1.0.exe",
+  "sizeBytes": 91234567,
+  "minimumOs": "10.0.19041",
+  "notarized": false,
+  "publishedAt": "2026-10-12T10:00:00.000Z"
+}

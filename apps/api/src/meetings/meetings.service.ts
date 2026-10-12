@@ -186,7 +186,7 @@ export class MeetingsService {
 
   /**
    * Runs the pipeline again. A meeting the server transcribed (browser recording, upload) starts
-   * from its audio, so transcription improvements (telling voices apart) reach it; a Mac recording
+   * from its audio, so transcription improvements (telling voices apart) reach it; a desktop (Mac or Windows) recording
    * keeps its transcript and is summarized again.
    */
   async reprocess(user: UserRow, id: string): Promise<MeetingDetail> {

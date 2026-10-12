@@ -33,14 +33,28 @@ download and sign-up calls to action.
    summary, names, tasks, decisions, “notes you took ×0”, 58 minutes back) and four
    points: every task in one list, see where your week went, find anything later,
    no bot joins your call. No prices or technical details on the landing page.
-5. *Download* (`#download`): fed by `GET /downloads/latest`; version and build,
-   “macOS 26 or later”, “Apple silicon & Intel”, DMG size, release date, a button
-   linking straight to the DMG, and first-launch steps (drag to Applications,
-   Microphone, System Audio Recording, sign in). If the build is not notarized it
-   adds the right-click → Open step. A 404 shows “The Mac app is still in the
-   oven” with a link to the browser recorder.
-6. *FAQ* (`#faq`): price, which apps, no bot, how names are found, no Mac,
-   languages, privacy, telling people you record. Native `<details>`, and the same
+5. *Download* (`#download`): fed by `GET /downloads` and pointed at the visitor's
+   computer. The OS comes from the user agent (`lib/platform.ts`: “Windows NT” →
+   Windows; “Macintosh” → Mac unless it has touch points, which is an iPad; then
+   `navigator.userAgentData.platform`; phones, tablets and Linux get neither). The
+   visitor's own app comes first: “Put a notetaker on your Mac / PC”, version and
+   build, minimum OS (“macOS 26 or later”, “Windows 10 or later”), what it runs on
+   (“Apple silicon & Intel”, “64-bit PCs (x64)”), size (disk image / installer),
+   release date, a button linking straight to the DMG or Setup.exe, and that
+   platform's first-launch steps. Mac: drag to Applications, Microphone, System
+   Audio Recording, sign in, plus right-click → Open when the build is not
+   notarized. Windows: run Setup (per user, no admin), the browser's Keep and
+   SmartScreen's **More info → Run anyway** when the build is not signed, the tray
+   icon and sign-in, the microphone privacy switch, the one-time model download.
+   The other platform's build is offered on one line underneath (“Also for
+   Mac/Windows”). A visitor whose computer can't be told gets both cards side by
+   side. A PC visitor before the Windows app ships still gets the Mac card first.
+   With no build at all: “The desktop app is still in the oven” and a link to the
+   browser recorder. The hero button names the same app (“Download for Windows”,
+   “Download for Mac”, otherwise “Download the app”); it reads `unknown` on the
+   server so the first render matches, then updates.
+6. *FAQ* (`#faq`): price, which apps, no bot, how names are found, is there a
+   Windows app, languages, privacy, telling people you record. Native `<details>`, and the same
    entries go out as FAQPage structured data.
 7. Final call to action and footer (“This website could have been an email.”).
 
@@ -60,7 +74,7 @@ cards with a generated 1200×630 image (the four heads at the table and the
 tagline; `app/_og/social-image.tsx`, heads drawn by `pnpm icon` into
 `app/og-heads.svg`), `apple-icon`, `manifest.webmanifest`, `robots.txt` (signed-in
 pages disallowed), `sitemap.xml`, and JSON-LD (`Organization`, `WebSite`,
-`SoftwareApplication` with the stable DMG link, `FAQPage`) from `lib/landing/seo.ts`.
+`SoftwareApplication` for macOS 26 and Windows 10/11 with the stable DMG and Setup.exe links, `FAQPage`) from `lib/landing/seo.ts`.
 
 **Where.** `app/page.tsx`, `components/landing/*`, `components/avatar/*`,
 `lib/avatar/*` (port of AvatarView.swift / Emotion.swift / OverlayViews.swift /
@@ -251,11 +265,11 @@ server transcribes them. Tab capture exists only in desktop Chromium-based
 browsers, and the visitor must tick “Share tab audio”. Permission errors are
 explained in plain words.
 
-### Connect the Mac app `/connect?challenge=…&device=…`
+### Connect a desktop app `/connect?challenge=…&device=…`
 
-**What.** The Mac app opens this page with a PKCE S256 challenge and the Mac’s
-name. Signed-out visitors sign in or sign up first and come back. The page asks
-“Connect <device> to your BoringTalks account?”; **Connect this Mac** calls
+**What.** The Mac or Windows app opens this page with a PKCE S256 challenge and the
+computer’s name (it defaults to “your computer”). Signed-out visitors sign in or sign up first and come back. The page asks
+“Connect <device> to your BoringTalks account?”; **Connect this computer** calls
 `POST /devices/authorize` and sends the browser to the returned
 `boringtalks://callback?code=…`, then shows “You can go back to the app.” with an
 **Open BoringTalks** link and the one-time code (large, selectable, Copy button)
@@ -274,8 +288,10 @@ characters. Only `boringtalks://callback` URLs are ever navigated to.
 **What.** Account email and sign-in method, **Sign out**; **Your name** (what
 meetings call you instead of “You”; saving it renames you in past meetings too); “Email me when a meeting
 is ready” switch (`PATCH /me/settings`); connected Macs with connected/last-seen
-dates and **Disconnect** (confirmation dialog, `DELETE /devices/:id`); Mac app
-version and download link.
+dates and **Disconnect** (confirmation dialog, `DELETE /devices/:id`), listed as
+“Connected computers”; a **Desktop app** card with a row per platform (the
+visitor's own first): version and minimum OS with a Download link, or “Not
+released yet” and a link to the landing page's download card.
 
 **Where.** `components/app/SettingsView.tsx`.
 
@@ -584,10 +600,11 @@ duplicate.
   meetings reuse them; tags are trimmed, capped at four and spelled like an existing tag when they
   match case-insensitively. They power the topic filter (`meetings.topics`, GIN index).
 - **Email** (Resend): welcome, "your meeting is ready" (summary + action items, per-user toggle),
-  "new Mac connected". Idempotent, allow-listed in dev, logged instead of sent without a key.
+  "new computer connected". Idempotent, allow-listed in dev, logged instead of sent without a key.
 - Jobs retry 5 times with backoff, collapse duplicates, and a final failure marks the meeting
   `failed` with the reason; Reprocess starts over.
 
 ### Operations
-`GET /health` (database + Redis, version, commit), `GET /downloads/latest` (current DMG),
+`GET /health` (database + Redis, version, commit), `GET /downloads` (current Mac and Windows
+builds; `GET /downloads/latest[/:platform]` for one),
 per-user rate limits in Redis, structured JSON logs, graceful shutdown.

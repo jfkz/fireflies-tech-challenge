@@ -13,7 +13,7 @@ export function SiteFooter() {
         </div>
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-sm font-extrabold text-white/85">
           <Link href="/#download" className="hover:text-sun">
-            Download for Mac
+            Download the app
           </Link>
           <Link href="/record" className="hover:text-sun">
             Record in the browser

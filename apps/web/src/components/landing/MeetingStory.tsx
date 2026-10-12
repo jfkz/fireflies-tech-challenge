@@ -1,5 +1,7 @@
 'use client';
 
+import { useDownloads } from '@/hooks/queries';
+import { usePlatform } from '@/hooks/usePlatform';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import Link from 'next/link';
 import { AnimatePresence, m, useMotionValue, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
@@ -8,6 +10,7 @@ import { SpeechBubble } from '@/components/avatar/SpeechBubble';
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { TypeLine } from '@/components/avatar/TypeLine';
 import { MEN, WOMEN, type AvatarStyle } from '@/lib/avatar/styles';
+import { heroDownloadLabel } from '@/lib/landing/downloads';
 import { CHATTER, clockMinutes, MEETING_BEATS, meetingBeatAt, type HeadMood, type MeetingBeat } from '@/lib/landing/story';
 import { Mug, OfficeWindow, Plant, WallClock, Whiteboard } from './RoomArt';
 
@@ -103,14 +106,12 @@ export function MeetingStory() {
                 Your meeting, minus the meeting.
               </h1>
               <p className="mt-4 max-w-[46ch] text-[1.05rem] leading-relaxed font-semibold text-white/90 sm:text-lg">
-                BoringTalks records the call on your Mac, writes it all down, and hands you a title, a summary and who promised what. You can keep
+                BoringTalks records the call on your computer, writes it all down, and hands you a title, a summary and who promised what. You can keep
                 nodding.
               </p>
               {/* One column, so nothing reaches across to the heads on the right. */}
               <div className="mt-6 flex flex-col items-start gap-2.5">
-                <a href="#download" className="btn btn-primary btn-lg">
-                  <DownloadGlyph /> Download for Mac
-                </a>
+                <HeroDownload />
                 <Link href="/signup" className="pl-1 text-base font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white">
                   or try it in the browser →
                 </Link>
@@ -250,6 +251,17 @@ function Table() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** "Download for Windows" / "for Mac": the app the visitor would get, which the card below offers first. */
+function HeroDownload() {
+  const platform = usePlatform();
+  const { data } = useDownloads();
+  return (
+    <a href="#download" className="btn btn-primary btn-lg">
+      <DownloadGlyph /> {heroDownloadLabel(platform, data)}
+    </a>
   );
 }
 

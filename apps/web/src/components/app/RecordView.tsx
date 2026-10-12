@@ -25,9 +25,9 @@ export function RecordView() {
     <div>
       <h1 className="font-display text-4xl leading-none sm:text-5xl">New recording</h1>
       <p className="mt-3 max-w-[62ch] font-semibold text-ink-soft">
-        No Mac app? Record from this browser, or upload audio you already have. The server transcribes it and writes the summary, usually within a
-        couple of minutes. The <Link href="/#download" className="font-extrabold text-call-deep underline underline-offset-2">Mac app</Link> does the
-        transcribing on your computer instead and tells the speakers apart.
+        No desktop app? Record from this browser, or upload audio you already have. The server transcribes it and writes the summary, usually
+        within a couple of minutes. The <Link href="/#download" className="font-extrabold text-call-deep underline underline-offset-2">Mac and Windows apps</Link>{' '}
+        do the transcribing on your computer instead and tell you apart from everyone else.
       </p>
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <RecorderPanel />

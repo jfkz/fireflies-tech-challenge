@@ -12,8 +12,8 @@ const STEPS: readonly { title: string; body: ReactNode }[] = [
     title: 'Hit record. Talk like normal.',
     body: (
       <>
-        Click the menu bar icon when the call starts. Zoom, Meet, Teams, Slack, a phone call on speaker: if your Mac can hear it, BoringTalks can
-        write it down. Nobody new joins the call.
+        Click the menu bar or tray icon when the call starts. Zoom, Meet, Teams, Slack, a phone call on speaker: if your computer can hear it,
+        BoringTalks can write it down. Nobody new joins the call.
       </>
     ),
   },

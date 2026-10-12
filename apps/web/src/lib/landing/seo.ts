@@ -4,9 +4,10 @@ import { FAQ } from './faq';
 export const SITE_NAME = 'BoringTalks';
 export const TAGLINE = 'Your meeting, minus the meeting.';
 export const DESCRIPTION =
-  'BoringTalks records your calls on your Mac and hands you a title that means something, a short summary, who said what by name, and every task with its owner and due date. No bot joins the call. Free.';
-/** Always the newest build: the publish job keeps this file pointing at the latest DMG. */
+  'BoringTalks records your calls on your Mac or PC and hands you a title that means something, a short summary, who said what by name, and every task with its owner and due date. No bot joins the call. Free.';
+/** Always the newest builds: the publish scripts keep these files pointing at the latest DMG and installer. */
 export const DMG_URL = 'https://download.boringtalks.lol/BoringTalks-latest.dmg';
+export const EXE_URL = 'https://download.boringtalks.lol/BoringTalks-Setup-latest.exe';
 
 /** schema.org data for the landing page: the app, who makes it, and the FAQ. */
 export function landingJsonLd() {
@@ -33,14 +34,14 @@ export function landingJsonLd() {
         name: SITE_NAME,
         description: DESCRIPTION,
         url: site,
-        operatingSystem: 'macOS 26',
+        operatingSystem: 'macOS 26, Windows 10, Windows 11',
         applicationCategory: 'BusinessApplication',
-        downloadUrl: DMG_URL,
+        downloadUrl: [DMG_URL, EXE_URL],
         image: `${site}/opengraph-image`,
         publisher: { '@id': `${site}/#org` },
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         featureList: [
-          'Records any meeting app from the Mac menu bar, no bot joins',
+          'Records any meeting app from the Mac menu bar or the Windows tray, no bot joins',
           'Speaker names picked up from the conversation',
           'Meaningful titles, summaries, decisions',
           'Tasks with owners and due dates across all meetings',

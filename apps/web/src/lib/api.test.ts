@@ -114,23 +114,19 @@ describe('api client', () => {
     });
   });
 
-  describe('latestDownload', () => {
-    const latest = { version: '1.0', build: '3', url: 'https://d.test/a.dmg', sizeBytes: 10, minimumOs: '26.0', notarized: true, publishedAt: '2026-10-01T10:00:00.000Z' };
+  describe('downloads', () => {
+    const mac = { platform: 'macos', version: '1.0', build: '3', url: 'https://d.test/a.dmg', sizeBytes: 10, minimumOs: '26.0', notarized: true, publishedAt: '2026-10-01T10:00:00.000Z' };
 
     it('is public: no Authorization header even without a user', async () => {
-      const { api, fetch } = setup(json(latest), null);
-      await expect(api.latestDownload()).resolves.toEqual(latest);
+      const { api, fetch } = setup(json({ macos: mac, windows: null }), null);
+      await expect(api.downloads()).resolves.toEqual({ macos: mac, windows: null });
+      expect(String(fetch.mock.calls[0][0])).toBe('https://api.test/downloads');
       expect((fetch.mock.calls[0][1] as RequestInit & { headers: Record<string, string> }).headers.Authorization).toBeUndefined();
     });
 
-    it('is null while no build exists (404)', async () => {
-      const { api } = setup(json({ statusCode: 404, message: 'none' }, 404));
-      await expect(api.latestDownload()).resolves.toBeNull();
-    });
-
-    it('still throws other errors', async () => {
+    it('throws errors', async () => {
       const { api } = setup(json({ statusCode: 500, message: 'boom' }, 500));
-      await expect(api.latestDownload()).rejects.toMatchObject({ status: 500 });
+      await expect(api.downloads()).rejects.toMatchObject({ status: 500 });
     });
   });
 

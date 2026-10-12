@@ -25,15 +25,17 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 1.3 | Keep scrolling through “How it works”. | Step 1 (two heads recording, level meters), step 2 (transcript lines drop in), step 3 (summary card assembles, action items get ticked). The active step is highlighted on the left. |
 | 1.4 | Continue to the yellow section, “What you get”, download, FAQ, final CTA. | Heads pop up cheering, confetti moves at different speeds; the receipt lists what a meeting turns into and drifts; no prices or technical terms anywhere; FAQ answers open and close; footer reads “This website could have been an email.” |
 | 1.4a | Watch the wall clock while scrolling the first scene. | Both hands turn around the centre of the dial (5 min ≈ 10:05, 58 min ≈ 10:58); nothing sticks out of the clock face. |
-| 1.4b | Hero at 1280×720, 1440×900, 1024×768 and phone width. | **Download for Mac**, then “or try it in the browser →” under it; neither covers a face. |
+| 1.4b | Hero at 1280×720, 1440×900, 1024×768 and phone width, on a Windows PC (the longest label). | **Download for Windows**, then “or try it in the browser →” under it; neither covers a face. |
 | 1.4c | Click **Sound off** (bottom right). | It turns into **Sound on**; the talking head babbles in a gibberish voice in time with its bubble and mouth; every head that talks (hero, How it works, the wake-up cheers, final CTA) has its own voice. Click again: silence. Reload: the button says Sound off until your first click, then the voices come back. |
-| 1.5 | Click **Download for Mac** in the hero. | Page scrolls to the download card. |
-| 1.6 | Download card, with a build published. | Version and build, “macOS 26 or later”, “Apple silicon & Intel”, size, date. The button downloads the `.dmg` from `download.boringtalks.lol`. If the build isn’t notarized, a step explains right-click → Open. |
-| 1.7 | Download card, before any build exists. | “The Mac app is still in the oven.” and a **Record in the browser** button; no broken link. |
+| 1.5 | On a Mac, click **Download for Mac** in the hero; on a Windows PC, **Download for Windows**. | Page scrolls to the download card. |
+| 1.6 | Download card on a Mac, with both builds published. | “Put a notetaker on your Mac.” Version and build, “macOS 26 or later”, “Apple silicon & Intel”, size, date. The button downloads the `.dmg` from `download.boringtalks.lol`. If the build isn’t notarized, a step explains right-click → Open. Underneath: “Also for Windows” with a link to the `.exe`. |
+| 1.6a | Download card on a Windows PC (or DevTools → Network conditions → user agent “Chrome — Windows”). | “Put a notetaker on your PC.” “BoringTalks for Windows”, “Windows 10 or later”, “64-bit PCs (x64)”, installer size. The button downloads `BoringTalks-Setup-<version>.exe`. While the build is unsigned, a step explains Keep and **More info → Run anyway**. Underneath: “Also for Mac”. Before the Windows app ships, the hero says **Download for Mac** and the card is the Mac one. |
+| 1.6b | Download card on an iPad, a phone or Linux (DevTools device toolbar / user agent). | Hero says **Download the app**; “Put a notetaker on your computer.” with the Mac and Windows cards side by side and no first-launch steps. |
+| 1.7 | Download card, before any build exists. | “The desktop app is still in the oven.” and a **Record in the browser** button; no broken link. |
 | 1.8 | Phone width (375 px): repeat 1.1–1.4. | No horizontal scrolling, nothing cut off; bubbles fit; headline readable above the heads. |
 | 1.9 | Turn on Reduce Motion (macOS: Accessibility → Display) and reload. | Nothing animates or sticks; the story captions and “Meetings are boring.” are shown as plain text; “How it works” is a static list with finished pictures. |
 | 1.10 | Paste the URL into Slack/iMessage or an OG debugger. | Card with title, description and the generated image (four heads at the table, the headline). Favicon is the two-heads app icon. |
-| 1.11 | Open `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`, and run the page through a rich-results test. | Signed-in pages disallowed; sitemap lists `/`, `/signup`, `/signin`; JSON-LD has SoftwareApplication (download link `BoringTalks-latest.dmg`) and FAQPage with every question. |
+| 1.11 | Open `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`, and run the page through a rich-results test. | Signed-in pages disallowed; sitemap lists `/`, `/signup`, `/signin`; JSON-LD has SoftwareApplication (macOS 26, Windows 10, Windows 11; download links `BoringTalks-latest.dmg` and `BoringTalks-Setup-latest.exe`) and FAQPage with every question. |
 
 ### 2. Sign up, sign in, reset
 
@@ -64,7 +66,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 3.6 | Click a topic pill on a row, then a person in the filter bar, then the active pill again, then **Clear filters**. | The list narrows to that topic, then that topic and person; the URL shows `?topic=…&speaker=…`; clicking an active pill removes it; Clear brings everything back. Back button walks through the filters. |
 | 3.7 | Filter to a combination with no meetings. | “No meetings with X about Y.” and a **Clear filters** button. |
 | 3.8 | Upload a recording with three people (e.g. a synthetic one made with `say`), wait for Ready. | Transcript has Speaker 1–3 per voice, then their names from the conversation; deadlines like “today or tomorrow” show the later day. A 26 MB+ or 2 h+ file transcribes too. **Reprocess** on an older upload separates its voices. |
-| 3.5 | New account with the demo deleted. | Empty state with a head (“Your calendar must be suspiciously free.”) and links to record or get the Mac app. |
+| 3.5 | New account with the demo deleted. | Empty state with a head (“Your calendar must be suspiciously free.”) and links to record or get the desktop app. |
 
 ### 4. Meeting page
 
@@ -138,12 +140,12 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 5.7 | Choose a `.pdf` or a file over 200 MB. | Clear message, Upload button disabled, nothing sent. |
 | 5.8 | Turn the network off during an upload (DevTools → Offline). | Error with **Try again**; the recording is not lost. |
 
-### 6. Connect the Mac app `/connect`
+### 6. Connect a desktop app `/connect`
 
 | # | Steps | Expected |
 |---|---|---|
-| 6.1 | In the Mac app choose Sign in while signed out on the web. | Browser opens `/connect?challenge=…&device=<Mac name>`, redirects to sign in; after signing in you’re back on the connect page. |
-| 6.2 | **Connect this Mac**. | Browser offers to open BoringTalks; the app shows it’s signed in. The page says “You can go back to the app.” with **Open BoringTalks** and the code. The new Mac appears in Settings → Connected Macs. |
+| 6.1 | In the Mac or Windows app choose Sign in while signed out on the web. | Browser opens `/connect?challenge=…&device=<computer name>`, redirects to sign in; after signing in you’re back on the connect page. |
+| 6.2 | **Connect this computer**. | Browser offers to open BoringTalks; the app shows it’s signed in. The page says “You can go back to the app.” with **Open BoringTalks** and the code. The new computer appears in Settings → Connected computers. |
 | 6.3 | Repeat, but use the app’s paste-code field with the shown code. | Works once; the code expires after the shown number of minutes. |
 | 6.4 | Click **Not now** instead. | The app receives `error=access_denied` and stays signed out; the page says “Okay, not connected.” |
 | 6.5 | Open `/connect` without `challenge`, or with `challenge=abc`. | “This connect link doesn’t work” with what to do; no API call. |
@@ -152,9 +154,9 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 
 | # | Steps | Expected |
 |---|---|---|
-| 7.1 | Open Settings. | Email and sign-in method; email switch reflects the account; connected Macs list; Mac app version with **Download**. |
+| 7.1 | Open Settings. | Email and sign-in method; email switch reflects the account; “Connected computers” list; **Desktop app** card with a row for Mac and Windows (your own computer's first), each with its version and **Download**, or “Not released yet”. |
 | 7.2 | Toggle “Email me when a meeting is ready” off and record a meeting; toggle on and record another. | No email for the first, a “Your meeting is ready” email for the second. Switch state persists after reload. |
-| 7.3 | **Disconnect** a Mac → confirm. | Dialog names the Mac; after confirming it disappears from the list and the Mac app can no longer upload (it asks to sign in again). |
+| 7.3 | **Disconnect** a Mac or PC → confirm. | Dialog names the computer; after confirming it disappears from the list and its app can no longer upload (it asks to sign in again). |
 | 7.5 | Type a name in **Your name** and Save. | Button says Saved; in the demo and other past meetings “You” becomes your first name (unless you renamed that speaker by hand); new meetings use it too. |
 | 7.4 | **Sign out**. | Lands on `/`; dashboard URLs now redirect to sign in. |
 
@@ -179,7 +181,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 
 `BASE_URL=https://dev.boringtalks.lol API_URL=https://api.dev.boringtalks.lol pnpm --filter @boringtalks/e2e test:smoke`:
 landing renders with no console errors, `/signin` renders, `${API_URL}/health` is
-OK, `/downloads/latest` is a DMG or 404, `/version.json` is uncached and (in CI) reports the
+OK, `/downloads/latest` is a DMG or 404, `/downloads` parses with a `.dmg` / `.exe` for each published build, `/version.json` is uncached and (in CI) reports the
 deployed commit.
 
 ## BoringTalks for Mac — manual QA
@@ -354,4 +356,8 @@ deploy, and against production after a merge.
 ### 8. Download
 1. On the landing page, click Download for Mac.
    **Expected:** `BoringTalks-<version>.dmg` from `download.boringtalks.lol` (dev: `/dev/`), version
-   and size match `GET /downloads/latest`.
+   and size match `GET /downloads` → `macos`.
+2. On a Windows PC, click Download for Windows.
+   **Expected:** `BoringTalks-Setup-<version>.exe` from the same host, version and size match
+   `GET /downloads` → `windows`. `GET /downloads/latest/windows` returns the same build;
+   `GET /downloads/latest/linux` is 404.

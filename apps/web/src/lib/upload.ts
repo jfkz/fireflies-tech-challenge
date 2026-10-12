@@ -99,7 +99,7 @@ export type SubmitStage = 'creating' | 'uploading' | 'finishing';
 
 export interface SubmitAudioOptions {
   api: ApiClient;
-  source: Exclude<MeetingSource, 'demo' | 'macos'>;
+  source: Exclude<MeetingSource, 'demo' | 'macos' | 'windows'>;
   audio: Blob;
   contentType: AudioContentType;
   title?: string;

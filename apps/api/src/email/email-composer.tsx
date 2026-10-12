@@ -50,7 +50,7 @@ export class EmailComposer {
         if (!device) return null;
         const connectedAt = device.createdAt.toUTCString().replace(' GMT', ' UTC');
         return renderEmail(
-          `New Mac connected: ${device.name}`,
+          `New computer connected: ${device.name}`,
           <DeviceConnectedEmail deviceName={device.name} connectedAt={connectedAt} settingsUrl={`${web}/settings`} />,
         );
       }

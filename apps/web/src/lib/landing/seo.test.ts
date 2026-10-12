@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { FAQ } from './faq';
-import { DMG_URL, landingJsonLd } from './seo';
+import { DMG_URL, EXE_URL, landingJsonLd } from './seo';
 
 describe('landingJsonLd', () => {
   const graph = landingJsonLd()['@graph'];
   const byType = (t: string) => graph.find((n) => n['@type'] === t) as Record<string, unknown>;
 
-  it('describes the app with a stable download link and a free offer', () => {
+  it('describes the app with stable download links for both platforms and a free offer', () => {
     const app = byType('SoftwareApplication');
-    expect(app.downloadUrl).toBe(DMG_URL);
+    expect(app.downloadUrl).toEqual([DMG_URL, EXE_URL]);
     expect(DMG_URL).toMatch(/BoringTalks-latest\.dmg$/);
+    expect(EXE_URL).toMatch(/BoringTalks-Setup-latest\.exe$/);
+    expect(app.operatingSystem).toMatch(/macOS.*Windows/);
     expect(app.offers).toMatchObject({ price: '0' });
   });
 

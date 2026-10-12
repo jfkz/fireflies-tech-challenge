@@ -25,6 +25,7 @@ export const metadata: Metadata = {
     'meeting summary',
     'action items',
     'meeting recorder for Mac',
+    'meeting recorder for Windows',
     'notetaker without a bot',
     'Zoom notes',
     'Google Meet notes',

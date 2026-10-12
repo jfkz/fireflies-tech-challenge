@@ -12,7 +12,7 @@ import { useAuthorizeDevice } from '@/hooks/queries';
 import { TALKER } from '@/lib/avatar/styles';
 import { DECLINED_CALLBACK_URL, isAppCallback, parseConnectParams } from '@/lib/connect';
 
-/** Hands the browser over to the Mac app. A function so tests can replace it. */
+/** Hands the browser over to the desktop app. A function so tests can replace it. */
 export function openApp(url: string) {
   window.location.href = url;
 }
@@ -37,7 +37,7 @@ function Approve({ challenge, deviceName, open }: { challenge: string; deviceNam
 
   function approve() {
     authorize.mutate(
-      { codeChallenge: challenge, deviceName: deviceName === 'your Mac' ? 'Mac' : deviceName },
+      { codeChallenge: challenge, deviceName: deviceName === 'your computer' ? 'Computer' : deviceName },
       {
         onSuccess: (res) => {
           if (isAppCallback(res.redirectUrl)) open(res.redirectUrl);
@@ -68,7 +68,7 @@ function Approve({ challenge, deviceName, open }: { challenge: string; deviceNam
       <Card head={<TalkingHead style={TALKER} cheering seed={3} className="h-32 w-32" />} bubble="Connected!">
         <h1 className="font-display text-3xl leading-tight sm:text-4xl">You can go back to the app.</h1>
         <p className="mt-3 font-semibold text-ink-soft">
-          {deviceName === 'your Mac' ? 'Your Mac' : deviceName} is now signed in as <strong className="text-ink">{user?.email}</strong>. If the app
+          {deviceName === 'your computer' ? 'Your computer' : deviceName} is now signed in as <strong className="text-ink">{user?.email}</strong>. If the app
           didn’t come to the front, open it yourself:
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
@@ -110,7 +110,7 @@ function Approve({ challenge, deviceName, open }: { challenge: string; deviceNam
         Connect {deviceName} to your BoringTalks account?
       </h1>
       <p className="mt-3 font-semibold text-ink-soft">
-        You’re signed in as <strong className="text-ink">{user?.email}</strong>. The Mac app will be able to upload meetings to this account. You can
+        You’re signed in as <strong className="text-ink">{user?.email}</strong>. The BoringTalks app will be able to upload meetings to this account. You can
         disconnect it any time in Settings.
       </p>
       {authorize.isError && (
@@ -120,7 +120,7 @@ function Approve({ challenge, deviceName, open }: { challenge: string; deviceNam
       )}
       <div className="mt-6 flex flex-wrap gap-3">
         <button type="button" className="btn btn-primary btn-lg" onClick={approve} disabled={authorize.isPending}>
-          {authorize.isPending ? 'Connecting…' : 'Connect this Mac'}
+          {authorize.isPending ? 'Connecting…' : 'Connect this computer'}
         </button>
         <button type="button" className="btn btn-secondary btn-lg" onClick={decline} disabled={authorize.isPending}>
           Not now
@@ -137,9 +137,9 @@ function BadLink({ reason }: { reason: 'missing' | 'invalid' }) {
       <h1 className="font-display text-3xl leading-tight sm:text-4xl">This connect link doesn’t work</h1>
       <p className="mt-3 font-semibold text-ink-soft">
         {reason === 'missing'
-          ? 'It’s missing the security code the Mac app adds.'
+          ? 'It’s missing the security code the BoringTalks app adds.'
           : 'The security code in it is damaged, maybe cut off when it was copied.'}{' '}
-        Open the BoringTalks menu on your Mac and choose Sign in again; it opens a fresh link.
+        Open the BoringTalks menu (menu bar on a Mac, system tray on Windows) and choose Sign in again; it opens a fresh link.
       </p>
       <Link href="/meetings" className="btn btn-secondary mt-6">
         Go to my meetings

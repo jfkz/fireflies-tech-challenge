@@ -3,7 +3,7 @@ import { z } from 'zod';
 /** base64url without padding, 43–128 characters (RFC 7636). */
 const pkceString = z.string().regex(/^[A-Za-z0-9\-._~]{43,128}$/, 'Not a PKCE value');
 
-/** Sent by the dashboard (signed in with Firebase) to approve a Mac. */
+/** Sent by the dashboard (signed in with Firebase) to approve a computer running the desktop app. */
 export const AuthorizeDeviceRequest = z.object({
   codeChallenge: pkceString,
   deviceName: z.string().trim().min(1).max(80),
@@ -17,7 +17,7 @@ export const AuthorizeDeviceResponse = z.object({
 });
 export type AuthorizeDeviceResponse = z.infer<typeof AuthorizeDeviceResponse>;
 
-/** Sent by the Mac app to swap the one-time code for its device token. */
+/** Sent by the desktop app to swap the one-time code for its device token. */
 export const DeviceTokenRequest = z.object({
   code: z.string().min(1),
   codeVerifier: pkceString,
@@ -42,5 +42,5 @@ export type Device = z.infer<typeof Device>;
 /** Prefix that tells device tokens apart from Firebase ID tokens. */
 export const DEVICE_TOKEN_PREFIX = 'btd_';
 
-/** URL scheme the Mac app registers for the sign-in callback. */
+/** URL scheme the desktop apps (Mac and Windows) register for the sign-in callback. */
 export const DEVICE_CALLBACK_URL = 'boringtalks://callback';

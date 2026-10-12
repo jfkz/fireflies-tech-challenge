@@ -28,7 +28,7 @@ const POINTS: readonly { title: string; body: string }[] = [
   },
   {
     title: 'No bot joins your call',
-    body: 'Nobody gets the “Notetaker has joined the meeting” moment. The Mac app listens from your side of the call, the way you do.',
+    body: 'Nobody gets the “Notetaker has joined the meeting” moment. The desktop app listens from your side of the call, the way you do.',
   },
 ];
 

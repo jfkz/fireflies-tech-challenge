@@ -6,7 +6,7 @@ import { DevicesRepository } from './devices.repository';
 
 const TOUCH_INTERVAL_MS = 60_000;
 
-/** Long-lived Mac app tokens: `btd_` + 32 random bytes; only the sha256 is stored. */
+/** Long-lived desktop app tokens: `btd_` + 32 random bytes; only the sha256 is stored. */
 @Injectable()
 export class DeviceTokensService {
   constructor(private readonly repo: DevicesRepository) {}

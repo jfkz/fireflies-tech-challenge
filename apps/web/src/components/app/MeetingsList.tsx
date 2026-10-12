@@ -334,14 +334,14 @@ function EmptyState() {
       </div>
       <h2 className="font-display mt-4 text-3xl">No meetings yet</h2>
       <p className="mt-2 max-w-[46ch] font-semibold text-ink-soft">
-        Record one with the Mac app, or right here in the browser. You can also upload an audio file you already have.
+        Record one with the Mac or Windows app, or right here in the browser. You can also upload an audio file you already have.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Link href="/record" className="btn btn-primary">
           Record in the browser
         </Link>
         <Link href="/#download" className="btn btn-secondary">
-          Get the Mac app
+          Get the desktop app
         </Link>
       </div>
     </div>

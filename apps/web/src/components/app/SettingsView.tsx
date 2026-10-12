@@ -1,6 +1,6 @@
 'use client';
 
-import type { Device } from '@boringtalks/shared';
+import type { Device, DownloadPlatform } from '@boringtalks/shared';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { AppIcon } from '@/components/brand/AppIcon';
@@ -8,8 +8,11 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Switch } from '@/components/ui/Switch';
-import { useDevices, useLatestDownload, useMe, useRevokeDevice, useUpdateSettings } from '@/hooks/queries';
+import { useDevices, useDownloads, useMe, useRevokeDevice, useUpdateSettings } from '@/hooks/queries';
+import { usePlatform } from '@/hooks/usePlatform';
 import { formatMeetingDate } from '@/lib/format';
+import { minimumOsLabel } from '@/lib/landing/downloads';
+import { PLATFORM_NAME } from '@/lib/platform';
 
 export function SettingsView() {
   return (
@@ -135,17 +138,17 @@ function DevicesSection() {
   const revoke = useRevokeDevice();
   const [target, setTarget] = useState<Device | null>(null);
   return (
-    <Card title="Connected Macs">
+    <Card title="Connected computers">
       {devices.isPending ? (
         <div className="h-16 animate-pulse rounded-2xl bg-paper" aria-busy="true" />
       ) : devices.isError ? (
         <ErrorNote onRetry={() => devices.refetch()}>{devices.error.message}</ErrorNote>
       ) : devices.data.length === 0 ? (
         <p className="font-semibold text-ink-soft">
-          No Macs connected yet. Install the app and choose Sign in from its menu; it opens this site to connect.
+          No computers connected yet. Install the Mac or Windows app and choose Sign in from its menu; it opens this site to connect.
         </p>
       ) : (
-        <ul className="divide-y-2 divide-ink/10" aria-label="Connected Macs">
+        <ul className="divide-y-2 divide-ink/10" aria-label="Connected computers">
           {devices.data.map((d) => (
             <li key={d.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
               <span className="grid h-10 w-10 place-items-center rounded-xl border-2 border-ink bg-paper" aria-hidden>
@@ -170,7 +173,7 @@ function DevicesSection() {
       )}
       <ConfirmDialog
         open={!!target}
-        title={`Disconnect ${target?.name ?? 'this Mac'}?`}
+        title={`Disconnect ${target?.name ?? 'this computer'}?`}
         confirmLabel="Disconnect"
         busy={revoke.isPending}
         error={revoke.isError ? revoke.error.message : null}
@@ -187,24 +190,38 @@ function DevicesSection() {
 }
 
 function DownloadCard() {
-  const latest = useLatestDownload();
+  const downloads = useDownloads();
+  const platform = usePlatform();
+  // The visitor's own computer first.
+  const order: DownloadPlatform[] = platform === 'windows' ? ['windows', 'macos'] : ['macos', 'windows'];
   return (
-    <Card title="Mac app">
-      <div className="flex flex-wrap items-center gap-4">
-        <AppIcon className="h-14 w-14 shrink-0" />
-        <p className="min-w-0 flex-1 font-semibold text-ink-soft">
-          {latest.data ? `Version ${latest.data.version} for macOS ${latest.data.minimumOs.replace(/(\.0)+$/, '')} or later.` : 'Records both sides of a call and transcribes on your Mac.'}
-        </p>
-        {latest.data ? (
-          <a href={latest.data.url} className="btn btn-primary">
-            Download
-          </a>
-        ) : (
-          <Link href="/#download" className="btn btn-secondary">
-            Details
-          </Link>
-        )}
-      </div>
+    <Card title="Desktop app">
+      <p className="font-semibold text-ink-soft">Records both sides of a call and transcribes on your computer.</p>
+      <ul className="mt-4 divide-y-2 divide-ink/10">
+        {order.map((p) => {
+          const build = downloads.data?.[p];
+          return (
+            <li key={p} className="flex flex-wrap items-center gap-4 py-3 first:pt-0 last:pb-0">
+              <AppIcon className="h-12 w-12 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-extrabold">BoringTalks for {PLATFORM_NAME[p]}</p>
+                <p className="text-sm font-semibold text-ink-soft">
+                  {build ? `Version ${build.version} for ${minimumOsLabel(p, build.minimumOs)}.` : downloads.isPending ? 'Checking…' : 'Not released yet.'}
+                </p>
+              </div>
+              {build ? (
+                <a href={build.url} className="btn btn-primary" download>
+                  Download
+                </a>
+              ) : (
+                <Link href="/#download" className="btn btn-secondary">
+                  Details
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </Card>
   );
 }

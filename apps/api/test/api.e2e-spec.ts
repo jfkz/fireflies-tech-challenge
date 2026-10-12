@@ -48,6 +48,14 @@ describe('public endpoints', () => {
 
   it('answers 404 for downloads before a build exists', async () => {
     await h.http.get('/downloads/latest').expect(404);
+    await h.http.get('/downloads/latest/windows').expect(404);
+    await h.http.get('/downloads/latest/linux').expect(404);
+  });
+
+  it('lists every platform, with null where no build exists', async () => {
+    const res = await h.http.get('/downloads').expect(200);
+    expect(res.body).toEqual({ macos: null, windows: null });
+    expect(res.headers['cache-control']).toBe('public, max-age=300');
   });
 
   it('requires a token everywhere else', async () => {

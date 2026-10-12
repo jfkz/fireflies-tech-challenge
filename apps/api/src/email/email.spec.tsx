@@ -18,7 +18,7 @@ describe('templates', () => {
     const { html, text } = await renderEmail('s', <WelcomeEmail name="Ann" dashboardUrl="https://app/meetings" />);
     expect(html).toContain('Welcome, Ann!');
     expect(html).toContain('https://boringtalks.lol/#download');
-    expect(text).toContain('Download BoringTalks for Mac');
+    expect(text).toContain('Download BoringTalks for Mac or Windows');
     expect((await renderEmail('s', <WelcomeEmail name={null} dashboardUrl="x" />)).html).toContain('Welcome!');
   });
 
@@ -36,10 +36,10 @@ describe('templates', () => {
     expect(bare.text).not.toContain('Action items');
   });
 
-  it('device notice names the Mac', async () => {
+  it('device notice names the computer', async () => {
     const { text } = await renderEmail('s', <DeviceConnectedEmail deviceName="Ann's MacBook" connectedAt="Tue" settingsUrl="https://app/settings" />);
     expect(text).toContain("Ann's MacBook");
-    expect(text).toContain('Review connected Macs');
+    expect(text).toContain('Review connected computers');
   });
 });
 
@@ -59,7 +59,7 @@ describe('EmailComposer', () => {
 
     devices.findById.mockResolvedValue({ name: 'Mac mini', createdAt: new Date('2026-10-06T10:00:00Z') });
     const dev = await composer.compose({ type: 'device-connected', userId: 'u', deviceId: 'd' }, user());
-    expect(dev?.subject).toBe('New Mac connected: Mac mini');
+    expect(dev?.subject).toBe('New computer connected: Mac mini');
     expect(dev?.text).toContain('06 Oct 2026 10:00:00 UTC');
   });
 
