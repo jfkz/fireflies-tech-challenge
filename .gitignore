@@ -22,3 +22,10 @@ test-results/
 !apps/api/.env.test
 firebase-debug.log
 *-debug.log
+
+# Windows app (apps/windows)
+apps/windows/**/bin/
+apps/windows/**/obj/
+apps/windows/build/
+apps/windows/publish/
+apps/windows/TestResults/
