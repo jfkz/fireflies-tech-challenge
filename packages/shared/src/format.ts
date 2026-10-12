@@ -1,4 +1,4 @@
-import type { Segment } from './meeting';
+import { SEGMENT_TEXT_MAX, type Segment } from './meeting';
 
 /** "1:05:09", "4:07", "0:09" */
 export function formatTimestamp(ms: number): string {
@@ -44,6 +44,35 @@ export function mergeSegments(segments: readonly Segment[], gapMs = 1500): Segme
     }
   }
   return out;
+}
+
+/**
+ * Cuts lines longer than `max` characters (a transcriber can return minutes of speech as one
+ * phrase) into pieces at a sentence end, else a space, with the time shared out by length.
+ */
+export function splitLongSegments(segments: readonly Segment[], max = SEGMENT_TEXT_MAX): Segment[] {
+  return segments.flatMap((s) => {
+    if (s.text.length <= max) return [s];
+    const pieces: string[] = [];
+    let rest = s.text;
+    while (rest.length > max) {
+      const head = rest.slice(0, max + 1);
+      const sentence = Math.max(...['. ', '! ', '? ', '… ', '。'].map((p) => head.lastIndexOf(p) + p.trimEnd().length));
+      const space = head.lastIndexOf(' ');
+      const cut = sentence > max / 2 ? sentence : space > max / 2 ? space : max;
+      pieces.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    if (rest) pieces.push(rest);
+    const span = s.endMs - s.startMs;
+    const total = pieces.reduce((n, p) => n + p.length, 0);
+    let done = 0;
+    return pieces.map((text) => {
+      const startMs = s.startMs + Math.round((span * done) / total);
+      done += text.length;
+      return { ...s, text, startMs, endMs: s.startMs + Math.round((span * done) / total) };
+    });
+  });
 }
 
 /** Plain-text transcript for the summarizer: "[4:07] Speaker 1: text". */

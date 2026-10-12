@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applySpeakerNames, formatDuration, formatTimestamp, mergeSegments, segmentAt, speakerName, speakersOf, transcriptText } from './format';
+import { applySpeakerNames, formatDuration, formatTimestamp, mergeSegments, segmentAt, splitLongSegments, speakerName, speakersOf, transcriptText } from './format';
 
 const seg = (speaker: string, startMs: number, endMs: number, text: string) => ({ speaker, startMs, endMs, text });
 
@@ -42,6 +42,31 @@ describe('mergeSegments', () => {
     const input = [seg('A', 0, 1, 'x'), seg('A', 2, 3, 'y')];
     mergeSegments(input);
     expect(input).toHaveLength(2);
+  });
+});
+
+describe('splitLongSegments', () => {
+  it('leaves short lines alone', () => {
+    const s = [{ speaker: 'A', startMs: 0, endMs: 10, text: 'Hi.' }];
+    expect(splitLongSegments(s)).toEqual(s);
+  });
+
+  it('cuts a long line at sentence ends and shares out its time', () => {
+    const sentence = 'Мы обсудили условия контракта. ';
+    const text = sentence.repeat(1000).trim();
+    const pieces = splitLongSegments([{ speaker: 'Speaker 2', startMs: 1_000, endMs: 601_000, text }]);
+    expect(pieces.length).toBeGreaterThan(1);
+    expect(pieces.every((p) => p.text.length <= 10_000 && p.text.endsWith('.') && p.speaker === 'Speaker 2')).toBe(true);
+    expect(pieces.map((p) => p.text).join(' ')).toBe(text);
+    expect(pieces[0].startMs).toBe(1_000);
+    expect(pieces.at(-1)!.endMs).toBe(601_000);
+    for (let i = 1; i < pieces.length; i++) expect(pieces[i].startMs).toBe(pieces[i - 1].endMs);
+  });
+
+  it('falls back to a space, then to a hard cut', () => {
+    expect(splitLongSegments([{ speaker: 'A', startMs: 0, endMs: 0, text: 'word '.repeat(30).trim() }], 40).every((p) => p.text.length <= 40 && !p.text.includes('wor ')))
+      .toBe(true);
+    expect(splitLongSegments([{ speaker: 'A', startMs: 0, endMs: 100, text: 'x'.repeat(25) }], 10).map((p) => p.text.length)).toEqual([10, 10, 5]);
   });
 });
 

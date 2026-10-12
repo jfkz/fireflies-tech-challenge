@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { speakerName, speakersOf, type Segment } from '@boringtalks/shared';
+import { speakerName, speakersOf, splitLongSegments, type Segment } from '@boringtalks/shared';
 import { displayNames } from '../processing/speaker-names';
 import type { MeetingRow } from '../db/schema';
 import { transcriptKey } from '../storage/keys';
@@ -24,7 +24,9 @@ export class TranscriptService {
     private readonly storage: StorageService,
   ) {}
 
-  async store(meeting: MeetingRow, input: TranscriptInput): Promise<MeetingRow> {
+  async store(meeting: MeetingRow, raw: TranscriptInput): Promise<MeetingRow> {
+    // A server transcriber can return minutes of speech as one phrase, longer than a line may be.
+    const input = { ...raw, segments: splitLongSegments(raw.segments) };
     const key = transcriptKey(meeting.userId, meeting.id);
     await this.storage.putJson(key, { meetingId: meeting.id, ...input });
     const lastEndSec = Math.ceil(Math.max(0, ...input.segments.map((s) => s.endMs)) / 1000);

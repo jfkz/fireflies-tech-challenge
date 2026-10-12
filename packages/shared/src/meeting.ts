@@ -35,12 +35,15 @@ export function canTransition(from: MeetingStatus, to: MeetingStatus): boolean {
 }
 
 /** A stretch of speech by one speaker. Times are milliseconds from the meeting start. */
+/** The longest line of a transcript; longer ones are split (`splitLongSegments`). */
+export const SEGMENT_TEXT_MAX = 10_000;
+
 export const Segment = z
   .object({
     speaker: z.string().trim().min(1).max(80),
     startMs: z.number().int().nonnegative(),
     endMs: z.number().int().nonnegative(),
-    text: z.string().trim().min(1).max(10_000),
+    text: z.string().trim().min(1).max(SEGMENT_TEXT_MAX),
   })
   .refine((s) => s.endMs >= s.startMs, { message: 'endMs must not be before startMs', path: ['endMs'] });
 export type Segment = z.infer<typeof Segment>;

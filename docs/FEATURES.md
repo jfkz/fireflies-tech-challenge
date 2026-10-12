@@ -653,6 +653,9 @@ duplicate.
     matched to the earlier part's by who speaks in the overlap.
   - Phrases become segments labelled Speaker 1, 2, 3 by first appearance; the language is the one
     spoken longest. The summarizer then names them as usual.
+  - A phrase longer than a transcript line may be (10,000 characters; MAI can return minutes of one
+    person talking as one phrase) is cut at sentence ends, its time shared out by length
+    (`splitLongSegments`, when stored). Meetings stored before that get the same cut when read.
   - Chosen against the old Whisper + Gemini Flash line labelling on a 13-minute two-person upload:
     Whisper's 10-second lines often held both people (“Yeah. Cool. All right, anything else? No,
     that's fine.”), so a line's single label was wrong for half of it, and in the silent last two

@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { MeetingDetail } from '@boringtalks/shared';
 import { encodeCursor } from '../common/cursor';
 import type { SummaryWithItems } from './meetings.repository';
 import { meeting, seg, user } from '../testing/fixtures';
@@ -66,6 +67,13 @@ describe('mapper', () => {
     const d = toDetail(meeting({ hasAudio: true }), summaryRow(), [seg('You', 0, 1, 'hi')], 'https://a');
     expect(d).toMatchObject({ actionItemCount: 1, audioUrl: 'https://a', summary: { model: 'm', decisions: ['d'] } });
     expect(d.summary).not.toHaveProperty('title');
+  });
+
+  it('cuts a line stored longer than the contract allows', () => {
+    const long = seg('Speaker 2', 0, 60_000, 'Слово за слово. '.repeat(900).trim());
+    const d = toDetail(meeting(), null, [long], null);
+    expect(d.segments.length).toBeGreaterThan(1);
+    expect(MeetingDetail.safeParse(d).success).toBe(true);
   });
 });
 
@@ -369,6 +377,16 @@ describe('MeetingsService', () => {
     });
     repo.findOwned.mockResolvedValue(meeting({ status: 'transcribing' }));
     await expect(service.putTranscript(user(), meeting().id, { segments })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('splits a transcriber phrase longer than a line may be before storing it', async () => {
+    const { repo, storage } = setup();
+    const transcripts = new TranscriptService(repo as never, storage as never);
+    await transcripts.store(meeting(), { segments: [seg('Speaker 1', 0, 600_000, 'A long answer. '.repeat(1_000).trim())] });
+    const stored = repo.replaceTranscript.mock.calls[0][1] as { text: string }[];
+    expect(stored.length).toBeGreaterThan(1);
+    expect(stored.every((s) => s.text.length <= 10_000)).toBe(true);
+    expect(storage.putJson.mock.calls[0][1].segments).toEqual(stored);
   });
 
   describe('complete', () => {
