@@ -59,6 +59,67 @@
   }
 }
 
+/* The logo on hover or keyboard focus: the icon tilts up, the heads lean in, the bubble pops and types. */
+.logo-icon,
+.logo-icon g {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.logo-icon g {
+  transform-box: fill-box;
+}
+.logo-head-left {
+  transform-origin: 50% 100%;
+}
+.logo-head-right {
+  transform-origin: 50% 100%;
+}
+.logo-bubble {
+  transform-origin: 0% 100%;
+}
+.logo-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.logo:hover .logo-icon,
+.logo:focus-visible .logo-icon {
+  transform: rotate(-8deg) scale(1.08);
+}
+.logo:hover .logo-head-left,
+.logo:focus-visible .logo-head-left {
+  transform: rotate(6deg) translateX(3%);
+}
+.logo:hover .logo-head-right,
+.logo:focus-visible .logo-head-right {
+  transform: rotate(-5deg) translateX(-2%);
+}
+.logo:hover .logo-bubble,
+.logo:focus-visible .logo-bubble {
+  transform: scale(1.12) translateY(-4%);
+}
+.logo:hover .logo-dot,
+.logo:focus-visible .logo-dot {
+  animation: logo-type 0.9s ease-in-out infinite;
+}
+.logo:hover .logo-dot:nth-of-type(2),
+.logo:focus-visible .logo-dot:nth-of-type(2) {
+  animation-delay: 0.15s;
+}
+.logo:hover .logo-dot:nth-of-type(3),
+.logo:focus-visible .logo-dot:nth-of-type(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes logo-type {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-45%);
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;

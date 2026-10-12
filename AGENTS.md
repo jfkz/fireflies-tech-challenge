@@ -31,3 +31,6 @@ cd apps/macos && SIGN_IDENTITY=- scripts/test.sh
 - Never commit secrets. Local secrets live in the gitignored `.local/` directory.
 - One open pull request at a time: every ready PR deploys to the shared dev environment.
 - Keep `docs/FEATURES.md` and `docs/QA.md` in step with user-facing changes.
+- The Mac app, the API and the web app share major.minor (`apps/macos/project.yml` `MARKETING_VERSION`,
+  `apps/api/package.json`, `apps/web/package.json`): bump the minor on all three together; patch releases
+  can differ. `pnpm check:versions` (run in CI) fails otherwise.

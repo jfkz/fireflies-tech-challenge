@@ -131,6 +131,7 @@ final class UploadQueueTests: XCTestCase {
         let uploadURL = try Fixture.json(requests[1].body)
         XCTAssertEqual(uploadURL["contentType"] as? String, "audio/mp4")
         XCTAssertEqual(uploadURL["sizeBytes"] as? Int, 2_048)
+        XCTAssertNil(uploadURL["channels"], "a mono mix says nothing about channels")
 
         let transcript = try Fixture.json(requests[3].body)
         XCTAssertEqual(NSDictionary(dictionary: transcript), NSDictionary(dictionary: try Fixture.json(Fixture.data("transcript-upload"))))
@@ -152,6 +153,23 @@ final class UploadQueueTests: XCTestCase {
         await queue.enqueue(try meeting(segments: [], uploadAudio: false))
         await queue.processDue()
         XCTAssertEqual(server.routes, ["POST /meetings", "POST /meetings/\(id)/upload-url", "PUT storage", "POST /meetings/\(id)/complete"])
+    }
+
+    func testTwoChannelRecordingTellsTheServerWhichSideIsWhich() async throws {
+        let queue = makeQueue()
+        var item = try meeting(segments: [])
+        item.audioChannels = .micSystem
+        await queue.enqueue(item)
+        await queue.processDue()
+        XCTAssertEqual(server.routes, ["POST /meetings", "POST /meetings/\(id)/upload-url", "PUT storage", "POST /meetings/\(id)/complete"])
+        let request = try XCTUnwrap(StubURLProtocol.requests.first { FakeServer.route(of: $0.request).hasSuffix("/upload-url") })
+        XCTAssertEqual(try Fixture.json(request.body)["channels"] as? String, "mic-system")
+    }
+
+    func testOlderQueuedMeetingsStillLoad() throws {
+        let json = #"[{"id":"7E1F2C3A-0000-4000-8000-000000000001","startedAt":"2026-10-06T09:20:00.000Z","durationSec":5,"segments":[],"audioFileName":"x.m4a","uploadAudio":true,"step":"audio","isFailed":false,"attempts":0}]"#
+        let items = try APICoding.decoder().decode([PendingMeeting].self, from: Data(json.utf8))
+        XCTAssertNil(items.first?.audioChannels)
     }
 
     func testMissingAudioFileIsSkipped() async throws {

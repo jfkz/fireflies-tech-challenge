@@ -2,17 +2,21 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { env } from '@/lib/env';
 import {
   BUILD,
   isNewBuild,
   liveBuild,
+  loadServices,
   parseBuildInfo,
+  servicesLabel,
   setLiveBuild,
   subscribeToVersion,
   updatesHeld,
   versionLabel,
   VERSION_PATH,
   type BuildInfo,
+  type Services,
 } from '@/lib/version';
 
 export const CHECK_EVERY_MS = 5 * 60_000;
@@ -81,12 +85,35 @@ function useWatchForNewBuild(current: BuildInfo, intervalMs: number) {
   }, [current, intervalMs]);
 }
 
-/** "v0.2.0 · abc1234", or a reload link once a newer version is live. */
-export function VersionTag({ className = '', current = BUILD, reload = reloadPage }: { className?: string; current?: BuildInfo; reload?: () => void }) {
+/**
+ * "v0.2.0 · abc1234", or a reload link once a newer version is live. With `services`
+ * (the dashboard) the API's and the Mac app's versions follow on the same line.
+ */
+export function VersionTag({
+  className = '',
+  current = BUILD,
+  reload = reloadPage,
+  services = false,
+  loadOthers = () => loadServices(env.apiUrl),
+}: {
+  className?: string;
+  current?: BuildInfo;
+  reload?: () => void;
+  services?: boolean;
+  loadOthers?: () => Promise<Services>;
+}) {
   const live = useSyncExternalStore(subscribeToVersion, liveBuild, () => null);
+  const others = useServices(services, loadOthers);
+  const othersLabel = others ? servicesLabel(others) : '';
   return (
     <span className={`text-xs font-bold tabular-nums ${className}`}>
       <span title={`Web app ${current.version}, commit ${current.commit}`}>{versionLabel(current)}</span>
+      {othersLabel && (
+        <>
+          {' · '}
+          <span title={servicesTitle(others!)}>{othersLabel}</span>
+        </>
+      )}
       {live && (
         <>
           {' · '}
@@ -97,4 +124,27 @@ export function VersionTag({ className = '', current = BUILD, reload = reloadPag
       )}
     </span>
   );
+}
+
+function useServices(enabled: boolean, load: () => Promise<Services>): Services | null {
+  const [services, setServices] = useState<Services | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    void load().then((s) => {
+      if (!cancelled) setServices(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `load` is a default-argument lambda: asking once per mount is the point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
+  return services;
+}
+
+function servicesTitle({ api, mac }: Services): string {
+  return [api && `API ${api.version}, commit ${api.commit.slice(0, 7)}`, mac && `Mac app ${mac.version} (build ${mac.commit})`]
+    .filter(Boolean)
+    .join('; ');
 }

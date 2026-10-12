@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
       <main className="mx-auto max-w-[1200px] px-4 py-6 sm:px-6 sm:py-10">{children}</main>
       <footer className="mx-auto max-w-[1200px] px-4 pb-6 text-right sm:px-6">
-        <VersionTag className="text-ink-soft/70" />
+        <VersionTag className="text-ink-soft/70" services />
       </footer>
     </div>
   );

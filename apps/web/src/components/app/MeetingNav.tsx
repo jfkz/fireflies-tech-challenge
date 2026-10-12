@@ -1,26 +1,29 @@
 'use client';
 
-import type { MeetingDetail, MeetingRef } from '@boringtalks/shared';
+import type { MeetingDetail, MeetingListItem, MeetingRef } from '@boringtalks/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useSameDayMeetings, useUpdateMeeting } from '@/hooks/queries';
+import { useLinkCandidates, useSameDayMeetings, useUpdateMeeting } from '@/hooks/queries';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { dateKey, formatDay, todayKey } from '@/lib/dates';
 import { formatMeetingDate } from '@/lib/format';
-import { chainNeighbours, dayNeighbours, isTyping, type Neighbours } from '@/lib/meeting-nav';
+import { chainNeighbours, dayNeighbours, isTyping, LINK_WINDOW_DAYS, linkCandidates, type Neighbours } from '@/lib/meeting-nav';
 
 const href = (m: MeetingRef) => `/meetings/${m.id}`;
 
 /**
- * Back to the list, the meetings before and after this one on the same day, and, when the meeting
- * continues earlier ones, its place in that chain. `[` `]` step through the day, `{` `}` through the chain.
+ * Back to the list, the meetings before and after this one on the same day, "Link to…" another
+ * meeting, and, when the meeting is in a chain, its place in it. `[` `]` step through the day, `{` `}`
+ * through the chain.
  */
 export function MeetingNav({ meeting: m }: { meeting: MeetingDetail }) {
   const router = useRouter();
   const sameDay = useSameDayMeetings(m.startedAt);
   const day = useMemo(() => dayNeighbours(m, sameDay.data ?? []), [m, sameDay.data]);
   const chain = useMemo(() => (m.chain ? chainNeighbours(m.chain, m.id) : null), [m]);
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     const targets: Record<string, MeetingRef | null | undefined> = { '[': day.prev, ']': day.next, '{': chain?.prev, '}': chain?.next };
@@ -54,8 +57,19 @@ export function MeetingNav({ meeting: m }: { meeting: MeetingDetail }) {
             <Step to={day.next} dir="next" label={`Next ${when}`} shortcut="]" />
           </div>
         )}
+        {/* Always here: linking by hand is how a meeting gets into a chain the summarizer missed. */}
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          title="Put this meeting in a chain with another one"
+          className="inline-flex items-center gap-1 rounded-full border-2 border-ink bg-white px-2.5 py-0.5 text-xs font-extrabold text-ink transition-transform hover:-translate-y-px hover:bg-sun-soft"
+          onClick={() => setLinking(true)}
+        >
+          Link to…
+        </button>
       </div>
       {m.chain && chain && <ChainBar meeting={m} chain={chain} />}
+      {linking && <LinkPicker meeting={m} onClose={() => setLinking(false)} />}
     </nav>
   );
 }
@@ -166,5 +180,128 @@ function ChainBar({ meeting: m, chain }: { meeting: MeetingDetail; chain: Neighb
         itself.
       </ConfirmDialog>
     </div>
+  );
+}
+
+/**
+ * "Link to…": picks another meeting and puts this one in its chain (`PATCH {chain: {with}}`), a choice
+ * the summarizer keeps. Meetings around this one come first, nearest first; typing searches them all.
+ * Mounted only while open, so it starts fresh each time.
+ */
+function LinkPicker({ meeting: m, onClose }: { meeting: MeetingDetail; onClose(): void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const [search, setSearch] = useState('');
+  const q = useDebouncedValue(search.trim(), 300);
+  const found = useLinkCandidates(m.startedAt, q, true);
+  const update = useUpdateMeeting(m.id);
+  const items = useMemo(() => linkCandidates(found.data ?? [], m, !q), [found.data, m, q]);
+  const close = () => {
+    if (!update.isPending) onClose();
+  };
+
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    if (typeof d.showModal === 'function') d.showModal();
+    else d.setAttribute('open', '');
+    // Closing (rather than just removing it) hands focus back to the "Link to…" button.
+    return () => {
+      if (typeof d.close === 'function') d.close();
+    };
+  }, []);
+
+  const link = (to: MeetingListItem) => update.mutate({ chain: { with: to.id } }, { onSuccess: onClose });
+
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      onCancel={(e) => {
+        e.preventDefault();
+        close();
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        close();
+      }}
+      onClick={(e) => {
+        // A click on the backdrop lands on the <dialog> itself.
+        if (e.target === ref.current) close();
+      }}
+      className="m-auto w-[min(92vw,520px)] rounded-[24px] border-[2.5px] border-ink bg-white p-0 text-ink shadow-[6px_7px_0_0_var(--color-ink)] backdrop:bg-dusk-deep/60"
+    >
+      <div className="p-6">
+        <h2 id={titleId} className="font-display text-2xl leading-tight">
+          Link to another meeting
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed font-semibold text-ink-soft">
+          Pick the meeting this one goes with: they show as one chain, and the summarizer won’t undo it.
+          {m.chain && ' This meeting leaves its current chain.'}
+        </p>
+        <label htmlFor={`${titleId}-q`} className="sr-only">
+          Search meetings
+        </label>
+        <input
+          id={`${titleId}-q`}
+          type="search"
+          className="field mt-4"
+          placeholder="Search meetings"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          autoComplete="off"
+          autoFocus
+        />
+        <div className="mt-3 max-h-[min(50vh,360px)] overflow-y-auto" aria-busy={found.isFetching}>
+          {found.isError ? (
+            <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
+              {found.error.message}
+            </p>
+          ) : found.isPending ? (
+            <p role="status" className="px-1 py-2 text-sm font-bold text-ink-soft">
+              Loading meetings…
+            </p>
+          ) : items.length === 0 ? (
+            <p role="status" className="px-1 py-2 text-sm font-bold text-ink-soft">
+              {q ? `No other meetings match “${q}”.` : `No other meetings within ${LINK_WINDOW_DAYS} days. Search to find older ones.`}
+            </p>
+          ) : (
+            <ul aria-label="Meetings to link to" className="space-y-1">
+              {items.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    disabled={update.isPending}
+                    onClick={() => link(c)}
+                    className="flex w-full items-baseline gap-3 rounded-xl px-3 py-2 text-left hover:bg-sun-soft focus-visible:bg-sun-soft disabled:opacity-60"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-extrabold text-ink">{c.title}</span>
+                    <time dateTime={c.startedAt} className="shrink-0 text-xs font-bold text-ink-soft">
+                      {formatMeetingDate(c.startedAt)}
+                    </time>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {update.isError && (
+          <p role="alert" className="mt-3 rounded-xl bg-danger-soft px-3 py-2 text-sm font-bold text-danger">
+            {update.error.message}
+          </p>
+        )}
+        <div className="mt-5 flex items-center justify-end gap-3">
+          {update.isPending && (
+            <span role="status" className="mr-auto text-sm font-bold text-ink-soft">
+              Linking…
+            </span>
+          )}
+          <button type="button" className="btn btn-secondary" onClick={close} disabled={update.isPending}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </dialog>
   );
 }

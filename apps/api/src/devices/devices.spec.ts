@@ -48,6 +48,12 @@ describe('device link (PKCE)', () => {
     expect(stored.codeHash).not.toContain(res.code);
   });
 
+  it('sends BoringTalks Dev its code on its own scheme', async () => {
+    const { service } = setup();
+    const res = await service.authorize(user(), { codeChallenge: challenge, deviceName: 'MacBook Air', app: 'dev' });
+    expect(res.redirectUrl).toBe(`boringtalks-dev://callback?code=${res.code}`);
+  });
+
   it('swaps code + verifier for a device token and emails a security notice', async () => {
     const { repo, users, jobs, service } = setup();
     repo.consumeCode.mockResolvedValue({ userId: user().id, codeChallenge: challenge, deviceName: 'MacBook Air' });

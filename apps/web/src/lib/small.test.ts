@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { authErrorMessage, safeNext } from './auth-errors';
-import { isAppCallback, parseConnectParams } from './connect';
+import { declinedCallbackUrl, isAppCallback, parseConnectParams } from './connect';
 import { formatBytes, formatClock, formatMeetingDate } from './format';
 import { summaryToMarkdown } from './markdown';
 import { lookTowards } from './pointer';
@@ -16,7 +16,14 @@ describe('connect params', () => {
       ok: true,
       challenge: CHALLENGE,
       deviceName: 'Mike’s Mac',
+      app: 'release',
     });
+  });
+  it('tells BoringTalks Dev apart by app=dev', () => {
+    expect(parseConnectParams(params(`challenge=${CHALLENGE}&app=dev`))).toMatchObject({ app: 'dev' });
+    expect(parseConnectParams(params(`challenge=${CHALLENGE}&app=other`))).toMatchObject({ app: 'release' });
+    expect(declinedCallbackUrl('dev')).toBe('boringtalks-dev://callback?error=access_denied');
+    expect(declinedCallbackUrl()).toBe('boringtalks://callback?error=access_denied');
   });
   it('defaults the device name and caps its length', () => {
     expect(parseConnectParams(params(`challenge=${CHALLENGE}`))).toMatchObject({ deviceName: 'your Mac' });
@@ -33,6 +40,8 @@ describe('connect params', () => {
   it('only lets the app callback through as a redirect', () => {
     expect(isAppCallback('boringtalks://callback?code=abc')).toBe(true);
     expect(isAppCallback('boringtalks://callback')).toBe(true);
+    expect(isAppCallback('boringtalks-dev://callback?code=abc')).toBe(true);
+    expect(isAppCallback('boringtalks-dev://elsewhere?code=abc')).toBe(false);
     expect(isAppCallback('https://evil.test/?boringtalks://callback')).toBe(false);
     expect(isAppCallback('javascript:alert(1)')).toBe(false);
   });

@@ -39,6 +39,9 @@ public struct PendingMeeting: Codable, Equatable, Identifiable, Sendable {
     public var audioFileName: String?
     /// The user's "Upload audio" setting at the time of recording.
     public var uploadAudio: Bool
+    /// `.micSystem` when the meeting was recorded for the server to transcribe, each side on its
+    /// own channel; nil (older uploads) is a mono mix.
+    public var audioChannels: AudioChannels?
     public var remoteID: String?
     public var step: Step
     /// Failed for good (the server refused it); waits for the user to retry or discard.
@@ -49,7 +52,7 @@ public struct PendingMeeting: Codable, Equatable, Identifiable, Sendable {
     public var lastError: String?
 
     public init(id: UUID = UUID(), title: String?, startedAt: Date, durationSec: Int, language: String?,
-                segments: [Segment], audioFileName: String?, uploadAudio: Bool) {
+                segments: [Segment], audioFileName: String?, uploadAudio: Bool, audioChannels: AudioChannels? = nil) {
         self.id = id
         self.title = title
         self.startedAt = startedAt
@@ -58,6 +61,7 @@ public struct PendingMeeting: Codable, Equatable, Identifiable, Sendable {
         self.segments = segments
         self.audioFileName = audioFileName
         self.uploadAudio = uploadAudio
+        self.audioChannels = audioChannels
         self.remoteID = nil
         self.step = .create
         self.isFailed = false

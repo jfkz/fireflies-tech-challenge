@@ -7,9 +7,11 @@ import BoringTalksKit
 ///
 /// Until the speech model is ready the audio waits in a backlog and is
 /// transcribed as soon as it is (up to 20 minutes; past that the meeting is left
-/// for the server to transcribe from the audio).
+/// for the server to transcribe from the audio). A channel that isn't transcribed here
+/// (`transcribes` off: the server does it) keeps no backlog.
 final class RecordingChannel: @unchecked Sendable {
     let kind: AudioChannel
+    let transcribes: Bool
     let meter = LevelMeter()
     private let clockStart: TimeInterval
     private let writer: RecordingWriter
@@ -23,11 +25,14 @@ final class RecordingChannel: @unchecked Sendable {
     private var backlogSamples = 0
     private var droppedBacklog = false
     private var transcriber: PhraseTranscriber?
+    /// Past `end`: a capture still stopping may deliver a buffer or two more, and they're dropped.
+    private var ended = false
 
     private static let backlogLimit = SpeechFormat.rate * 60 * 20
 
-    init(kind: AudioChannel, clockStart: TimeInterval, writer: RecordingWriter) {
+    init(kind: AudioChannel, clockStart: TimeInterval, writer: RecordingWriter, transcribes: Bool = true) {
         self.kind = kind
+        self.transcribes = transcribes
         self.clockStart = clockStart
         self.writer = writer
         queue = DispatchQueue(label: "games.cutthecheese.boringtalks.\(kind.rawValue)", qos: .userInitiated)
@@ -45,6 +50,7 @@ final class RecordingChannel: @unchecked Sendable {
     func catchUp() {
         let elapsed = ProcessInfo.processInfo.systemUptime - clockStart
         queue.async {
+            guard !self.ended else { return }
             let silence = self.timeline.catchUp(to: elapsed)
             if silence > 0 { self.deliver([Float](repeating: 0, count: silence)) }
         }
@@ -81,6 +87,7 @@ final class RecordingChannel: @unchecked Sendable {
                     _ = self.timeline.catchUp(to: elapsed, lag: 0)
                     self.deliver([Float](repeating: 0, count: behind))
                 }
+                self.ended = true
                 continuation.resume(returning: Ending(transcribed: self.transcriber != nil && !self.droppedBacklog,
                                                       transcriber: self.transcriber))
             }
@@ -88,6 +95,7 @@ final class RecordingChannel: @unchecked Sendable {
     }
 
     private func process(_ samples: [Float], endingAt elapsed: TimeInterval) {
+        guard !ended else { return }
         let silence = timeline.silenceBefore(frames: samples.count, endingAt: elapsed)
         if silence > 0 { deliver([Float](repeating: 0, count: silence)) }
         deliver(samples)
@@ -97,7 +105,7 @@ final class RecordingChannel: @unchecked Sendable {
         writer.append(chunk, from: kind)
         if let transcriber {
             transcriber.feed(chunk)
-        } else if !droppedBacklog {
+        } else if transcribes, !droppedBacklog {
             backlog.append(chunk)
             backlogSamples += chunk.count
             if backlogSamples > Self.backlogLimit {

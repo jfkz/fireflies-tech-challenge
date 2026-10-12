@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { AppConfig } from '../config/config.module';
 import { DevicesModule } from '../devices/devices.module';
 import { MeetingsModule } from '../meetings/meetings.module';
+import { ReportsModule } from '../reports/reports.module';
 import { UsersModule } from '../users/users.module';
 import { EmailComposer } from './email-composer';
 import { EmailLogRepository } from './email-log.repository';
@@ -12,7 +13,7 @@ import { FakeMailSender, LogMailSender, MailSender, ResendMailSender } from './m
 
 /** Worker-side email delivery: the `email` queue processor and everything it needs. */
 @Module({
-  imports: [UsersModule, MeetingsModule, DevicesModule],
+  imports: [UsersModule, MeetingsModule, DevicesModule, ReportsModule],
   providers: [
     EmailComposer,
     EmailLogRepository,

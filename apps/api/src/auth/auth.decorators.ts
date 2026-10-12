@@ -22,3 +22,10 @@ export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionConte
   if (!auth) throw new Error('CurrentUser used on a route without authentication');
   return auth.user;
 });
+
+/** The Mac that made the request, or null for the dashboard. */
+export const CurrentDeviceId = createParamDecorator((_: unknown, ctx: ExecutionContext): string | null => {
+  const auth = ctx.switchToHttp().getRequest<AuthedRequest>().auth;
+  if (!auth) throw new Error('CurrentDeviceId used on a route without authentication');
+  return auth.deviceId;
+});

@@ -83,6 +83,7 @@ Validated with zod at boot (`src/config/env.ts`); the process exits with a list 
 | `RESEND_API_KEY` | | empty = log emails instead of sending |
 | `EMAIL_FROM` | | `BoringTalks <hello@send.boringtalks.lol>` |
 | `EMAIL_ALLOWLIST` | | comma list; when set, mail only these addresses (dev) |
+| `REPORTS_NOTIFY_EMAIL` | | empty = reports are only stored; set, each Mac problem report is emailed there (without its log) |
 | `DIARIZE_MODEL` | | `google/gemini-3-flash`: tells voices apart when `TRANSCRIBE_MODEL` can't (Whisper); empty = off |
 | `THROTTLE_LIMIT` | | `120` requests/min per user |
 

@@ -144,3 +144,51 @@ export async function speechParts(audio: Uint8Array, opts: { maxBytes?: number; 
     await rm(dir, { recursive: true, force: true });
   }
 }
+
+export interface SplitAudio {
+  /** The left channel: the Mac's microphone, the user. Compact speech MP3. */
+  mic: Uint8Array;
+  /** The right channel: what the Mac played, everyone else. Compact speech MP3. */
+  system: Uint8Array;
+  /** Both channels mixed to mono AAC for playback (a split file plays the user in one ear only). */
+  mix: Uint8Array;
+}
+
+export const SPEECH_MEDIA_TYPE = 'audio/mpeg';
+export const PLAYBACK_MEDIA_TYPE = 'audio/mp4';
+
+/**
+ * A Mac recording with the microphone on the left channel and system audio on the right: each side
+ * on its own, as speech for the transcriber, plus a mono mix to play back. A file with one channel
+ * gives the same audio for both sides.
+ */
+export async function splitChannels(audio: Uint8Array): Promise<SplitAudio> {
+  const dir = await mkdtemp(join(tmpdir(), 'bt-split-'));
+  try {
+    const input = join(dir, 'input');
+    await writeFile(input, audio);
+    const stereo = (await channelCount(input)) >= 2;
+    const speech = ['-ac', '1', '-ar', '16000', '-c:a', 'libmp3lame', '-b:a', '24k'];
+    const [mic, system, mix] = ['mic.mp3', 'system.mp3', 'mix.m4a'].map((name) => join(dir, name));
+    await ffmpeg([
+      '-i', input, '-vn',
+      ...(stereo ? ['-af', 'pan=mono|c0=c0'] : []), ...speech, mic,
+      ...(stereo ? ['-af', 'pan=mono|c0=c1'] : []), ...speech, system,
+      '-ac', '1', '-ar', '16000', '-c:a', 'aac', '-b:a', '32k', mix,
+    ]);
+    return { mic: await readFile(mic), system: await readFile(system), mix: await readFile(mix) };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** Audio channels of the first audio stream, 0 when ffprobe can't tell. */
+async function channelCount(file: string): Promise<number> {
+  try {
+    const { stdout } = await run('ffprobe', ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=channels', '-of', 'csv=p=0', file]);
+    const channels = Number(stdout.trim());
+    return Number.isFinite(channels) ? channels : 0;
+  } catch {
+    return 0;
+  }
+}

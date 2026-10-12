@@ -35,12 +35,15 @@ export function canTransition(from: MeetingStatus, to: MeetingStatus): boolean {
 }
 
 /** A stretch of speech by one speaker. Times are milliseconds from the meeting start. */
+/** The longest line of a transcript; longer ones are split (`splitLongSegments`). */
+export const SEGMENT_TEXT_MAX = 10_000;
+
 export const Segment = z
   .object({
     speaker: z.string().trim().min(1).max(80),
     startMs: z.number().int().nonnegative(),
     endMs: z.number().int().nonnegative(),
-    text: z.string().trim().min(1).max(10_000),
+    text: z.string().trim().min(1).max(SEGMENT_TEXT_MAX),
   })
   .refine((s) => s.endMs >= s.startMs, { message: 'endMs must not be before startMs', path: ['endMs'] });
 export type Segment = z.infer<typeof Segment>;
@@ -119,7 +122,10 @@ export type MeetingRef = z.infer<typeof MeetingRef>;
 export const MeetingChain = z.object({
   id: z.string().uuid(),
   meetings: z.array(MeetingRef).min(2),
-  /** Why this meeting was linked ("Follows up on the admin page plan"); null when linked by hand. */
+  /**
+   * What connects them ("Follows up on the admin page plan"): why this meeting was linked, else why
+   * the nearest other one was, so every meeting of the chain shows it; null when all were linked by hand.
+   */
   reason: z.string().nullable(),
 });
 export type MeetingChain = z.infer<typeof MeetingChain>;
@@ -138,6 +144,8 @@ export type MeetingDetail = z.infer<typeof MeetingDetail>;
 export const MeetingPage = z.object({
   items: z.array(MeetingListItem),
   nextCursor: z.string().nullable(),
+  /** How many meetings match in all; only on a numbered page (`page` in the query). */
+  total: z.number().int().nonnegative().optional(),
 });
 export type MeetingPage = z.infer<typeof MeetingPage>;
 
@@ -155,9 +163,19 @@ export const AUDIO_CONTENT_TYPES = ['audio/mp4', 'audio/m4a', 'audio/x-m4a', 'au
 /** 200 MB: about 14 hours of the Mac app's 32 kbps AAC, or a long uploaded file. */
 export const MAX_AUDIO_BYTES = 200 * 1024 * 1024;
 
+/**
+ * How the recording's channels are laid out. `mixed`: everyone in one mix (mono or plain stereo).
+ * `mic-system`: the Mac's microphone (the user) on the left channel and what the Mac played (everyone
+ * else) on the right, so the server can transcribe each side on its own and keep "You" apart.
+ */
+export const AUDIO_CHANNELS = ['mixed', 'mic-system'] as const;
+export const AudioChannels = z.enum(AUDIO_CHANNELS);
+export type AudioChannels = z.infer<typeof AudioChannels>;
+
 export const UploadUrlRequest = z.object({
   contentType: z.enum(AUDIO_CONTENT_TYPES),
   sizeBytes: z.number().int().positive().max(MAX_AUDIO_BYTES),
+  channels: AudioChannels.optional(),
 });
 export type UploadUrlRequest = z.infer<typeof UploadUrlRequest>;
 
@@ -206,6 +224,8 @@ export type UpdateMeetingRequest = z.infer<typeof UpdateMeetingRequest>;
 export const ListMeetingsQuery = z
   .object({
     cursor: z.string().optional(),
+    /** A numbered page (from 1) instead of a cursor; the response then carries `total`. */
+    page: z.coerce.number().int().min(1).max(10_000).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(20),
     q: z.string().trim().max(200).optional(),
     /** Only meetings this person spoke in (display name, exact). */
@@ -216,7 +236,8 @@ export const ListMeetingsQuery = z
     from: z.string().datetime({ offset: true }).optional(),
     to: z.string().datetime({ offset: true }).optional(),
   })
-  .refine((v) => !v.from || !v.to || Date.parse(v.from) < Date.parse(v.to), { message: '`from` must be before `to`', path: ['to'] });
+  .refine((v) => !v.from || !v.to || Date.parse(v.from) < Date.parse(v.to), { message: '`from` must be before `to`', path: ['to'] })
+  .refine((v) => !v.cursor || !v.page, { message: 'Use either `cursor` or `page`', path: ['page'] });
 export type ListMeetingsQuery = z.infer<typeof ListMeetingsQuery>;
 
 /** A speaker or topic with how many meetings it appears in, for the filter bar. */
