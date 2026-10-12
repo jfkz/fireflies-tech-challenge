@@ -18,26 +18,31 @@ public sealed record SpeakerTag
 }
 
 /// <summary>What is known about one stretch of a voice.</summary>
-/// <param name="Embedding">Speaker embedding (WeSpeaker): who it is.</param>
+/// <param name="Embedding">Speaker embedding (TitaNet): who it is.</param>
 /// <param name="Traits">Pitch, intonation, timbre, brightness, breathiness: how it sounds.</param>
 public sealed record VoiceSample(float[] Embedding, VoiceTraits? Traits);
 
 /// <summary>
 /// Remembers the voices heard on the call and recognizes them again.
 /// <para>
-/// Who is who comes from speaker embeddings. On the Mac (WeSpeaker ResNet34 via FluidAudio)
-/// the thresholds were fitted on 514 clips of 1.2–5 s from 40 LibriSpeech speakers: a voice
-/// is mistaken 3.2 % of the time on one such clip. They are parameters here so they can be
-/// fitted again for the embedding model the Windows app runs.
+/// Who is who comes from TitaNet-small speaker embeddings. The thresholds were fitted on 367
+/// clips of 1.2–5 s from 21 LibriSpeech test-clean speakers: the same person's clips sit at a
+/// cosine distance of 0.26 (median; 0.42 at the 90th percentile), two people's at 0.96 (0.74 at
+/// the 3rd percentile). In simulated meetings of 2–4 people 0.9 % of phrases went to the wrong
+/// speaker. (The Mac app's WeSpeaker model needs 0.61 / 0.74.)
 /// </para>
 /// <para>For a meeting, voices are never forgotten, so "Speaker 2" stays Speaker 2 for the whole meeting. Thread-safe.</para>
 /// </summary>
 public sealed class VoiceRegistry(int maxVoices = 10, float sameDistance = VoiceRegistry.DefaultSameDistance, float newDistance = VoiceRegistry.DefaultNewDistance)
 {
     /// <summary>Closer than this: surely the same person, and the voice learns from the phrase.</summary>
-    public const float DefaultSameDistance = 0.61f;
+    public const float DefaultSameDistance = 0.55f;
     /// <summary>Further than this from everyone: a new person. In between: the nearest voice, without learning.</summary>
-    public const float DefaultNewDistance = 0.74f;
+    public const float DefaultNewDistance = 0.70f;
+    /// <summary>The voice at the end of a phrase is this far from how it began: surely someone else took over.</summary>
+    public const float ChangeDistance = 0.70f;
+    /// <summary>…this far: probably someone else; a second look in half a second decides.</summary>
+    public const float LikelyChangeDistance = 0.55f;
     /// <summary>A second or so of real speech: less (a laugh, music that came out as words) neither starts nor changes a voice.</summary>
     private const int SpeechFrames = 50;
 

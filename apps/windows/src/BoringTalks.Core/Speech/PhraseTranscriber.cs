@@ -480,11 +480,11 @@ public sealed class PhraseTranscriber : IAsyncDisposable
                     if (identification.Phrase != number) return;
                     // The change is most likely in the middle of the window.
                     var here = from + window / 3;
-                    // One person against the start of their own phrase: 0.51 typical, 0.69 at the
-                    // 90th percentile; a change of speaker: 0.85–0.95.
-                    identification = distance > 0.82f || (distance > 0.72f && identification.Suspect is not null)
+                    // One person against the start of their own phrase: 0.26 typical, 0.42 at the
+                    // 90th percentile; a change of speaker: 0.74 and up (see VoiceRegistry).
+                    identification = distance > VoiceRegistry.ChangeDistance || (distance > VoiceRegistry.LikelyChangeDistance && identification.Suspect is not null)
                         ? identification with { Watching = false, Cut = identification.Suspect ?? here }
-                        : identification with { Watching = false, Suspect = distance > 0.72f ? here : null };
+                        : identification with { Watching = false, Suspect = distance > VoiceRegistry.LikelyChangeDistance ? here : null };
                 }
                 trace?.Invoke($"watch {distance:0.000} at {current.Length / (double)Rate:0.0} s of the phrase");
             }

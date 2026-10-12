@@ -95,7 +95,8 @@ public sealed class ModelCatalogTests
             Assert.Equal("download.boringtalks.lol", f.Urls[0].Host);
             Assert.True(f.Urls.Count >= 2);
         });
-        Assert.True(ModelCatalog.ApproximateBytes > 600_000_000);
+        Assert.InRange(ModelCatalog.ApproximateBytes, 700_000_000, 730_000_000);
+        Assert.Equal(@"C:\m\parakeet-tdt-0.6b-v3-int8\tokens.txt", ModelCatalog.PathOf(ModelCatalog.Speech[3], @"C:\m"));
     }
 
     [Fact]
