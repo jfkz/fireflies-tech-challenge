@@ -84,6 +84,22 @@ public sealed class MicChoiceTests
     public void Falls_back_to_another_wired_mic() => Assert.Equal(Usb, MicChoice.Pick(Headset, [Headset, Usb], true));
 
     [Fact]
+    public void The_microphone_picked_in_settings_wins_while_it_is_connected()
+    {
+        // Even a Bluetooth headset, when that's what was picked.
+        Assert.Equal(Headset, MicChoice.Pick("bt", BuiltIn, [Headset, Usb, BuiltIn], avoidBluetooth: true));
+        Assert.Equal(Usb, MicChoice.Pick("usb", BuiltIn, [Headset, Usb, BuiltIn], avoidBluetooth: true));
+    }
+
+    [Fact]
+    public void An_unplugged_or_unset_pick_means_the_system_default()
+    {
+        Assert.Equal(BuiltIn, MicChoice.Pick("gone", Headset, [Headset, BuiltIn], avoidBluetooth: true));
+        Assert.Null(MicChoice.Pick("", Usb, [Usb, BuiltIn], avoidBluetooth: true));
+        Assert.Null(MicChoice.Pick(null, Usb, [Usb], avoidBluetooth: false));
+    }
+
+    [Fact]
     public void Keeps_the_default_when_there_is_no_other_mic() => Assert.Null(MicChoice.Pick(Headset, [Headset], true));
 
     [Fact]

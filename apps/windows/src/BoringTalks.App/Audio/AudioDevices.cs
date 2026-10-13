@@ -27,6 +27,16 @@ public sealed class AudioDevices : IMMNotificationClient, IDisposable
         return null;
     }
 
+    /// <summary>
+    /// The microphones that are connected now, as plain records. Its own enumerator, so it can run
+    /// on any thread (listing can take a second or two).
+    /// </summary>
+    public static IReadOnlyList<MicChoice.Device> ListMicrophones()
+    {
+        using var devices = new MMDeviceEnumerator();
+        return [.. devices.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active).Select(Describe).OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase)];
+    }
+
     public IReadOnlyList<MMDevice> Inputs() => [.. enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)];
 
     public MMDevice Get(string id) => enumerator.GetDevice(id);

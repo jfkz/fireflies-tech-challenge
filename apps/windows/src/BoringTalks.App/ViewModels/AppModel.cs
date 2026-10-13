@@ -304,6 +304,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         try
         {
             Recorder.AvoidBluetoothMic = Settings.AvoidBluetoothMic;
+            Recorder.MicrophoneId = Settings.MicrophoneId;
             Recorder.SilenceLimit = Settings.SilenceStopMinutes * 60;
             await Recorder.StartAsync(TitleDraft, Settings.LanguageCode, Settings.UploadAudio, Settings.TranscribeOnPc);
             callSignals.RecordingStarted(Now);

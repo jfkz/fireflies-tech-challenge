@@ -96,6 +96,9 @@ public sealed partial class MeetingRecorder : ObservableObject
 
     /// <summary>See <see cref="Settings.AvoidBluetoothMic"/>; read when a meeting starts.</summary>
     public bool AvoidBluetoothMic { get; set; } = true;
+
+    /// <summary>The microphone picked in Settings; empty: the system default.</summary>
+    public string? MicrophoneId { get; set; }
     /// <summary>Quiet this long (seconds) stops the meeting; 0 never does. Read when a meeting starts.</summary>
     public double SilenceLimit { get; set; } = 300;
 
@@ -244,7 +247,7 @@ public sealed partial class MeetingRecorder : ObservableObject
         if (!channels.TryGetValue(kind, out var channel)) return false;
         try
         {
-            IAudioCapture capture = kind == AudioChannel.Microphone ? new MicCapture(AvoidBluetoothMic, log) : new SystemAudioCapture(log);
+            IAudioCapture capture = kind == AudioChannel.Microphone ? new MicCapture(AvoidBluetoothMic, log, MicrophoneId) : new SystemAudioCapture(log);
             capture.Audio += channel.Ingest;
             capture.Stopped += error => ui.BeginInvoke(() =>
             {

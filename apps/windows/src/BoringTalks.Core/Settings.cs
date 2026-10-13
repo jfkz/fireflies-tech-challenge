@@ -30,6 +30,12 @@ public sealed record Settings
     /// </summary>
     public bool AvoidBluetoothMic { get; init; } = true;
 
+    /// <summary>The microphone that records "You" (a Windows endpoint id); empty: the system default.</summary>
+    public string MicrophoneId { get; init; } = "";
+
+    /// <summary>Its name, to show while it isn't connected.</summary>
+    public string MicrophoneName { get; init; } = "";
+
     /// <summary>Stop the recording when nobody has spoken for this many minutes; 0 never stops.</summary>
     public int SilenceStopMinutes { get; init; } = 5;
 

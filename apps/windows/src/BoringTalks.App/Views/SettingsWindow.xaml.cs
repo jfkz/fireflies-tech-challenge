@@ -14,6 +14,8 @@ public sealed record Choice(string Name, int Value);
 
 public sealed record LanguageChoice(string Name, string Code);
 
+public sealed record MicrophoneChoice(string Name, string Id);
+
 /// <summary>The settings window's view of the app: each setting reads from and writes straight to <see cref="AppModel.Settings"/>.</summary>
 public sealed class SettingsViewModel : ObservableObject
 {
@@ -25,6 +27,8 @@ public sealed class SettingsViewModel : ObservableObject
         App = app;
         app.PropertyChanged += (_, _) => OnPropertyChanged(new PropertyChangedEventArgs(string.Empty));
         // "Restart to update" waits for the recording to end.
+        app.Devices.Changed += _ => System.Windows.Application.Current?.Dispatcher.BeginInvoke(RefreshMicrophones);
+        BuildMicrophones();
         app.Recorder.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(app.Recorder.Phase)) OnPropertyChanged(nameof(CanRestartToUpdate));
@@ -52,6 +56,51 @@ public sealed class SettingsViewModel : ObservableObject
     public bool StopWhenCallEnds { get => S.StopWhenCallEnds; set => App.UpdateSettings(s => s with { StopWhenCallEnds = value }); }
     public bool OpenAtSignIn { get => S.OpenAtSignIn; set => App.UpdateSettings(s => s with { OpenAtSignIn = value }); }
     public IReadOnlyList<string> IgnoredApps => S.IgnoredCallApps;
+
+    private IReadOnlyList<MicChoice.Device> connected = [];
+
+    /// <summary>System default, every microphone connected now, and the picked one if it's unplugged. One list per refresh, so the box keeps its selection.</summary>
+    public IReadOnlyList<MicrophoneChoice> Microphones { get; private set; } = [];
+
+    public string MicrophoneId
+    {
+        get => S.MicrophoneId;
+        set
+        {
+            // A list being swapped sets null for a moment; that isn't a choice.
+            if (value is null || value == S.MicrophoneId) return;
+            var name = connected.FirstOrDefault(d => d.Id == value)?.Name ?? "";
+            App.UpdateSettings(s => s with { MicrophoneId = value, MicrophoneName = name });
+            BuildMicrophones();
+        }
+    }
+
+    /// <summary>Lists the microphones again (off the UI thread: it can take a second or two).</summary>
+    public async void RefreshMicrophones()
+    {
+        try
+        {
+            connected = await Task.Run(Audio.AudioDevices.ListMicrophones);
+        }
+        catch (Exception error) when (error is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        {
+            Platform.Log.Error("settings", "couldn't list the microphones", error);
+            return;
+        }
+        BuildMicrophones();
+    }
+
+    private void BuildMicrophones()
+    {
+        List<MicrophoneChoice> list = [new("System default", ""), .. connected.Select(d => new MicrophoneChoice(d.Name, d.Id))];
+        if (S.MicrophoneId.Length > 0 && connected.All(d => d.Id != S.MicrophoneId))
+        {
+            list.Add(new($"{(S.MicrophoneName.Length > 0 ? S.MicrophoneName : "The microphone you picked")} (not connected: using the system default)", S.MicrophoneId));
+        }
+        Microphones = list;
+        OnPropertyChanged(nameof(Microphones));
+        OnPropertyChanged(nameof(MicrophoneId));
+    }
     public bool HasIgnoredApps => S.IgnoredCallApps.Count > 0;
 
     public int TabIndex
@@ -116,6 +165,13 @@ public partial class SettingsWindow : Window
     {
         e.Cancel = true;
         Hide();
+    }
+
+    /// <summary>Microphones come and go; list them again whenever the window shows.</summary>
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        model.RefreshMicrophones();
     }
 
     private void RetryModels_Click(object sender, RoutedEventArgs e) => _ = model.App.Models.PrepareAsync();

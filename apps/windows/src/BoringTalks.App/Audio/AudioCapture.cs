@@ -64,7 +64,8 @@ public interface IAudioCapture : IDisposable
 /// isn't the chosen device is never forced into its call profile. The device is picked and opened
 /// on the thread that starts the capture (Core Audio objects don't cross COM apartments).
 /// </summary>
-public sealed class MicCapture(bool avoidBluetooth, Action<string>? log = null) : IAudioCapture
+/// <param name="chosenId">The microphone picked in Settings; null or empty: the system default.</param>
+public sealed class MicCapture(bool avoidBluetooth, Action<string>? log = null, string? chosenId = null) : IAudioCapture
 {
     private WasapiCapture? capture;
     private MMDeviceEnumerator? enumerator;
@@ -110,12 +111,19 @@ public sealed class MicCapture(bool avoidBluetooth, Action<string>? log = null) 
     }
 
     /// <summary>
-    /// The microphone call apps use (Communications role), else the default one. When that is a
-    /// Bluetooth headset, the PC's own microphone instead (see <see cref="MicChoice"/>); listing
-    /// every microphone can take seconds, so only then.
+    /// The microphone picked in Settings, if it's connected. Otherwise the one call apps use
+    /// (Communications role), else the default one; when that is a Bluetooth headset, the PC's own
+    /// microphone instead (see <see cref="MicChoice"/>). Listing every microphone can take seconds,
+    /// so only when needed.
     /// </summary>
     private MMDevice Pick(MMDeviceEnumerator devices)
     {
+        if (!string.IsNullOrEmpty(chosenId))
+        {
+            var all = devices.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active).ToList();
+            if (all.FirstOrDefault(d => d.ID == chosenId) is { } picked) return picked;
+            log?.Invoke("the microphone picked in Settings isn't connected; using the system default");
+        }
         var role = devices.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Communications) ? Role.Communications
             : devices.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Console) ? Role.Console
             : throw new CaptureException("There is no microphone. Plug one in, or check Settings › System › Sound.");

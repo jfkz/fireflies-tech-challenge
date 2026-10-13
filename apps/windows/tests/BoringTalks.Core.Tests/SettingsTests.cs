@@ -21,6 +21,7 @@ public sealed class SettingsTests
         Assert.Empty(settings.IgnoredCallApps);
         Assert.True(settings.OpenAtSignIn);
         Assert.True(settings.TranscribeOnPc);
+        Assert.Equal("", settings.MicrophoneId);
         Assert.Equal("transcription", settings.SettingsTab);
         Assert.Equal("de", (settings with { Language = "de" }).LanguageCode);
     }

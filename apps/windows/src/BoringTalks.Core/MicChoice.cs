@@ -14,6 +14,13 @@ public static class MicChoice
 {
     public sealed record Device(string Id, string Name, bool IsBluetooth, bool IsBuiltIn);
 
+    /// <summary>
+    /// The microphone picked in Settings while it's connected; otherwise (System default, or it's
+    /// unplugged) the default rule below. Null means the default as it is.
+    /// </summary>
+    public static Device? Pick(string? chosenId, Device? defaultInput, IReadOnlyList<Device> inputs, bool avoidBluetooth) =>
+        !string.IsNullOrEmpty(chosenId) && inputs.FirstOrDefault(d => d.Id == chosenId) is { } chosen ? chosen : Pick(defaultInput, inputs, avoidBluetooth);
+
     /// <summary>The device to record from; null means the default as it is.</summary>
     public static Device? Pick(Device? defaultInput, IReadOnlyList<Device> inputs, bool avoidBluetooth)
     {

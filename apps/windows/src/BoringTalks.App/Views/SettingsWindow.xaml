@@ -120,9 +120,14 @@
         <StackPanel>
           <Border Style="{StaticResource Group}">
             <StackPanel>
+              <DockPanel Margin="0,0,0,10">
+                <TextBlock Text="Microphone" Width="150" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding Microphones}" DisplayMemberPath="Name" SelectedValuePath="Id"
+                          SelectedValue="{Binding MicrophoneId}" AutomationProperties.Name="Microphone" />
+              </DockPanel>
               <CheckBox Content="Keep Bluetooth headsets in high quality" IsChecked="{Binding AvoidBluetoothMic}" />
               <TextBlock Style="{StaticResource Help}"
-                         Text="Recording with a Bluetooth headset's microphone switches the headset to call quality. With this on, “You” is recorded with the PC's own microphone instead." />
+                         Text="With System default: recording with a Bluetooth headset's microphone switches the headset to call quality, so “You” is recorded with the PC's own microphone instead." />
               <CheckBox Content="Upload meeting audio" IsChecked="{Binding UploadAudio}" IsEnabled="{Binding TranscribeOnPc}" />
               <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="{Binding UploadAudioHelp}" />
             </StackPanel>

@@ -429,6 +429,7 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 |---|---|
 | Open Settings from the menu | Tabs **Transcription**, **Recording**, **Calls**, **Account** with icons, like the Mac; the window is as tall as the tab; it reopens on the tab last used |
 | Transcription › **Online, after the meeting (upload only)**, record a call with your voice and the others', stop | The speech model status says it isn't needed; **Upload meeting audio** is on and greyed out; the log says "upload only"; the `.m4a` is stereo (you left, the others right); on the dashboard the meeting is transcribed by the server with "You" and the other speakers apart, and plays back as one mix |
+| Recording › **Microphone**: pick a USB or headset microphone, start a meeting | The log says it records with that microphone; the menu shows its name under You. Unplug it and start again: the system default records, and Settings shows the pick as not connected |
 | Back to **On this PC** | The speech model downloads (if it isn't there) and the next meeting is transcribed live again |
 | Calls › Never for Zoom (from an offer), then Settings › Calls | A “Never asked” group lists Zoom with **Ask again** |
 | Install a dev build, publish a newer one (`release.ps1 dev`), relaunch and wait 30 s (or Account › **Check for updates**) | Account: “Downloading 0.5.2… 40 %” with a bar, then “… is ready”; the menu says it's ready with **Restart to update** |

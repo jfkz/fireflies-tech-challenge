@@ -716,7 +716,7 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
 ### Settings, environments, command line
 
 - **What:** the Mac's settings in the same four tabs (**Transcription**: **Transcribe on this
-  PC** or **Online, after the meeting (upload only)**, speech model and language; **Recording**: Bluetooth, upload audio, keep recordings, stop after silence;
+  PC** or **Online, after the meeting (upload only)**, speech model and language; **Recording**: **Microphone** (System default, or any connected microphone; an unplugged pick falls back to the default), Bluetooth, upload audio, keep recordings, stop after silence;
   **Calls**: offer to record, stop when the call ends, **Open BoringTalks when I sign in to
   Windows**, apps never asked about; **Account**: sign-in, API and dashboard, updates, version and
   Quit). The window is as tall as the open tab (a tab taller than the screen scrolls) and reopens
