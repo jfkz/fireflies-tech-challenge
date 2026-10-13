@@ -1,31 +1,34 @@
 # BoringTalks
 
-**Your meeting, minus the meeting.** A simplified Fireflies.ai: a Mac app records your calls and
-turns them into text on your Mac; the server writes a title that says what the meeting was about,
+**Your meeting, minus the meeting.** A simplified Fireflies.ai: a Mac or Windows app records your
+calls and turns them into text on your computer; the server writes a title that says what the meeting was about,
 a summary, key topics, action items with owners, and decisions; a web dashboard shows it all.
 
 - Web app: https://boringtalks.lol (dev: https://dev.boringtalks.lol)
 - API: https://api.boringtalks.lol/health
-- Mac app: https://download.boringtalks.lol/BoringTalks-latest.dmg (always the newest build; also the Download button on the landing page)
+- Mac app: https://download.boringtalks.lol/BoringTalks-latest.dmg (always the newest build)
+- Windows app: https://download.boringtalks.lol/BoringTalks-Setup-latest.exe (Windows 10 2004+ / 11; the landing page's Download button picks the right one for your computer)
 - Write-up for reviewers: [docs/WRITEUP.md](docs/WRITEUP.md)
 
 New accounts get a ready demo meeting, so the dashboard shows the full result before you record
-anything. Without a Mac, use **Record in the browser** (or upload an audio file) on `/record`.
+anything. Without the desktop app, use **Record in the browser** (or upload an audio file) on `/record`.
 
 ## What's inside
 
 | Path | What |
 |---|---|
 | [`apps/macos`](apps/macos) | Swift/SwiftUI menu-bar recorder. Captures the microphone ("You") and system audio (everyone else), transcribes on the Neural Engine with Parakeet, tells voices apart with WeSpeaker embeddings, uploads the transcript. |
+| [`apps/windows`](apps/windows) | C#/.NET 10 WPF tray recorder, the Mac app's features on Windows: microphone + process-loopback system audio, Parakeet on the CPU through sherpa-onnx, TitaNet voice embeddings, call detection, per-user Velopack installer. |
 | [`apps/api`](apps/api) | NestJS 11 API + BullMQ worker: auth, meetings, presigned R2 uploads, summarization with Claude Haiku 4.5 via the Vercel AI Gateway, Whisper fallback transcription, Resend emails. |
-| [`apps/web`](apps/web) | Next.js 16: a parallax landing page with cartoon heads, and the dashboard (meetings, transcript synced to audio, action items, browser recorder, Mac sign-in). |
-| [`packages/shared`](packages/shared) | zod schemas = the API contract, shared by API and web, mirrored by the Mac app. |
+| [`apps/web`](apps/web) | Next.js 16: a parallax landing page with cartoon heads, and the dashboard (meetings, transcript synced to audio, action items, browser recorder, desktop sign-in), offering the visitor's Mac or Windows app. |
+| [`packages/shared`](packages/shared) | zod schemas = the API contract, shared by API and web, mirrored by the desktop apps; JSON fixtures checked against them. |
 | [`e2e`](e2e) | Playwright: UI suite against the Firebase Auth emulator, smoke suite for deployed environments. |
 | [`docs`](docs) | [Architecture](docs/ARCHITECTURE.md) · [Features](docs/FEATURES.md) · [QA flows](docs/QA.md) · [API](docs/API.md) · [Deployment](docs/DEPLOYMENT.md) · [Costs](docs/COSTS.md) · [Agent options](docs/AGENT.md) |
 
 ## Run it locally
 
-Requirements: Node 24 (22.12+), pnpm 10, Docker. For the Mac app: macOS 26, Xcode 26, XcodeGen.
+Requirements: Node 24 (22.12+), pnpm 10, Docker. For the Mac app: macOS 26, Xcode 26, XcodeGen. For
+the Windows app: Windows 10 2004+ and the .NET 10 SDK.
 
 ```sh
 pnpm install
@@ -46,6 +49,9 @@ pnpm --filter @boringtalks/web dev            # terminal 4
 # Mac app (pointed at the local API)
 cd apps/macos && xcodegen generate && open BoringTalks.xcodeproj
 #   launch arguments: --api-url http://localhost:4000 --web-url http://localhost:3000
+
+# Windows app (pointed at the local API)
+cd apps/windows && dotnet run --project src/BoringTalks.App -- --api-url http://localhost:4000 --web-url http://localhost:3000
 ```
 
 Summaries need `AI_GATEWAY_API_KEY` in `apps/api/.env` (a Vercel AI Gateway key); without it
@@ -58,6 +64,7 @@ pnpm turbo run lint typecheck test:cov build  # unit tests with coverage gates, 
 pnpm --filter @boringtalks/api test:e2e       # API + worker against docker-compose
 pnpm --filter @boringtalks/e2e test:e2e       # Playwright UI suite
 cd apps/macos && SIGN_IDENTITY=- scripts/test.sh   # XCTest
+cd apps/windows && pwsh scripts/test.ps1           # xUnit, Core coverage gate
 ```
 
 | Package | Unit tests | Coverage (lines) | e2e |

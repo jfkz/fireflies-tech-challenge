@@ -4,6 +4,7 @@ What BoringTalks does, by part. Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 - [Web dashboard and landing page](#web-features-appsweb)
 - [Mac app](#boringtalks-for-mac--features)
+- [Windows app](#boringtalks-for-windows--features)
 - [Backend](#backend-features-appsapi)
 
 ## Web features (apps/web)
@@ -519,6 +520,106 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   `publish.sh` on a developer's Mac; CI runs `test.sh`).
 - **Limits:** without a Developer ID certificate the DMG is ad-hoc signed and not notarized;
   first launch then needs right-click → Open.
+
+## BoringTalks for Windows — features
+
+The Mac app's features on Windows 10 (2004+) and 11, in `apps/windows` (C#, .NET 10, WPF). The
+logic is the Mac's, ported to `BoringTalks.Core` with its tests; this section lists what each
+feature is on Windows and where it differs. Paths are relative to `apps/windows/src`. Details:
+[apps/windows/README.md](../apps/windows/README.md).
+
+### Tray app
+
+- **What:** an icon in the notification area (red dot while recording, blue while a call waits
+  for an answer); left click opens the menu above the tray, right click has Open, Start/Stop
+  meeting, Dashboard, Settings and Quit. The menu has the Mac's panels: sign-in, meeting title,
+  Start/Stop with the elapsed time, level bars for "You" and "Others", warnings, the stop
+  countdown with **Keep recording**, the call offer, the "stopped by itself" notice, model
+  progress, the live transcript toggle, upload status with Retry/Discard, the 5 recent meetings,
+  and Dashboard / Settings… / Quit. One instance per user; launching it again opens the menu.
+  Opens at sign-in by default (`--background`, quietly).
+- **Where:** `BoringTalks.App/Views/TrayIcon.cs`, `MenuWindow.xaml`, `ViewModels/MenuViewModel.cs`,
+  `ViewModels/AppModel.cs`, `Platform/SingleInstance.cs`, `Platform/Registration.cs`.
+
+### Sign in with the browser
+
+- **What:** the Mac's PKCE device link. `boringtalks://` is registered for the user on every
+  launch; Windows starts a second BoringTalks with the callback link, which hands it to the
+  running one over a named pipe. The device token goes to Windows Credential Manager. **Paste
+  code** and **Copy the sign-in link** work as on the Mac. The PC's name is its Windows device name.
+- **Where:** `BoringTalks.Core/Auth/`, `BoringTalks.App/Platform/CredentialStore.cs`, `SingleInstance.cs`.
+
+### Recording a meeting
+
+- **What:** "You" from the microphone call apps use (the Communications default), the other
+  people from Windows' process loopback (everything the PC plays except BoringTalks, on every
+  output device). Both start in parallel and run on one 16 kHz clock; a side that can't start
+  (microphone privacy off, no output device) leaves a warning and the other records. Device
+  changes restart a side after 400 ms. Bluetooth headsets keep their music profile: "You" then
+  comes from the PC's own microphone. Saved as AAC in `.m4a` (48 kHz, 96 kbps mono, ~43 MB/h).
+- **Where:** `BoringTalks.App/Audio/`, `Recording/MeetingRecorder.cs`, `RecordingChannel.cs`,
+  `RecordingWriter.cs`; `BoringTalks.Core/Audio/`.
+- **Limits:** process loopback needs Windows 10 build 19041; before that, only the default output
+  device is recorded. Windows "N" editions without the Media Feature Pack upload the transcript
+  without audio. Audio over 200 MB (~4.5 h) isn't uploaded.
+
+### Stop after silence; offer to record a call, stop when it ends
+
+- **What:** the Mac's rules (`SilenceWatch`, `CallSignals`, `CallEndWatch`) with Windows signals:
+  the apps holding a microphone come from Windows' microphone privacy records (the data behind
+  the taskbar's microphone icon), re-read on registry change notifications and every 2 s.
+  Records left "in use" by an app that crashed mid-call (or an old version) are ignored. The
+  offer is a toast with **Record / Not now / Never for <app>** and the same banner in the menu;
+  the silence warning is a toast with **Keep recording**.
+- **Where:** `BoringTalks.App/Platform/MicUsageMonitor.cs`, `Notifier.cs`;
+  `BoringTalks.Core/Calls/`, `SilenceWatch.cs`.
+- **Limits:** call apps are recognized by executable name (Zoom, Teams, Webex, Slack, Discord,
+  WhatsApp, Telegram, Skype, browsers) or Store package; others via `extraCallApps` in
+  `%APPDATA%\BoringTalks\settings.json`.
+
+### On-device transcription and telling the other people apart
+
+- **What:** Parakeet TDT 0.6B v3 (int8) and pyannote segmentation 3.0 through sherpa-onnx on the
+  CPU, with the Mac's phrase logic (previews, pauses, 15 s cap, pitch and voice cuts, turns).
+  Voices are TitaNet-small embeddings, recalibrated for that model (same < 0.55, new > 0.70;
+  0.9 % of phrases to the wrong speaker in simulated 2–4 person meetings on LibriSpeech).
+  Models (~717 MB) download once, with resume and SHA-256 checks, into `%LOCALAPPDATA%\BoringTalks-Models`;
+  a meeting recorded before they're ready waits (up to 20 min per side), else goes to the
+  server's transcription with its audio.
+- **Where:** `BoringTalks.Speech/`, `BoringTalks.Core/Speech/`.
+- **Limits:** the language setting only labels the transcript (Parakeet in sherpa-onnx detects it);
+  without a setting, `LanguageGuess` (alphabet, common words) does.
+
+### Transcript assembly, live window, upload queue, recordings
+
+- **What:** as on the Mac: speakers labelled "You" / "Speaker N", echo dropped, the live transcript
+  window (two talking heads drawn like the website's, floating above other windows without taking
+  focus or a place in Alt+Tab), the persistent upload queue (`%APPDATA%\BoringTalks\uploads.json`,
+  `source: "windows"`, `User-Agent: BoringTalks-Windows/<version>`), recordings kept 0/1/7/30
+  days in `%APPDATA%\BoringTalks\Recordings`.
+- **Where:** `BoringTalks.Core/Transcript/`, `Uploads/`, `RecordingJanitor.cs`;
+  `BoringTalks.App/Views/LiveTranscriptWindow.xaml`, `AvatarView.cs`.
+
+### Settings, environments, command line
+
+- **What:** the Mac's settings (language, Bluetooth, upload audio, keep recordings, stop after
+  silence, offer to record, stop when the call ends, ignored apps, account) plus **Open
+  BoringTalks when I sign in to Windows**, saved in `%APPDATA%\BoringTalks\settings.json`, which
+  also takes `apiUrl` / `webUrl` (or `--api-url` / `--web-url`). Command line: `--transcribe`,
+  `--listen-test`, `--mic-users`, `--demo`, `--show-menu`; debug builds add `--debug-sign-in`,
+  `--debug-print-connect-url`, `--debug-sign-out`, `--debug-record <seconds>`.
+- **Where:** `BoringTalks.App/Views/SettingsWindow.xaml`, `BoringTalks.Core/Settings.cs`,
+  `BoringTalks.App/CommandLineTools.cs`.
+
+### Distribution
+
+- **What:** a self-contained per-user installer (Velopack, no admin rights, ~97 MB) and
+  `latest-windows.json` on R2 next to the DMGs; the website's `GET /downloads` offers it.
+  Uninstalling removes the link handler, the sign-in entry, notifications and the models.
+- **Where:** `apps/windows/scripts/` (`release.ps1` runs `build.ps1` and `publish.ps1` on a
+  developer's PC; CI runs `test.ps1` and keeps each PR's installer as an artifact).
+- **Limits:** not code-signed yet: browsers and SmartScreen warn on the first run
+  (**More info → Run anyway**), which the landing page explains.
 
 ## Backend features (apps/api)
 

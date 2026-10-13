@@ -4,6 +4,7 @@ Manual test flows with steps and expected results. Automated coverage: unit test
 
 - [Web](#manual-qa-web-appsweb)
 - [Mac app](#boringtalks-for-mac--manual-qa)
+- [Windows app](#boringtalks-for-windows--manual-qa)
 - [Backend and end to end](#manual-qa-backend-and-end-to-end)
 
 ## Manual QA: web (apps/web)
@@ -317,6 +318,89 @@ BoringTalks.app/Contents/MacOS/BoringTalks --transcribe /tmp/meeting.wav --speak
 Expected: JSON with `segments` alternating `Speaker 1` / `Speaker 2`, times in ms that match
 the audio, `language: "en"`, exit code 0.
 
+## BoringTalks for Windows — manual QA
+
+On Windows 10 (2004 or later) or 11. A clean start: uninstall BoringTalks (Settings › Apps), then
+delete `%APPDATA%\BoringTalks` and `%LOCALAPPDATA%\BoringTalks-Models`, and the
+`BoringTalks:device-token.*` entries in Control Panel › Credential Manager › Windows Credentials.
+
+Against dev: put `{ "apiUrl": "https://api.dev.boringtalks.lol", "webUrl": "https://dev.boringtalks.lol" }`
+in `%APPDATA%\BoringTalks\settings.json` (or launch with `--api-url` / `--web-url`). Logs:
+`%APPDATA%\BoringTalks\logs\boringtalks-<date>.log`.
+
+### 1. Install, SmartScreen, first launch
+
+| Step | Expected |
+|---|---|
+| On the landing page in Edge or Chrome, **Download for Windows** | `BoringTalks-Setup-<version>.exe` from `download.boringtalks.lol`. Unsigned build: the browser says it "isn't commonly downloaded"; **Keep** (Edge: ⋯ › Keep › Show more › Keep anyway) |
+| Run it | Unsigned: "Windows protected your PC" → **More info** → **Run anyway**. No admin prompt; a short splash, then the app starts and its menu opens above the tray with **Sign in with browser** |
+| Look at the notification area (under **^** if hidden) | The BoringTalks icon; Start menu and desktop have BoringTalks shortcuts |
+| Settings… | "Speech model": "Downloading the speech model… n %", then "Ready · Parakeet v3 + voice separation" (~717 MB the first time) |
+| Launch BoringTalks again from the Start menu | No second icon; the menu of the running one opens |
+| Sign out of Windows and back in | BoringTalks is in the tray again, quietly (Settings › **Open BoringTalks when I sign in to Windows**; off removes it from Settings › Apps › Startup) |
+
+### 2. Sign in with the browser
+
+| Step | Expected |
+|---|---|
+| **Sign in with browser** | The browser opens `…/connect?challenge=…&device=<the PC's name>`; the menu shows "Finish signing in in your browser…" |
+| Sign in and **Connect this computer** | The browser asks to open BoringTalks; allow. The menu shows your email, **Start meeting** and "Recent meetings"; dashboard Settings lists the PC under "Connected computers" |
+| Quit (menu › Quit) and start it again | Still signed in (Credential Manager: `BoringTalks:device-token.<api host>`) |
+| **Paste code** with the code shown by the dashboard (or the `boringtalks://` link) | Signed in the same way; `two words` → "That doesn't look like a sign-in code." |
+| **Copy the sign-in link**, open it in another browser | Same flow from that browser |
+
+### 3. Record a two-voice meeting
+
+| Step | Expected |
+|---|---|
+| Title (optional), **Start meeting** | Red **Stop** with a timer; the tray icon gets a red dot; both level bars move (speak; play a video) |
+| **Show live transcript** | A window with two heads (You, Others) above other windows, not in Alt+Tab, never taking focus; lines appear labelled **Speaker 1/2** for the video's voices and **You** for yours, grey while being spoken; the mouths move with the sound |
+| Play a two-person interview for ~2 minutes on the speakers, then on headphones; speak in between | With headphones: clean "You" lines. On speakers: the video's words aren't duplicated under "You" (echo removal) |
+| Switch the default output device during the meeting (speakers ↔ headset) | Recording continues; the "Others" level keeps moving (process loopback records every output device) |
+| **Stop** | "Finishing transcript…", then idle; "1 upload waiting" → gone; the meeting appears under Recent meetings as Summarizing → Ready |
+| Open it on the dashboard | Speakers You / Speaker 1 / Speaker 2 with the right words, audio plays, summary and action items |
+| Bluetooth headset as default microphone, **Start meeting** | The menu shows "You · <the PC's own microphone>" and the headset keeps its music quality; Settings › **Keep Bluetooth headsets in high quality** off records with the headset instead |
+| Settings › Privacy & security › Microphone › desktop apps **off**, **Start meeting** | Recording starts with a warning that microphone access is off; only "Others" is transcribed |
+
+### 4. Stop after silence; calls
+
+| Step | Expected |
+|---|---|
+| Settings › Stop after silence **1 minute**, start a meeting, stay silent | After 30 s a toast "Still in a meeting?" with **Keep recording** and a countdown in the menu; **Keep recording** resets it; otherwise it stops and a toast says "Nobody spoke for 1 minute, so BoringTalks stopped recording…" |
+| Join a Zoom/Teams call, or a Google Meet in Chrome/Edge, without recording | After ~5 s (browsers ~15 s) a toast "<app> is in a call. Record it?" with **Record / Not now / Never for <app>**, the same banner in the menu, and a blue dot on the tray icon |
+| **Record** | Recording starts; **Not now**: no new offer during this call; **Never for <app>**: listed in Settings › Calls with **Ask again** |
+| Leave the call while recording | ~30 s after the others go quiet the recording stops by itself ("The Teams call ended…") |
+| `BoringTalks.exe --mic-users 60` while joining and leaving calls | One line per change: each app holding a microphone and the call app it counts as |
+
+### 5. Offline, relaunch, sign out, recordings
+
+| Step | Expected |
+|---|---|
+| Airplane mode (or unplug), record and stop | "1 upload waiting — offline"; reconnect → it uploads within seconds |
+| Kill BoringTalks (Task Manager) during an upload, start it again | The upload resumes where it stopped; no duplicate meeting (`Idempotency-Key`) |
+| Dashboard › Settings › **Disconnect** this PC | Next upload or refresh: "This PC was signed out…"; waiting uploads continue after signing in again |
+| Settings › **Show recordings in Explorer** | `%APPDATA%\BoringTalks\Recordings\<id>.m4a`, ~43 MB per hour, playable with both sides |
+| Keep recordings "Delete after upload" | The file disappears once the upload finishes |
+
+### 6. Uninstall
+
+| Step | Expected |
+|---|---|
+| Settings › Apps › BoringTalks › Uninstall | The app, its shortcuts and `%LOCALAPPDATA%\BoringTalks-Models` are gone; `HKCU\Software\Classes\boringtalks` and the Startup entry are removed; meetings and settings in `%APPDATA%\BoringTalks` stay |
+
+### 7. Command line
+
+```powershell
+Add-Type -AssemblyName System.Speech   # make a two-voice clip with Windows' voices
+# (see apps/windows/README.md), then:
+& "$env:LOCALAPPDATA\BoringTalks\current\BoringTalks.exe" --transcribe two-voices.wav --speakers > out.json
+& "$env:LOCALAPPDATA\BoringTalks\current\BoringTalks.exe" --listen-test 6
+```
+
+Expected: `out.json` has segments for both voices with times that match the audio,
+`language: "en"`, exit code 0; `--listen-test` reports `"allOutputDevices": true` and a non-zero
+`peak` while something plays.
+
 ## Manual QA: backend and end-to-end
 
 Run against dev (`https://dev.boringtalks.lol`, `https://api.dev.boringtalks.lol`) after each
@@ -331,8 +415,8 @@ deploy, and against production after a merge.
    **Expected:** the meetings list shows one ready demo meeting with a specific title. A welcome
    email arrives (dev: only for allow-listed addresses; others appear in the worker log).
 
-### 3. Mac recording end to end
-1. Record a 2–3 minute call with the Mac app (see the Mac section) and stop.
+### 3. Desktop recording end to end
+1. Record a 2–3 minute call with the Mac or Windows app (see their sections) and stop.
    **Expected:** within a minute the meeting moves recording → summarizing → ready; the title
    names what was discussed; action items have owners; the speakers are "You" and "Speaker 1…";
    the audio plays and highlights the transcript; a "meeting ready" email arrives.

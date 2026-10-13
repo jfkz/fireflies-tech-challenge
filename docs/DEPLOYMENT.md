@@ -24,8 +24,18 @@ Each deploy run:
    Releases run on a developer's Mac, so the signing key stays off CI: `apps/macos/scripts/release.sh
    prod` (or `dev`) signs with Developer ID, builds the DMG, submits it for notarization and publishes
    it to R2 with `latest.json`; once Apple accepts it, `release.sh staple prod` staples the ticket and
-   republishes it as notarized (`WAIT=1` does both in one go). The landing page's download card reads it (and `latest-windows.json`) via `GET /downloads`; links
-   elsewhere (README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg.
+   republishes it as notarized (`WAIT=1` does both in one go).
+5. **Windows app.** `windows.yml` runs the unit tests (with the Core coverage gate), builds the app
+   and the installer on `windows-latest` when `apps/windows/**` (or the shared contract fixtures)
+   changes, and keeps each run's unsigned `BoringTalks-Setup.exe` as an artifact for a week.
+   Releases run on a developer's PC: `apps/windows/scripts/release.ps1 prod` (or `dev`) builds the
+   self-contained app, packs the per-user installer with Velopack and publishes it to R2 with
+   `latest-windows.json` (needs the AWS CLI and `.local/secrets/r2`). It isn't code-signed yet
+   (`notarized: false`); setting `SIGN_PARAMS` signs it.
+
+The landing page's download card reads both manifests via `GET /downloads`; links elsewhere
+(README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg
+and https://download.boringtalks.lol/BoringTalks-Setup-latest.exe.
 
 ## Infrastructure
 
@@ -36,7 +46,7 @@ Each deploy run:
 | Worker | Railway service `worker` | same image, `node dist/worker.js` | same |
 | Postgres, Redis | Railway services, one per environment | | |
 | Object storage | Cloudflare R2 bucket `boringtalks` | `prod/` | `dev/` |
-| Installers (DMG, Setup.exe) | same bucket, `downloads/`, served at `download.boringtalks.lol` | `downloads/` → `/` | `downloads/dev/` → `/dev/` |
+| Installers (DMG, Setup.exe), speech-model mirror (`models/`) | same bucket, `downloads/`, served at `download.boringtalks.lol` | `downloads/` → `/` | `downloads/dev/` → `/dev/` |
 | Auth | Firebase project `boringtalks-fe45f` (Email/Password, Google) | shared | shared |
 
 Google sign-in uses the site's own domain as Firebase's auth domain: `next.config.ts` proxies
@@ -70,7 +80,7 @@ the public domain can only ever reach the `downloads/` folder, never meeting aud
 |---|---|---|
 | `RAILWAY_TOKEN` | per environment (Railway project token for that environment) | deploy |
 | `VERCEL_TOKEN` | repository (team-scoped token; dev needs `vercel alias`) | deploy |
-| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | repository (Object R/W on the `boringtalks` bucket) | DMG publish |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | repository (Object R/W on the `boringtalks` bucket) | installer publish (releases are local; kept for CI) |
 | `DEVELOPER_ID_P12`, `DEVELOPER_ID_P12_PASSWORD`, `ASC_*` | repository, unused | kept from when CI signed the DMG; releases are local now |
 
 ## Manual deploys
@@ -86,6 +96,9 @@ vercel deploy --prod --scope jfkz0              # production
 
 # DMG
 cd apps/macos && scripts/build.sh && scripts/make-dmg.sh build/Release/BoringTalks.app build/BoringTalks.dmg
+
+# Windows installer (PowerShell)
+cd apps/windows; scripts/build.ps1          # → build\BoringTalks-Setup.exe
 ```
 
 ## Rollback
@@ -93,3 +106,4 @@ cd apps/macos && scripts/build.sh && scripts/make-dmg.sh build/Release/BoringTal
 - Web: `vercel rollback` (or promote the previous deployment in the dashboard).
 - API/worker: redeploy the previous deployment from the Railway dashboard; migrations are additive.
 - DMG: re-run `scripts/publish.sh` with the previous DMG (versioned files stay in the bucket).
+- Windows installer: re-run `apps/windows/scripts/publish.ps1` with the previous `BoringTalks-Setup-<version>.exe`.

@@ -177,7 +177,7 @@ call creates a new meeting.
 curl -XPOST $API/meetings -H "Authorization: Bearer $T" -H 'content-type: application/json' \
   -H 'Idempotency-Key: 7b0e4c1e-3f7a-4d0b-9a59-1f6c2f0a9d11' -d '{"source":"macos"}'
 ```
-`source` is `macos`, `browser` or `upload`. The meeting starts in `recording` with a placeholder
+`source` is `macos`, `windows`, `browser` or `upload`. The meeting starts in `recording` with a placeholder
 title such as `Meeting on Oct 6, 14:05` (UTC) that the summarizer replaces. A title given here (or
 later through `PATCH`) is kept: the summarizer never overwrites a title the user chose.
 
