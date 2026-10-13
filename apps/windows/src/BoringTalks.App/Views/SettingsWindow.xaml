@@ -168,6 +168,9 @@
               <CheckBox Content="Stop when the call ends" IsChecked="{Binding StopWhenCallEnds}" />
               <TextBlock Style="{StaticResource Help}"
                          Text="When the app of the call being recorded stops using the microphone, the recording stops 30 seconds after the others go quiet." />
+              <CheckBox Content="Record when a game starts" IsChecked="{Binding RecordGames}" />
+              <TextBlock Style="{StaticResource Help}"
+                         Text="A game from Steam, Epic, Xbox, GOG, EA, Ubisoft, Riot or Battle.net (or one Windows' Game Bar knows) that runs for 10 seconds starts a recording of the session, voice chat included; closing the game stops it. A notification says so, with a Stop button." />
               <CheckBox Content="Open BoringTalks when I sign in to Windows" IsChecked="{Binding OpenAtSignIn}" />
               <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="It waits in the system tray, so it can offer to record your calls." />
             </StackPanel>

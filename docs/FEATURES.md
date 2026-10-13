@@ -713,11 +713,25 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
 - **Where:** `BoringTalks.Core/Transcript/`, `Uploads/`, `RecordingJanitor.cs`;
   `BoringTalks.App/Views/LiveTranscriptWindow.xaml`, `AvatarView.cs`.
 
+### Games
+
+- **What:** **Record when a game starts** (Settings › Calls, off by default): a game that runs for
+  10 s starts a recording titled "<game> session" (voice chat included) with a notification and a
+  **Stop** button; when the game has been closed for 20 s, the recording stops and uploads, and
+  the menu says why. A game is anything Windows' Game Bar recognised
+  (`HKCU\System\GameConfigStore\Children`) or run from a game library folder (Steam, Epic,
+  Xbox, GOG, EA, Ubisoft, Riot, Battle.net, `\Games\`), minus launchers, crash reporters,
+  anti-cheat services and installers; it's named after its library folder ("Cyberpunk 2077").
+  Running programs are checked every 5 s, only while the setting is on. `--games` prints what
+  counts as a game right now.
+- **Where:** `BoringTalks.Core/Calls/Games.cs` (`GameDetector`, `GameWatch`),
+  `BoringTalks.App/Platform/GameMonitor.cs`, `ViewModels/AppModel.cs`.
+
 ### Settings, environments, command line
 
 - **What:** the Mac's settings in the same four tabs (**Transcription**: **Transcribe on this
   PC** or **Online, after the meeting (upload only)**, speech model and language; **Recording**: **Microphone** (System default, or any connected microphone; an unplugged pick falls back to the default), Bluetooth, upload audio, keep recordings, stop after silence;
-  **Calls**: offer to record, stop when the call ends, **Open BoringTalks when I sign in to
+  **Calls**: offer to record, stop when the call ends, **Record when a game starts**, **Open BoringTalks when I sign in to
   Windows**, apps never asked about; **Account**: sign-in, API and dashboard, updates, version and
   Quit). The window is as tall as the open tab (a tab taller than the screen scrolls) and reopens
   on the tab last used. Saved in `%APPDATA%\BoringTalks\settings.json`, which
@@ -727,7 +741,7 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   They install and run side by side, each with its own name, sign-in link (`boringtalks-dev://`,
   asked for with `&app=dev`), data folder (`%APPDATA%\BoringTalksDev`) and Start menu entry; they
   share the speech models. Command line: `--transcribe`,
-  `--listen-test`, `--mic-users`, `--demo`, `--show-menu`, `--show-settings [tab]`; debug builds add `--debug-sign-in`,
+  `--listen-test [s] [--mic]`, `--mic-users`, `--games`, `--demo`, `--show-menu`, `--show-settings [tab]`; debug builds add `--debug-sign-in`,
   `--debug-print-connect-url`, `--debug-sign-out`, `--debug-record <seconds>`.
 - **Where:** `BoringTalks.App/Views/SettingsWindow.xaml`, `BoringTalks.Core/Settings.cs`,
   `BoringTalks.Core/AppFlavor.cs` (chosen at build time, `-p:BoringTalksFlavor=dev`),

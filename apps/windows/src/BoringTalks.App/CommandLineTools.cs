@@ -26,6 +26,14 @@ public static class CommandLineTools
             ConsoleOutput.Attach();
             return ListenTest(double.TryParse(Value("--listen-test"), out var s) ? s : 6, Has("--mic"));
         }
+        if (Has("--games"))
+        {
+            // Which running programs count as games, for "Record when a game starts".
+            ConsoleOutput.Attach();
+            using var monitor = new GameMonitor();
+            foreach (var game in monitor.Scan().Order()) Console.WriteLine(game);
+            return 0;
+        }
         if (Has("--mic-users"))
         {
             ConsoleOutput.Attach();

@@ -13,6 +13,7 @@ public sealed class Notifier : IDisposable
     private const string CallTag = "call-offer";
     private const string WarningTag = "silence-warning";
     private const string StoppedTag = "stopped";
+    private const string GameTag = "game";
 
     public Notifier()
     {
@@ -27,6 +28,8 @@ public sealed class Notifier : IDisposable
     public event Action? DeclineCall;
     /// <summary>…Never ask for this app (its name).</summary>
     public event Action<string>? IgnoreCallApp;
+    /// <summary>"Stop" on the game-session notification.</summary>
+    public event Action? StopRecording;
     /// <summary>A click on any other notification: show the menu.</summary>
     public event Action? Opened;
 
@@ -40,6 +43,14 @@ public sealed class Notifier : IDisposable
         .SetToastScenario(ToastScenario.Reminder));
 
     public void WithdrawOffer() => Remove(CallTag);
+
+    public void RecordingGame(string game) => Show(GameTag, b => b
+        .AddArgument("action", "open")
+        .AddText($"Recording your {game} session")
+        .AddText("BoringTalks writes down the voice chat and stops when you close the game.")
+        .AddButton(new ToastButton().SetContent("Stop").AddArgument("action", "stop")));
+
+    public void ClearGame() => Remove(GameTag);
 
     public void WarnSilence(double stopsIn) => Show(WarningTag, b => b
         .AddArgument("action", "warning")
@@ -90,6 +101,7 @@ public sealed class Notifier : IDisposable
         switch (action)
         {
             case "keep": KeepRecording?.Invoke(); break;
+            case "stop": StopRecording?.Invoke(); break;
             case "record" or "offer": RecordCall?.Invoke(); break;
             case "not-now": DeclineCall?.Invoke(); break;
             case "never" when app is not null: IgnoreCallApp?.Invoke(app); break;

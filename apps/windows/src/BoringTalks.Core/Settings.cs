@@ -42,6 +42,9 @@ public sealed record Settings
     /// <summary>Ask to record when a call app (Zoom, Teams, a browser…) starts using the microphone.</summary>
     public bool OfferToRecordCalls { get; init; } = true;
 
+    /// <summary>Start recording when a game starts (and stop when it closes): voice chat while playing.</summary>
+    public bool RecordGames { get; init; }
+
     /// <summary>Stop the recording shortly after the call's app releases the microphone.</summary>
     public bool StopWhenCallEnds { get; init; } = true;
 

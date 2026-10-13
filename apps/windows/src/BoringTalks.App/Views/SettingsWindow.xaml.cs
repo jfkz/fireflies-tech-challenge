@@ -53,6 +53,7 @@ public sealed class SettingsViewModel : ObservableObject
     public int KeepAudioDays { get => S.KeepAudioDays; set => App.UpdateSettings(s => s with { KeepAudioDays = value }); }
     public int SilenceStopMinutes { get => S.SilenceStopMinutes; set => App.UpdateSettings(s => s with { SilenceStopMinutes = value }); }
     public bool OfferToRecordCalls { get => S.OfferToRecordCalls; set => App.UpdateSettings(s => s with { OfferToRecordCalls = value }); }
+    public bool RecordGames { get => S.RecordGames; set => App.UpdateSettings(s => s with { RecordGames = value }); }
     public bool StopWhenCallEnds { get => S.StopWhenCallEnds; set => App.UpdateSettings(s => s with { StopWhenCallEnds = value }); }
     public bool OpenAtSignIn { get => S.OpenAtSignIn; set => App.UpdateSettings(s => s with { OpenAtSignIn = value }); }
     public IReadOnlyList<string> IgnoredApps => S.IgnoredCallApps;

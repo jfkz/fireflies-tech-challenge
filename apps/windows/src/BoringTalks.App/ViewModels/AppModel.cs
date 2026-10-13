@@ -39,6 +39,10 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     private readonly DeviceAuthenticator authenticator;
     private readonly MicUsageMonitor micMonitor = new();
     private readonly CallSignals callSignals = new();
+    private readonly GameMonitor games = new();
+    private GameWatch gameWatch = new();
+    /// <summary>The game whose session is being recorded (started by "Record when a game starts").</summary>
+    private string? gameRecording;
     private readonly DispatcherTimer callTimer;
     private readonly DispatcherTimer refreshTimer;
     private readonly DispatcherTimer modelRetry;
@@ -84,6 +88,11 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         Notifier.DeclineCall += () => ui.BeginInvoke(DeclineCall);
         Notifier.IgnoreCallApp += app => ui.BeginInvoke(() => IgnoreCallApp(app));
         Notifier.Opened += () => ui.BeginInvoke(() => ShowMenuRequested?.Invoke());
+        Notifier.StopRecording += () => ui.BeginInvoke(() =>
+        {
+            if (Recorder.IsRecording) _ = StopMeetingAsync();
+        });
+        games.Changed += running => ui.BeginInvoke(() => EvaluateGames(running));
 
         callTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) => EvaluateCalls(), ui);
         refreshTimer = new DispatcherTimer(TimeSpan.FromSeconds(20), DispatcherPriority.Background, (_, _) =>
@@ -170,6 +179,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         // meetings are only uploaded and the server transcribes them.
         if (Settings.TranscribeOnPc) _ = Models.PrepareAsync();
         refreshTimer.Start();
+        if (Settings.RecordGames) games.Start();
         micMonitor.Changed += () => ui.BeginInvoke(EvaluateCalls);
         micMonitor.Start();
         callTimer.Start();
@@ -320,6 +330,8 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
 
     public async Task StopMeetingAsync()
     {
+        gameRecording = null;
+        Notifier.ClearGame();
         Notifier.ClearWarning();
         var meeting = await Recorder.StopAsync();
         callSignals.RecordingStopped();
@@ -335,6 +347,8 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     /// <summary>The call ended or nobody spoke for a while: the meeting is over but the recording was left on.</summary>
     private async Task StopByItselfAsync(AutoStopReason reason)
     {
+        gameRecording = null;
+        Notifier.ClearGame();
         var why = reason switch
         {
             AutoStopReason.Silence s => $"Nobody spoke for {SilenceWatch.Describe(s.Limit)}",
@@ -435,6 +449,43 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         Notifier.WithdrawOffer();
     }
 
+    // ---- Games
+
+    /// <summary>A game has run for a few seconds: record the session. It closed: stop.</summary>
+    private void EvaluateGames(IReadOnlyCollection<string> running)
+    {
+        foreach (var e in gameWatch.Update(running, Now))
+        {
+            switch (e)
+            {
+                case GameEvent.Started started when Settings.RecordGames && Auth == AuthState.SignedIn && Recorder.Phase == RecorderPhase.Idle:
+                    _ = RecordGameAsync(started.Game);
+                    break;
+                case GameEvent.Ended ended when ended.Game == gameRecording && Recorder.IsRecording:
+                    _ = StopForGameAsync(ended.Game);
+                    break;
+            }
+        }
+    }
+
+    private async Task RecordGameAsync(string game)
+    {
+        log($"{game} started; recording the session");
+        TitleDraft = $"{game} session";
+        await StartMeetingAsync();
+        if (!Recorder.IsRecording) return;
+        gameRecording = game;
+        Notifier.RecordingGame(game);
+    }
+
+    private async Task StopForGameAsync(string game)
+    {
+        log($"{game} closed; stopping");
+        await StopMeetingAsync();
+        AutoStopNotice = $"{game} closed, so BoringTalks stopped recording. The session is uploading as usual.";
+        Notifier.RecordingStopped(AutoStopNotice);
+    }
+
     // ---- Meetings
 
     public async void RefreshMeetings()
@@ -487,6 +538,12 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         }
         // Back to transcribing on this PC: get the speech model now, not when the next meeting starts.
         if (!old.TranscribeOnPc && Settings.TranscribeOnPc) _ = Models.PrepareAsync();
+        if (old.RecordGames != Settings.RecordGames)
+        {
+            gameWatch = new GameWatch();
+            if (Settings.RecordGames) games.Start();
+            else games.Stop();
+        }
         if (old.OpenAtSignIn != Settings.OpenAtSignIn) TryRegister(() => Registration.SetOpenAtSignIn(Settings.OpenAtSignIn));
     }
 
@@ -559,6 +616,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         modelRetry.Stop();
         Updater.Dispose();
         micMonitor.Dispose();
+        games.Dispose();
         await Queue.DisposeAsync();
         Notifier.Dispose();
         Models.Dispose();
