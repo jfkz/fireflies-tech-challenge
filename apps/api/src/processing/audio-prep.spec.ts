@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { partWindows, prepareForTranscription, splitChannels } from './audio-prep';
+import { partWindows, playbackMix, prepareForTranscription, splitChannels } from './audio-prep';
 
 const hasFfmpeg = (() => {
   try {
@@ -116,6 +116,22 @@ describe('splitChannels', () => {
     expect(sides.system.maxDb).toBeLessThan(-60);
     expect(sides.mix).toMatchObject({ channels: 1 });
     expect(sides.mix.maxDb).toBeGreaterThan(-30);
+  });
+
+  it.skipIf(!hasFfmpeg)('plays a quiet microphone back at a normal level', async () => {
+    // About −38 dBFS on the left, as from a headset microphone far from the mouth.
+    const { mic, mix } = await splitChannels(leftOnlyWav(3, 'pan=stereo|c0=0.1*c0|c1=0*c0'));
+    expect(inspect(mic).maxDb).toBeLessThan(-30);
+    expect(inspect(mix).maxDb).toBeGreaterThan(-25);
+  });
+
+  it('levels each side, then adds them instead of averaging', () => {
+    const graph = playbackMix(true);
+    expect(graph).toContain('pan=mono|c0=c0,dynaudnorm');
+    expect(graph).toContain('pan=mono|c0=c1,dynaudnorm');
+    expect(graph).toContain('amix=inputs=2:normalize=0');
+    expect(graph).toMatch(/alimiter=limit=0\.95\[mix\]$/);
+    expect(playbackMix(false)).toBe('[0:a]dynaudnorm=f=250:g=31:p=0.9:m=10[mix]');
   });
 
   it.skipIf(!hasFfmpeg)('hears a mono file on both sides', async () => {

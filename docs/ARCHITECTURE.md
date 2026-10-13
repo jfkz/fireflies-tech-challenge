@@ -104,7 +104,8 @@ sequenceDiagram
 audio on separate channels of one stereo file and asks for the upload URL with
 `channels: "mic-system"`; there is no transcript step. The worker splits the channels with ffmpeg,
 transcribes both in parallel (the microphone becomes "You", the system side keeps its speakers),
-drops the microphone's echo with the Mac's rule, and stores a mono mix for playback.
+drops the microphone's echo with the Mac's rule, and stores a mono mix for playback: each side levelled
+(ffmpeg `dynaudnorm`, up to +20 dB for a quiet microphone), then added rather than averaged, with a limiter.
 
 **Desktop sign-in (PKCE), Mac and Windows alike:** the app opens `boringtalks.lol/connect?challenge=…&device=…`; the signed-in
 dashboard calls `POST /devices/authorize` and redirects to `boringtalks://callback?code=…`; the app

@@ -694,7 +694,9 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   this, like the Mac's online mode: no model is downloaded, the meeting is recorded as stereo AAC
   (48 kHz, 128 kbps) with the microphone on the left and the PC's sound on the right, and uploaded
   with `channels: "mic-system"` and no transcript; the server transcribes each side, keeping
-  “You” apart, and stores a mono mix for playback. A failed download says so in the menu with **Try again**, and retries by itself when
+  “You” apart, and stores a mono mix for playback. In both modes each side's speech is levelled
+  before it's mixed (`SpeechLeveler`: up to 4× for a quiet microphone, down to ½ for a loud one,
+  holding still in pauses), so “You” is as loud as the call. A failed download says so in the menu with **Try again**, and retries by itself when
   the network comes back and every 5 minutes. A meeting recorded before they're ready waits (up
   to 20 min per side), else goes to the server's transcription with its audio.
 - **Where:** `BoringTalks.Speech/`, `BoringTalks.Core/Speech/`.
@@ -794,10 +796,13 @@ as rows for search. `POST /meetings` honours `Idempotency-Key`, so a client retr
 duplicate.
 
 ### Processing pipeline (worker)
-- **Two-channel Mac recordings** (`audioChannels = 'mic-system'`, from **Transcribe: Online**):
+- **Two-channel recordings** (`audioChannels = 'mic-system'`, from the Mac's **Transcribe: Online**
+  and the Windows app's **upload only**):
   ffmpeg splits the file into the microphone side and the system side (mono 24 kbps MP3 each) plus a
   mono AAC mix, which becomes the meeting's playback audio (`audio-playback.m4a`, `playback_key`) so
-  the user isn't in one ear only. The mix is made once both sides are transcribed, and the
+  the user isn't in one ear only. The mix levels each side first (`dynaudnorm`, up to +20 dB, so a
+  quiet headset microphone sounds as loud as the call) and adds them instead of averaging, with a
+  limiter (`playbackMix` in `processing/audio-prep.ts`). The mix is made once both sides are transcribed, and the
   dashboard is never handed the two-channel file: no player until the mix exists. Both sides go through the transcriber below in parallel; the
   system side gets its voices told apart, every microphone segment becomes “You”, and a microphone
   phrase that overlaps the others' and repeats ≥ 60% of their words is dropped as echo (the Mac's

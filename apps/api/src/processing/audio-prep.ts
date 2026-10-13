@@ -172,14 +172,33 @@ export async function splitChannels(audio: Uint8Array): Promise<SplitAudio> {
     const [mic, system, mix] = ['mic.mp3', 'system.mp3', 'mix.m4a'].map((name) => join(dir, name));
     await ffmpeg([
       '-i', input, '-vn',
-      ...(stereo ? ['-af', 'pan=mono|c0=c0'] : []), ...speech, mic,
-      ...(stereo ? ['-af', 'pan=mono|c0=c1'] : []), ...speech, system,
-      '-ac', '1', '-ar', '16000', '-c:a', 'aac', '-b:a', '32k', mix,
+      '-filter_complex', playbackMix(stereo),
+      '-map', '0:a', ...(stereo ? ['-af', 'pan=mono|c0=c0'] : []), ...speech, mic,
+      '-map', '0:a', ...(stereo ? ['-af', 'pan=mono|c0=c1'] : []), ...speech, system,
+      '-map', '[mix]', '-ac', '1', '-ar', '16000', '-c:a', 'aac', '-b:a', '32k', mix,
     ]);
     return { mic: await readFile(mic), system: await readFile(system), mix: await readFile(mix) };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+/** Speech brought to one level: up to 10× (+20 dB) for a quiet microphone, never pumping up silence. */
+const LEVEL = 'dynaudnorm=f=250:g=31:p=0.9:m=10';
+
+/**
+ * The playback mix of a split recording: each side levelled on its own (a headset microphone is
+ * often far quieter than the call), then added, not averaged (`-ac 1` would halve both), with a
+ * limiter for when both talk at once. A mono file is only levelled.
+ */
+export function playbackMix(stereo: boolean): string {
+  if (!stereo) return `[0:a]${LEVEL}[mix]`;
+  return [
+    '[0:a]asplit=2[l][r]',
+    `[l]pan=mono|c0=c0,${LEVEL}[mic]`,
+    `[r]pan=mono|c0=c1,${LEVEL}[others]`,
+    '[mic][others]amix=inputs=2:normalize=0:duration=longest,alimiter=limit=0.95[mix]',
+  ].join(';');
 }
 
 /** Audio channels of the first audio stream, 0 when ffprobe can't tell. */

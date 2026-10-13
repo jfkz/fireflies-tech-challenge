@@ -34,7 +34,8 @@ public sealed class RecordingWriter : IDisposable
     {
         Path = path;
         this.log = log;
-        mixer = new AudioMixer(stereo: stereo);
+        // Each side levelled first: a quiet headset microphone sounds as loud as the call.
+        mixer = new AudioMixer(stereo: stereo, level: true);
         upsamplers = [.. Enumerable.Range(0, mixer.Channels).Select(_ => new Resampler(16000, EncoderRate))];
         feed = new FeedProvider(new WaveFormat(EncoderRate, 16, mixer.Channels));
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);

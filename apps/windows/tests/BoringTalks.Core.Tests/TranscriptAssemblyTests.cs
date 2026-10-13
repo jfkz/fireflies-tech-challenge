@@ -198,11 +198,64 @@ public sealed class AudioMixerTests
     }
 
     [Fact]
-    public void Default_gains_favour_the_call()
+    public void Without_levelling_both_sides_pass_unchanged()
     {
         var mixer = new AudioMixer([AudioChannel.Microphone]);
         mixer.Append([0.5f], AudioChannel.Microphone);
-        Assert.Equal(0.4f, mixer.Drain()[0], 1e-6f);
+        Assert.Equal(0.5f, mixer.Drain()[0], 1e-6f);
+    }
+
+    private static float[] Tone(float amplitude, int samples) =>
+        [.. Enumerable.Range(0, samples).Select(i => amplitude * MathF.Sin(i * 2 * MathF.PI * 220 / 16000))];
+
+    private static float Rms(ReadOnlySpan<float> samples)
+    {
+        double sum = 0;
+        foreach (var s in samples) sum += s * s;
+        return (float)Math.Sqrt(sum / samples.Length);
+    }
+
+    [Fact]
+    public void A_quiet_voice_is_brought_up_to_the_target_level()
+    {
+        var leveler = new SpeechLeveler();
+        // A quiet microphone: about −32 dBFS of speech for 5 s.
+        var output = leveler.Process(Tone(0.035f, 16000 * 5));
+        Assert.Equal(16000 * 5, output.Length);
+        Assert.InRange(leveler.Gain, 2.5f, 4f);
+        Assert.InRange(Rms(output.AsSpan(^16000..)), 0.07f, 0.11f);
+    }
+
+    [Fact]
+    public void A_loud_voice_is_brought_down_but_never_below_half()
+    {
+        var leveler = new SpeechLeveler();
+        leveler.Process(Tone(0.9f, 16000 * 5));
+        Assert.InRange(leveler.Gain, 0.5f, 0.55f);
+    }
+
+    [Fact]
+    public void Silence_leaves_the_gain_alone_and_nothing_is_lost()
+    {
+        var leveler = new SpeechLeveler();
+        leveler.Process(Tone(0.035f, 16000 * 3));
+        var gain = leveler.Gain;
+        var quiet = leveler.Process(new float[16000 * 2 + 50]);
+        Assert.Equal(gain, leveler.Gain);
+        Assert.Equal(16000 * 2, quiet.Length);
+        Assert.Equal(50, leveler.Flush().Length);
+        Assert.Empty(leveler.Flush());
+    }
+
+    [Fact]
+    public void The_mixer_levels_each_side_and_flushes_the_rest_at_the_end()
+    {
+        var mixer = new AudioMixer(level: true);
+        mixer.Append(Tone(0.035f, 16000 * 4 + 10), AudioChannel.Microphone);
+        mixer.Append(Tone(0.1f, 16000 * 4 + 10), AudioChannel.System);
+        var mixed = mixer.Drain();
+        Assert.Equal(16000 * 4, mixed.Length);
+        Assert.Equal(10, mixer.Drain(flush: true).Length);
     }
 
     [Fact]

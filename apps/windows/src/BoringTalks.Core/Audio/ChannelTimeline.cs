@@ -62,10 +62,14 @@ public sealed class AudioMixer
     private readonly Dictionary<AudioChannel, List<float>> pending = [];
     private readonly HashSet<AudioChannel> active;
 
-    public AudioMixer(IEnumerable<AudioChannel>? channels = null, bool stereo = false)
+    private readonly Dictionary<AudioChannel, SpeechLeveler>? levelers;
+
+    /// <param name="level">Each side's speech brought to the same level first (<see cref="SpeechLeveler"/>).</param>
+    public AudioMixer(IEnumerable<AudioChannel>? channels = null, bool stereo = false, bool level = false)
     {
         active = [.. channels ?? Enum.GetValues<AudioChannel>()];
         Stereo = stereo;
+        if (level) levelers = active.ToDictionary(c => c, _ => new SpeechLeveler());
     }
 
     /// <summary>Left: the microphone; right: the PC's sound. Drain then returns interleaved frames.</summary>
@@ -73,14 +77,15 @@ public sealed class AudioMixer
 
     public int Channels => Stereo ? 2 : 1;
 
-    /// <summary>Gain per channel; the call is usually quieter than the user's own microphone.</summary>
-    public Dictionary<AudioChannel, float> Gains { get; } = new() { [AudioChannel.Microphone] = 0.8f, [AudioChannel.System] = 1.0f };
+    /// <summary>Gain per channel, after levelling.</summary>
+    public Dictionary<AudioChannel, float> Gains { get; } = new() { [AudioChannel.Microphone] = 1.0f, [AudioChannel.System] = 1.0f };
 
     public void Append(ReadOnlySpan<float> samples, AudioChannel channel)
     {
         if (!active.Contains(channel)) return;
         if (!pending.TryGetValue(channel, out var list)) pending[channel] = list = [];
-        list.AddRange(samples);
+        if (levelers?.GetValueOrDefault(channel) is { } leveler) list.AddRange(leveler.Process(samples));
+        else list.AddRange(samples);
     }
 
     /// <summary>A channel that stopped for good (its capture failed): mix without it.</summary>
@@ -97,6 +102,13 @@ public sealed class AudioMixer
     public float[] Drain(bool flush = false)
     {
         if (active.Count == 0) return [];
+        if (flush && levelers is not null)
+        {
+            foreach (var (channel, leveler) in levelers)
+            {
+                if (active.Contains(channel) && pending.TryGetValue(channel, out var list)) list.AddRange(leveler.Flush());
+            }
+        }
         var lengths = active.Select(c => pending.TryGetValue(c, out var l) ? l.Count : 0).ToList();
         var count = flush ? lengths.Max() : lengths.Min();
         if (count <= 0) return [];
