@@ -57,7 +57,7 @@ public sealed partial class MeetingRecorder : ObservableObject
     private readonly Dictionary<AudioChannel, PhraseTranscriber> transcribers = [];
     private RecordingWriter? writer;
     private VoiceRegistry registry = new();
-    private (Guid Id, string? Title, string? Language, bool UploadAudio)? meeting;
+    private (Guid Id, string? Title, string? Language, bool UploadAudio, bool Transcribe)? meeting;
     private long clockStart;
     private DispatcherTimer? ticker;
     private Task attaching = Task.CompletedTask;
@@ -115,7 +115,11 @@ public sealed partial class MeetingRecorder : ObservableObject
 
     private double ClockNow => Stopwatch.GetElapsedTime(clockStart).TotalSeconds;
 
-    public async Task StartAsync(string? title, string? language, bool uploadAudio)
+    /// <param name="transcribe">
+    /// False: upload only. Both sides go to the file on their own channels and the server
+    /// transcribes them after the meeting; no speech model needed.
+    /// </param>
+    public async Task StartAsync(string? title, string? language, bool uploadAudio, bool transcribe = true)
     {
         if (Phase != RecorderPhase.Idle) return;
         Phase = RecorderPhase.Starting;
@@ -132,15 +136,15 @@ public sealed partial class MeetingRecorder : ObservableObject
         PendingStop = null;
         var id = Guid.NewGuid();
         var trimmed = title?.Trim();
-        meeting = (id, string.IsNullOrEmpty(trimmed) ? null : trimmed, language, uploadAudio);
+        meeting = (id, string.IsNullOrEmpty(trimmed) ? null : trimmed, language, uploadAudio || !transcribe, transcribe);
 
         try
         {
             folders.Create();
-            writer = new RecordingWriter(Path.Combine(folders.Recordings, $"{id}.m4a"), log);
+            writer = new RecordingWriter(Path.Combine(folders.Recordings, $"{id}.m4a"), log, stereo: !transcribe);
             clockStart = Stopwatch.GetTimestamp();
             StartedAt = DateTimeOffset.Now;
-            foreach (var kind in Enum.GetValues<AudioChannel>()) channels[kind] = new RecordingChannel(kind, clockStart, writer);
+            foreach (var kind in Enum.GetValues<AudioChannel>()) channels[kind] = new RecordingChannel(kind, clockStart, writer, keepBacklog: transcribe);
 
             // Keep both sides on the clock from the first moment: a side that is slow to start
             // (or never does), or plays nothing, is filled with silence instead of stalling the mix.
@@ -162,7 +166,8 @@ public sealed partial class MeetingRecorder : ObservableObject
         }
 
         Phase = RecorderPhase.Recording;
-        log($"recording {id}");
+        log($"recording {id}{(transcribe ? "" : " (upload only: the server transcribes it)")}");
+        if (!transcribe) return;
         // Transcribe as soon as the model is there; until then the audio waits.
         WaitingForModel = !models.IsReady;
         _ = WaitForModelAsync(id);
@@ -194,7 +199,7 @@ public sealed partial class MeetingRecorder : ObservableObject
         foreach (var (kind, channel) in channels) endings[kind] = await channel.EndAsync(elapsed);
         // The model may have finished loading just now.
         var missing = endings.Keys.Where(k => !attached.Contains(k)).ToList();
-        if (models.IsReady && missing.Count > 0)
+        if (current.Transcribe && models.IsReady && missing.Count > 0)
         {
             await AttachTranscribersAsync(missing);
             foreach (var kind in missing) endings[kind] = await channels[kind].EndAsync(elapsed);
@@ -225,6 +230,7 @@ public sealed partial class MeetingRecorder : ObservableObject
             Segments = segments,
             AudioFileName = hasFile ? Path.GetFileName(writer.Path) : null,
             UploadAudio = current.UploadAudio,
+            AudioChannels = current.Transcribe ? null : Core.Api.AudioChannelLayouts.MicSystem,
         };
         Reset();
         log($"stopped: {segments.Count} segments, {(int)elapsed} s");

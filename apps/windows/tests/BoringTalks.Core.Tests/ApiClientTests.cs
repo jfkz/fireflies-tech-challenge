@@ -96,6 +96,14 @@ public sealed class ApiClientTests
     }
 
     [Fact]
+    public async Task Upload_url_request_for_split_channels()
+    {
+        Answer(HttpStatusCode.OK, Fixture.Text("upload-url-response"));
+        await Client().RequestUploadUrlAsync("m1", new UploadUrlRequest(10, Channels: AudioChannelLayouts.MicSystem), Token);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("""{"contentType":"audio/mp4","sizeBytes":10,"channels":"mic-system"}"""), handler.Requests.Single().BodyJson));
+    }
+
+    [Fact]
     public async Task A_base_url_with_a_path_prefix()
     {
         Answer(HttpStatusCode.OK, """{"items":[],"nextCursor":null}""");

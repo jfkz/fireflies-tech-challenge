@@ -7,7 +7,9 @@ using BoringTalks.Core.Transcript;
 namespace BoringTalks.App.Recording;
 
 /// <summary>
-/// Writes the meeting as one mono AAC file (.m4a, 48 kHz, 96 kbps, about 43 MB an hour):
+/// Writes the meeting as one AAC file (.m4a, 48 kHz): mono at 96 kbps (about 43 MB an hour), or,
+/// for the server to transcribe, stereo at 128 kbps with the microphone left and the PC's sound right.
+/// Mono:
 /// both channels mixed on the meeting clock, then encoded by Windows' Media Foundation on a
 /// thread of its own so the audio threads never wait for the encoder. Windows' AAC encoder only
 /// takes 44.1 or 48 kHz and 96 kbps and up, so the 16 kHz mix is resampled on the way in.
@@ -16,28 +18,32 @@ public sealed class RecordingWriter : IDisposable
 {
     public const int EncoderRate = 48000;
     public const int BitRate = 96000;
+    public const int StereoBitRate = 128000;
 
     private readonly BlockingCollection<Action> work = new();
     private readonly Thread worker;
-    private readonly AudioMixer mixer = new();
-    private readonly Resampler upsampler = new(16000, EncoderRate);
-    private readonly FeedProvider feed = new(new WaveFormat(EncoderRate, 16, 1));
+    private readonly AudioMixer mixer;
+    private readonly Resampler[] upsamplers;
+    private readonly FeedProvider feed;
     private readonly Thread? encoder;
     private readonly Action<string>? log;
     private long framesWritten;
     private Exception? encoderError;
 
-    public RecordingWriter(string path, Action<string>? log = null)
+    public RecordingWriter(string path, Action<string>? log = null, bool stereo = false)
     {
         Path = path;
         this.log = log;
+        mixer = new AudioMixer(stereo: stereo);
+        upsamplers = [.. Enumerable.Range(0, mixer.Channels).Select(_ => new Resampler(16000, EncoderRate))];
+        feed = new FeedProvider(new WaveFormat(EncoderRate, 16, mixer.Channels));
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
         worker = new Thread(() => { foreach (var job in work.GetConsumingEnumerable()) job(); }) { IsBackground = true, Name = "BoringTalks writer" };
         worker.Start();
         try
         {
             MediaFoundationApi.Startup();
-            var mediaType = MediaFoundationEncoder.SelectMediaType(AudioSubtypes.MFAudioFormat_AAC, feed.WaveFormat, BitRate)
+            var mediaType = MediaFoundationEncoder.SelectMediaType(AudioSubtypes.MFAudioFormat_AAC, feed.WaveFormat, stereo ? StereoBitRate : BitRate)
                 ?? throw new NotSupportedException("This Windows has no AAC encoder (an N edition without the Media Feature Pack?).");
             encoder = new Thread(() =>
             {
@@ -100,18 +106,32 @@ public sealed class RecordingWriter : IDisposable
         if (!work.IsAddingCompleted) work.Add(job);
     }
 
+    /// <summary><paramref name="samples"/>: 16 kHz frames, interleaved when stereo.</summary>
     private void Write(float[] samples)
     {
         if (samples.Length == 0) return;
-        framesWritten += samples.Length;
+        var channels = upsamplers.Length;
+        framesWritten += samples.Length / channels;
         if (!HasFile) return;
-        var up = upsampler.Process(samples);
-        var bytes = new byte[up.Length * 2];
-        for (var i = 0; i < up.Length; i++)
+        // Each side through its own resampler, then interleaved again.
+        var sides = new float[channels][];
+        for (var c = 0; c < channels; c++)
         {
-            var v = (short)Math.Clamp(up[i] * 32767f, short.MinValue, short.MaxValue);
-            bytes[2 * i] = (byte)v;
-            bytes[2 * i + 1] = (byte)(v >> 8);
+            var side = new float[samples.Length / channels];
+            for (var i = 0; i < side.Length; i++) side[i] = samples[i * channels + c];
+            sides[c] = upsamplers[c].Process(side);
+        }
+        var frames = sides.Min(s => s.Length);
+        var bytes = new byte[frames * channels * 2];
+        for (var i = 0; i < frames; i++)
+        {
+            for (var c = 0; c < channels; c++)
+            {
+                var v = (short)Math.Clamp(sides[c][i] * 32767f, short.MinValue, short.MaxValue);
+                var at = (i * channels + c) * 2;
+                bytes[at] = (byte)v;
+                bytes[at + 1] = (byte)(v >> 8);
+            }
         }
         feed.Add(bytes);
     }

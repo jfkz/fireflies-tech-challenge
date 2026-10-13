@@ -292,7 +292,7 @@ public sealed class UploadQueue : IAsyncDisposable
                     log?.Invoke($"skipping audio of {size} bytes");
                     return item;
                 }
-                var target = await api.RequestUploadUrlAsync(remoteId, new UploadUrlRequest((int)size), cancellation);
+                var target = await api.RequestUploadUrlAsync(remoteId, new UploadUrlRequest((int)size, Channels: item.AudioChannels), cancellation);
                 await api.UploadAudioAsync(file, target, cancellation);
                 log?.Invoke($"uploaded {size} bytes of audio for {remoteId}");
                 return item;

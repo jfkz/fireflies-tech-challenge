@@ -204,6 +204,29 @@ public sealed class AudioMixerTests
         mixer.Append([0.5f], AudioChannel.Microphone);
         Assert.Equal(0.4f, mixer.Drain()[0], 1e-6f);
     }
+
+    [Fact]
+    public void Stereo_puts_the_microphone_left_and_the_pc_right_unmixed()
+    {
+        var mixer = new AudioMixer(stereo: true);
+        Assert.Equal(2, mixer.Channels);
+        mixer.Append([0.1f, 0.2f, 0.3f], AudioChannel.Microphone);
+        Assert.Empty(mixer.Drain());
+        mixer.Append([-0.5f, 2f], AudioChannel.System);
+        Assert.Equal([0.1f, -0.5f, 0.2f, 1f], mixer.Drain());
+        // The end of the meeting: what only one side has, with silence on the other.
+        Assert.Equal([0.3f, 0f], mixer.Drain(flush: true));
+    }
+
+    [Fact]
+    public void Stereo_without_a_side_that_never_started_keeps_that_side_silent()
+    {
+        var mixer = new AudioMixer(stereo: true);
+        mixer.Remove(AudioChannel.Microphone);
+        mixer.Append([0.25f, 0.5f], AudioChannel.System);
+        Assert.Equal([0f, 0.25f, 0f, 0.5f], mixer.Drain());
+        Assert.Equal(1, new AudioMixer().Channels);
+    }
 }
 
 public sealed class LanguageGuessTests

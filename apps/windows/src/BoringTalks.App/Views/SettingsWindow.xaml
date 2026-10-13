@@ -82,8 +82,12 @@
       <ScrollViewer Style="{StaticResource Page}">
         <StackPanel>
           <Border Style="{StaticResource Group}">
-            <TextBlock TextWrapping="Wrap"
-                       Text="Parakeet v3 writes the transcript on this PC as you talk, for free. Only the text (and the audio, if you upload it) leaves the PC." />
+            <StackPanel>
+              <TextBlock Text="Transcribe" Margin="0,0,0,6" />
+              <RadioButton Content="On this PC" GroupName="Transcribe" IsChecked="{Binding TranscribeOnPc}" Margin="0,0,0,4" />
+              <RadioButton Content="Online, after the meeting (upload only)" GroupName="Transcribe" IsChecked="{Binding UploadOnly}" />
+              <TextBlock Style="{StaticResource Help}" Margin="0,8,0,0" Text="{Binding TranscribeHelp}" />
+            </StackPanel>
           </Border>
 
           <TextBlock Text="Speech model" Style="{StaticResource GroupTitle}" />
@@ -91,7 +95,7 @@
             <StackPanel>
               <DockPanel>
                 <TextBlock Text="Status" Width="150" />
-                <TextBlock Text="{Binding App.ModelSummary}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ModelStatus}" TextWrapping="Wrap" />
               </DockPanel>
               <ProgressBar Height="4" Margin="0,8,0,0" Maximum="1" Value="{Binding ModelFraction, Mode=OneWay, TargetNullValue=0}"
                            IsIndeterminate="{Binding ModelIndeterminate, Mode=OneWay}"
@@ -119,9 +123,8 @@
               <CheckBox Content="Keep Bluetooth headsets in high quality" IsChecked="{Binding AvoidBluetoothMic}" />
               <TextBlock Style="{StaticResource Help}"
                          Text="Recording with a Bluetooth headset's microphone switches the headset to call quality. With this on, “You” is recorded with the PC's own microphone instead." />
-              <CheckBox Content="Upload meeting audio" IsChecked="{Binding UploadAudio}" />
-              <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0"
-                         Text="Lets the dashboard play the meeting back. Without a local transcript the audio is uploaded anyway, so the server can transcribe it." />
+              <CheckBox Content="Upload meeting audio" IsChecked="{Binding UploadAudio}" IsEnabled="{Binding TranscribeOnPc}" />
+              <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="{Binding UploadAudioHelp}" />
             </StackPanel>
           </Border>
           <Border Style="{StaticResource Group}">

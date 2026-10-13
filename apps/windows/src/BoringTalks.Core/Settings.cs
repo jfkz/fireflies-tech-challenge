@@ -6,6 +6,12 @@ namespace BoringTalks.Core;
 /// <summary>User settings, kept in <c>%APPDATA%\BoringTalks\settings.json</c>. Same keys and defaults as the Mac app.</summary>
 public sealed record Settings
 {
+    /// <summary>
+    /// Transcribe on this PC as the meeting goes (the speech model, ~700 MB). Off: upload only — each
+    /// side on its own channel, and the server transcribes after the meeting (the Mac's "Online").
+    /// </summary>
+    public bool TranscribeOnPc { get; init; } = true;
+
     /// <summary>ISO code the speech model is steered to; empty means detect it.</summary>
     public string Language { get; init; } = "";
 

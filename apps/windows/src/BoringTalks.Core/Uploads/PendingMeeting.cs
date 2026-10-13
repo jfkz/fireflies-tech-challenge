@@ -36,6 +36,11 @@ public sealed record PendingMeeting
     public string? AudioFileName { get; init; }
     /// <summary>The user's "Upload audio" setting at the time of recording.</summary>
     public bool UploadAudio { get; init; }
+    /// <summary>
+    /// <see cref="Api.AudioChannelLayouts.MicSystem"/> when recorded for the server to transcribe (each
+    /// side on its own channel, no transcript); null for one mix.
+    /// </summary>
+    public string? AudioChannels { get; init; }
     public string? RemoteId { get; init; }
     public UploadStep Step { get; init; } = UploadStep.Create;
     /// <summary>Failed for good (the server refused it); waits for the user to retry or discard.</summary>

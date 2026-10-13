@@ -31,9 +31,11 @@ public sealed class RecordingChannel
     private bool droppedBacklog;
     private PhraseTranscriber? transcriber;
 
-    public RecordingChannel(AudioChannel kind, long clockStart, RecordingWriter writer)
+    /// <param name="keepBacklog">False when nothing will transcribe this channel (upload only): no backlog to keep.</param>
+    public RecordingChannel(AudioChannel kind, long clockStart, RecordingWriter writer, bool keepBacklog = true)
     {
         Kind = kind;
+        droppedBacklog = !keepBacklog;
         this.clockStart = clockStart;
         this.writer = writer;
         _ = Task.Run(async () =>

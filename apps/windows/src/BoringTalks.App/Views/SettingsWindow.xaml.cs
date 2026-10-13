@@ -35,8 +35,17 @@ public sealed class SettingsViewModel : ObservableObject
     private Settings S => App.Settings;
 
     public string Language { get => S.Language; set => App.UpdateSettings(s => s with { Language = value ?? "" }); }
+    public bool TranscribeOnPc { get => S.TranscribeOnPc; set => App.UpdateSettings(s => s with { TranscribeOnPc = value }); }
+    public bool UploadOnly { get => !S.TranscribeOnPc; set => TranscribeOnPc = !value; }
+    public string TranscribeHelp => S.TranscribeOnPc
+        ? "Parakeet v3 writes the transcript on this PC as you talk, for free. Only the text (and the audio, if you upload it) leaves the PC."
+        : "Nothing is transcribed here: BoringTalks records you and the others on separate channels and uploads the audio, and the server transcribes it once the meeting is over, keeping “You” apart from the others. No live transcript, no speech model to download.";
+    public string ModelStatus => S.TranscribeOnPc ? App.ModelSummary : "Not needed while the server transcribes";
+    public string UploadAudioHelp => S.TranscribeOnPc
+        ? "Lets the dashboard play the meeting back. Without a local transcript the audio is uploaded anyway, so the server can transcribe it."
+        : "Always on while the server transcribes: it needs the audio.";
     public bool AvoidBluetoothMic { get => S.AvoidBluetoothMic; set => App.UpdateSettings(s => s with { AvoidBluetoothMic = value }); }
-    public bool UploadAudio { get => S.UploadAudio; set => App.UpdateSettings(s => s with { UploadAudio = value }); }
+    public bool UploadAudio { get => S.UploadAudio || !S.TranscribeOnPc; set => App.UpdateSettings(s => s with { UploadAudio = value }); }
     public int KeepAudioDays { get => S.KeepAudioDays; set => App.UpdateSettings(s => s with { KeepAudioDays = value }); }
     public int SilenceStopMinutes { get => S.SilenceStopMinutes; set => App.UpdateSettings(s => s with { SilenceStopMinutes = value }); }
     public bool OfferToRecordCalls { get => S.OfferToRecordCalls; set => App.UpdateSettings(s => s with { OfferToRecordCalls = value }); }
@@ -64,8 +73,8 @@ public sealed class SettingsViewModel : ObservableObject
     public int UpdatePercent => App.UpdateState is UpdateState.Downloading d ? d.Percent : 0;
     public bool CanRestartToUpdate => App.CanRestartToUpdate;
 
-    public bool ModelLoading => App.Models.State is ModelState.Loading;
-    public bool ModelFailed => App.Models.State is ModelState.Failed;
+    public bool ModelLoading => S.TranscribeOnPc && App.Models.State is ModelState.Loading;
+    public bool ModelFailed => S.TranscribeOnPc && App.Models.State is ModelState.Failed;
     public double? ModelFraction => App.Models.State is ModelState.Loading { Fraction: { } f } ? f : null;
     public bool ModelIndeterminate => ModelFraction is null;
 

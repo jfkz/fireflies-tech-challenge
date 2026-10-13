@@ -49,7 +49,10 @@ public sealed class ChannelTimeline(double sampleRate = 16000, double toleranceS
 }
 
 /// <summary>
-/// Mixes the two channels into the mono track that is saved and uploaded.
+/// Puts the two channels together into the track that is saved and uploaded: mixed into one mono
+/// track, or (<see cref="Stereo"/>, for the server to transcribe each side) the microphone on the
+/// left and the PC's sound on the right, interleaved.
+///
 /// Both arrive on the same clock (see <see cref="ChannelTimeline"/>), so sample <i>n</i> of one
 /// plays with sample <i>n</i> of the other; whatever one channel has that the other
 /// hasn't delivered yet waits here.
@@ -59,10 +62,16 @@ public sealed class AudioMixer
     private readonly Dictionary<AudioChannel, List<float>> pending = [];
     private readonly HashSet<AudioChannel> active;
 
-    public AudioMixer(IEnumerable<AudioChannel>? channels = null)
+    public AudioMixer(IEnumerable<AudioChannel>? channels = null, bool stereo = false)
     {
         active = [.. channels ?? Enum.GetValues<AudioChannel>()];
+        Stereo = stereo;
     }
+
+    /// <summary>Left: the microphone; right: the PC's sound. Drain then returns interleaved frames.</summary>
+    public bool Stereo { get; }
+
+    public int Channels => Stereo ? 2 : 1;
 
     /// <summary>Gain per channel; the call is usually quieter than the user's own microphone.</summary>
     public Dictionary<AudioChannel, float> Gains { get; } = new() { [AudioChannel.Microphone] = 0.8f, [AudioChannel.System] = 1.0f };
@@ -91,6 +100,7 @@ public sealed class AudioMixer
         var lengths = active.Select(c => pending.TryGetValue(c, out var l) ? l.Count : 0).ToList();
         var count = flush ? lengths.Max() : lengths.Min();
         if (count <= 0) return [];
+        if (Stereo) return Split(count);
         var mixed = new float[count];
         foreach (var channel in active)
         {
@@ -107,5 +117,19 @@ public sealed class AudioMixer
             if (MathF.Abs(v) > 0.9f) mixed[i] = v > 0 ? 0.9f + 0.1f * MathF.Tanh((v - 0.9f) * 10) : -0.9f - 0.1f * MathF.Tanh((-v - 0.9f) * 10);
         }
         return mixed;
+    }
+
+    /// <summary><paramref name="count"/> frames, left then right; a side with nothing (it never started) is silent.</summary>
+    private float[] Split(int count)
+    {
+        var frames = new float[count * 2];
+        foreach (var (channel, side) in new[] { (AudioChannel.Microphone, 0), (AudioChannel.System, 1) })
+        {
+            if (!active.Contains(channel) || !pending.TryGetValue(channel, out var samples)) continue;
+            var available = Math.Min(count, samples.Count);
+            for (var i = 0; i < available; i++) frames[2 * i + side] = Math.Clamp(samples[i], -1f, 1f);
+            samples.RemoveRange(0, available);
+        }
+        return frames;
     }
 }

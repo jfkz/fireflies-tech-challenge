@@ -690,7 +690,11 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   0.9 % of phrases to the wrong speaker in simulated 2–4 person meetings on LibriSpeech).
   Models (~717 MB) download at the first launch (and whenever files are missing or incomplete),
   with resume and SHA-256 checks, into `%LOCALAPPDATA%\BoringTalks-Models`; the menu shows the
-  progress. A failed download says so in the menu with **Try again**, and retries by itself when
+  progress. **Upload only** (Settings › Transcription › Online, after the meeting) skips all of
+  this, like the Mac's online mode: no model is downloaded, the meeting is recorded as stereo AAC
+  (48 kHz, 128 kbps) with the microphone on the left and the PC's sound on the right, and uploaded
+  with `channels: "mic-system"` and no transcript; the server transcribes each side, keeping
+  “You” apart, and stores a mono mix for playback. A failed download says so in the menu with **Try again**, and retries by itself when
   the network comes back and every 5 minutes. A meeting recorded before they're ready waits (up
   to 20 min per side), else goes to the server's transcription with its audio.
 - **Where:** `BoringTalks.Speech/`, `BoringTalks.Core/Speech/`.
@@ -709,8 +713,8 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
 
 ### Settings, environments, command line
 
-- **What:** the Mac's settings in the same four tabs (**Transcription**: speech model and
-  language; **Recording**: Bluetooth, upload audio, keep recordings, stop after silence;
+- **What:** the Mac's settings in the same four tabs (**Transcription**: **Transcribe on this
+  PC** or **Online, after the meeting (upload only)**, speech model and language; **Recording**: Bluetooth, upload audio, keep recordings, stop after silence;
   **Calls**: offer to record, stop when the call ends, **Open BoringTalks when I sign in to
   Windows**, apps never asked about; **Account**: sign-in, API and dashboard, updates, version and
   Quit). The window is as tall as the open tab (a tab taller than the screen scrolls) and reopens

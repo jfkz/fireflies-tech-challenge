@@ -153,6 +153,27 @@ public sealed class UploadQueueTests : IDisposable
     }
 
     [Fact]
+    public async Task Upload_only_sends_both_sides_on_their_own_channels_for_the_server()
+    {
+        var queue = MakeQueue();
+        queue.Enqueue(Meeting(segments: [], uploadAudio: true) with { AudioChannels = AudioChannelLayouts.MicSystem });
+        await queue.ProcessDueAsync(None);
+        Assert.Equal(["POST /meetings", $"POST /meetings/{Id}/upload-url", "PUT storage", $"POST /meetings/{Id}/complete"], server.Routes);
+        var request = server.Handler.Requests.Single(r => r.Route.EndsWith("/upload-url", StringComparison.Ordinal));
+        Assert.Equal("mic-system", request.BodyJson["channels"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task One_mix_says_nothing_about_channels()
+    {
+        var queue = MakeQueue();
+        queue.Enqueue(Meeting(segments: [], uploadAudio: true));
+        await queue.ProcessDueAsync(None);
+        var request = server.Handler.Requests.Single(r => r.Route.EndsWith("/upload-url", StringComparison.Ordinal));
+        Assert.Null(request.BodyJson["channels"]);
+    }
+
+    [Fact]
     public async Task A_missing_audio_file_is_skipped()
     {
         var queue = MakeQueue();

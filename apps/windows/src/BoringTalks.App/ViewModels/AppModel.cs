@@ -166,8 +166,9 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
             if (e.IsAvailable) ui.BeginInvoke(RetryModels);
         };
         NetworkChange.NetworkAddressChanged += (_, _) => Queue.SetOnline(NetworkInterface.GetIsNetworkAvailable());
-        // Start downloading the speech model right away; it takes a while the first time.
-        _ = Models.PrepareAsync();
+        // Start downloading the speech model right away (it takes a while the first time), unless
+        // meetings are only uploaded and the server transcribes them.
+        if (Settings.TranscribeOnPc) _ = Models.PrepareAsync();
         refreshTimer.Start();
         micMonitor.Changed += () => ui.BeginInvoke(EvaluateCalls);
         micMonitor.Start();
@@ -304,7 +305,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         {
             Recorder.AvoidBluetoothMic = Settings.AvoidBluetoothMic;
             Recorder.SilenceLimit = Settings.SilenceStopMinutes * 60;
-            await Recorder.StartAsync(TitleDraft, Settings.LanguageCode, Settings.UploadAudio);
+            await Recorder.StartAsync(TitleDraft, Settings.LanguageCode, Settings.UploadAudio, Settings.TranscribeOnPc);
             callSignals.RecordingStarted(Now);
             ClearCallOffer();
         }
@@ -483,6 +484,8 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
             Queue.SetKeepAudioDays(Settings.KeepAudioDays);
             PruneRecordings();
         }
+        // Back to transcribing on this PC: get the speech model now, not when the next meeting starts.
+        if (!old.TranscribeOnPc && Settings.TranscribeOnPc) _ = Models.PrepareAsync();
         if (old.OpenAtSignIn != Settings.OpenAtSignIn) TryRegister(() => Registration.SetOpenAtSignIn(Settings.OpenAtSignIn));
     }
 
@@ -515,7 +518,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     /// <summary>Downloads (or finishes downloading) the speech model again after a failure.</summary>
     public void RetryModels()
     {
-        if (Models.State is ModelState.Failed) _ = Models.PrepareAsync();
+        if (Settings.TranscribeOnPc && Models.State is ModelState.Failed) _ = Models.PrepareAsync();
     }
 
     // ---- Updates

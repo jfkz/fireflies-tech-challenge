@@ -73,7 +73,15 @@ public sealed record CreateMeetingRequest(string? Title, DateTimeOffset? Started
 /// <summary>The part of the created meeting the app needs.</summary>
 public sealed record CreatedMeeting(string Id);
 
-public sealed record UploadUrlRequest(int SizeBytes, string ContentType = "audio/mp4");
+/// <param name="Channels">"mic-system": the microphone on the left, the PC's sound on the right (shared <c>AudioChannels</c>); null: one mix.</param>
+public sealed record UploadUrlRequest(int SizeBytes, string ContentType = "audio/mp4", string? Channels = null);
+
+/// <summary>The shared <c>AudioChannels</c> values.</summary>
+public static class AudioChannelLayouts
+{
+    /// <summary>The microphone (the user) on the left channel, what the PC played (everyone else) on the right.</summary>
+    public const string MicSystem = "mic-system";
+}
 
 public sealed record UploadUrlResponse(Uri Url, string Key, IReadOnlyDictionary<string, string> Headers, int ExpiresInSec);
 
