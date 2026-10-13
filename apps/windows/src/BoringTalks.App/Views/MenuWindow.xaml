@@ -1,0 +1,198 @@
+<Window x:Class="BoringTalks.App.Views.MenuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BoringTalks" Width="360" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ShowInTaskbar="False" Topmost="True" FontFamily="{StaticResource UiFont}" FontSize="13"
+        Foreground="{StaticResource Ink}">
+  <Border Margin="10" Background="White" CornerRadius="12" BorderBrush="#26292133" BorderThickness="1">
+    <Border.Effect>
+      <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.25" />
+    </Border.Effect>
+    <StackPanel Margin="16,14">
+
+      <!-- Header -->
+      <DockPanel>
+        <Image Source="/Assets/BoringTalks-64.png" Width="32" Height="32" Margin="0,0,10,0" />
+        <Border DockPanel.Dock="Right" Background="#4DFFD140" CornerRadius="8" Padding="6,2" VerticalAlignment="Center"
+                Visibility="{Binding DevHost, Converter={StaticResource VisibleWhen}}">
+          <TextBlock Text="{Binding DevHost}" FontFamily="Consolas" FontSize="11" />
+        </Border>
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="BoringTalks" Style="{StaticResource Heading}" />
+          <TextBlock Text="{Binding HeaderCaption}" Style="{StaticResource Caption}" />
+        </StackPanel>
+      </DockPanel>
+      <Separator Margin="0,12" />
+
+      <!-- Loading the stored sign-in -->
+      <ProgressBar IsIndeterminate="True" Height="4" Visibility="{Binding App.Auth, Converter={StaticResource VisibleWhen}, ConverterParameter=Unknown}" />
+
+      <!-- Signed out -->
+      <StackPanel Visibility="{Binding App.Auth, Converter={StaticResource VisibleWhen}, ConverterParameter=SignedOut|WaitingForBrowser}">
+        <TextBlock TextWrapping="Wrap" Text="Sign in to send your meetings to the dashboard. Transcription happens on this PC." />
+        <Button Style="{StaticResource Primary}" Margin="0,10,0,0" Padding="12,9" HorizontalContentAlignment="Center" Click="SignIn_Click"
+                Content="Sign in with browser" />
+        <Button Style="{StaticResource Link}" HorizontalAlignment="Left" Margin="0,6,0,0" FontSize="12" Click="CopyLink_Click"
+                Content="Signed in to another browser? Copy the sign-in link" />
+        <DockPanel Margin="0,6,0,0" Visibility="{Binding IsWaitingForBrowser, Converter={StaticResource VisibleWhen}}">
+          <Button DockPanel.Dock="Right" Style="{StaticResource Link}" FontSize="12" Content="Cancel" Click="CancelSignIn_Click" />
+          <TextBlock Text="{Binding WaitingText}" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+        </DockPanel>
+        <Expander Header="Paste code" Margin="0,8,0,0">
+          <DockPanel Margin="0,6,0,0">
+            <Button DockPanel.Dock="Right" Margin="6,0,0,0" Content="Connect" Click="Paste_Click" />
+            <TextBox x:Name="PasteBox" KeyDown="PasteBox_KeyDown" ToolTip="Code or boringtalks:// link" />
+          </DockPanel>
+        </Expander>
+        <TextBlock Text="{Binding App.AuthError}" Foreground="{StaticResource Danger}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                   Visibility="{Binding App.AuthError, Converter={StaticResource VisibleWhen}}" />
+      </StackPanel>
+
+      <!-- Signed in: recording -->
+      <StackPanel Visibility="{Binding App.Auth, Converter={StaticResource VisibleWhen}, ConverterParameter=SignedIn}">
+        <TextBox Text="{Binding App.TitleDraft, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding IsIdle}"
+                 ToolTip="Meeting title (optional)" x:Name="TitleBox" />
+        <TextBlock Text="Meeting title (optional)" Style="{StaticResource Caption}" Margin="2,2,0,0" />
+        <Button x:Name="RecordButton" Margin="0,8,0,0" Padding="14,10" Click="Record_Click" IsEnabled="{Binding RecordButtonEnabled}"
+                HorizontalContentAlignment="Stretch">
+          <Button.Style>
+            <Style TargetType="Button" BasedOn="{StaticResource Primary}">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding Recorder.IsRecording}" Value="True">
+                  <Setter Property="Background" Value="{StaticResource Danger}" />
+                  <Setter Property="BorderBrush" Value="#B5222D" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Button.Style>
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding Elapsed}" FontFamily="Consolas" FontSize="15" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding RecordButtonText}" FontSize="15" />
+          </DockPanel>
+        </Button>
+
+        <Grid Margin="0,10,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition />
+            <RowDefinition />
+          </Grid.RowDefinitions>
+          <TextBlock Text="{Binding MicLabel}" Style="{StaticResource Caption}" MaxWidth="150" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,0,10,4" />
+          <ProgressBar Grid.Column="1" Height="6" Maximum="1" Value="{Binding MicLevel, Mode=OneWay}" Foreground="{StaticResource Mint}" Background="{StaticResource Paper}" BorderThickness="0" />
+          <TextBlock Grid.Row="1" Text="Others" Style="{StaticResource Caption}" Margin="0,0,10,0" />
+          <ProgressBar Grid.Row="1" Grid.Column="1" Height="6" Maximum="1" Value="{Binding SystemLevel, Mode=OneWay}" Foreground="{StaticResource Call}" Background="{StaticResource Paper}" BorderThickness="0" />
+        </Grid>
+
+        <ItemsControl ItemsSource="{Binding Recorder.Warnings}" Margin="0,6,0,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding StringFormat=⚠ {0}}" Foreground="{StaticResource Orange}" FontSize="12" TextWrapping="Wrap" Margin="0,2" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="{Binding App.RecordError}" Foreground="{StaticResource Danger}" FontSize="12" TextWrapping="Wrap"
+                   Visibility="{Binding App.RecordError, Converter={StaticResource VisibleWhen}}" />
+
+        <!-- Stopping by itself -->
+        <Border Style="{StaticResource Notice}" Background="#26E07A1F" Visibility="{Binding CountdownText, Converter={StaticResource VisibleWhen}}">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Keep recording" Padding="8,4" FontSize="12" Click="Keep_Click" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding CountdownText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
+          </DockPanel>
+        </Border>
+
+        <!-- A call started -->
+        <Border Style="{StaticResource Notice}" Background="{StaticResource Paper}" Visibility="{Binding CallOfferText, Converter={StaticResource VisibleWhen}}">
+          <StackPanel>
+            <TextBlock Text="{Binding CallOfferText}" FontWeight="SemiBold" />
+            <DockPanel Margin="0,6,0,0">
+              <Button Style="{StaticResource Primary}" Content="Record" Padding="10,4" Click="RecordCall_Click" />
+              <Button Content="Not now" Padding="10,4" Margin="6,0,0,0" Click="NotNow_Click" />
+              <Button Style="{StaticResource Link}" HorizontalAlignment="Right" FontSize="12" Content="{Binding NeverText}" Click="Never_Click" />
+            </DockPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Stopped by itself -->
+        <Border Style="{StaticResource Notice}" Background="{StaticResource SunSoft}" Visibility="{Binding AutoStopNotice, Converter={StaticResource VisibleWhen}}">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Style="{StaticResource Link}" Content="OK" FontSize="12" Click="DismissNotice_Click" />
+            <TextBlock Text="{Binding AutoStopNotice}" FontSize="12" TextWrapping="Wrap" />
+          </DockPanel>
+        </Border>
+
+        <!-- Speech model -->
+        <StackPanel Margin="0,8,0,0" Visibility="{Binding ModelHint, Converter={StaticResource VisibleWhen}}">
+          <ProgressBar Height="4" Maximum="1" Value="{Binding ModelFraction, Mode=OneWay, TargetNullValue=0}"
+                       IsIndeterminate="{Binding ModelIndeterminate, Mode=OneWay}" />
+          <TextBlock Text="{Binding ModelHint}" Style="{StaticResource Caption}" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <Button Style="{StaticResource Link}" HorizontalAlignment="Left" Margin="0,8,0,0" Content="{Binding LiveButtonText}" Click="Live_Click" />
+        <Separator Margin="0,10" />
+
+        <!-- Uploads -->
+        <StackPanel Visibility="{Binding HasUploads, Converter={StaticResource VisibleWhen}}">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Style="{StaticResource Link}" FontSize="12" Content="Retry" Click="Retry_Click"
+                    Visibility="{Binding ShowRetry, Converter={StaticResource VisibleWhen}}" />
+            <TextBlock Text="{Binding UploadSummary}" VerticalAlignment="Center" />
+          </DockPanel>
+          <ItemsControl ItemsSource="{Binding FailedUploads}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <DockPanel Margin="0,4,0,0">
+                  <Button DockPanel.Dock="Right" Style="{StaticResource Link}" FontSize="12" Content="Discard" Tag="{Binding Id}" Click="Discard_Click" />
+                  <TextBlock Text="{Binding Text}" Foreground="{StaticResource Danger}" FontSize="12" TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Separator Margin="0,10" />
+        </StackPanel>
+
+        <!-- Recent meetings -->
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Style="{StaticResource Link}" Content="↻" ToolTip="Refresh" FontSize="14" Click="Refresh_Click" />
+          <TextBlock Text="Recent meetings" Style="{StaticResource SectionTitle}" VerticalAlignment="Center" />
+        </DockPanel>
+        <TextBlock Text="{Binding App.MeetingsError}" Foreground="{StaticResource Danger}" FontSize="12" TextWrapping="Wrap"
+                   Visibility="{Binding App.MeetingsError, Converter={StaticResource VisibleWhen}}" />
+        <TextBlock Text="No meetings yet. Press Start when your next call begins." Style="{StaticResource Caption}" Margin="0,4,0,0"
+                   Visibility="{Binding NoMeetings, Converter={StaticResource VisibleWhen}}" />
+        <ItemsControl ItemsSource="{Binding Meetings}" Margin="0,4,0,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Tag="{Binding Meeting}" Click="Meeting_Click" Padding="6,5" Margin="-6,0" HorizontalContentAlignment="Stretch"
+                      Background="Transparent" BorderThickness="0" Cursor="Hand">
+                <DockPanel>
+                  <Border DockPanel.Dock="Right" CornerRadius="8" Padding="6,1" VerticalAlignment="Center" Background="{StaticResource Paper}">
+                    <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding StatusBrush}" />
+                  </Border>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding When}" Style="{StaticResource Caption}" FontSize="11" />
+                  </StackPanel>
+                </DockPanel>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <!-- Footer -->
+      <Separator Margin="0,12" />
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Style="{StaticResource Link}" Content="Quit" Click="Quit_Click" />
+        <StackPanel Orientation="Horizontal">
+          <Button Style="{StaticResource Link}" Content="Dashboard" Click="Dashboard_Click" Margin="0,0,12,0" />
+          <Button Style="{StaticResource Link}" Content="Settings…" Click="Settings_Click" />
+        </StackPanel>
+      </DockPanel>
+    </StackPanel>
+  </Border>
+</Window>

@@ -12,7 +12,7 @@ public abstract record ModelState
 
 /// <summary>
 /// Downloads and loads the on-device models once per launch: Parakeet (about 670 MB) and the
-/// voice models (about 46 MB), all in <c>%LOCALAPPDATA%\BoringTalks\models</c>.
+/// voice models (about 46 MB), all in <c>%LOCALAPPDATA%\BoringTalks-Models</c>.
 /// </summary>
 public sealed class SpeechModels(ModelStore store, Action<string>? log = null) : IDisposable
 {

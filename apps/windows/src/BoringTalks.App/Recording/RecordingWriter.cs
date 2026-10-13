@@ -120,6 +120,7 @@ public sealed class RecordingWriter : IDisposable
     {
         work.CompleteAdding();
         feed.Complete();
+        worker.Join(TimeSpan.FromSeconds(2));
         work.Dispose();
     }
 

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using BoringTalks.Core;
 using BoringTalks.Core.Audio;
 
 namespace BoringTalks.App.Audio;
@@ -59,27 +60,36 @@ public interface IAudioCapture : IDisposable
 
 /// <summary>
 /// The microphone: "You". Shared-mode WASAPI on one device, so a Bluetooth headset that
-/// isn't the chosen device is never forced into its call profile.
+/// isn't the chosen device is never forced into its call profile. The device is picked and opened
+/// on the thread that starts the capture (Core Audio objects don't cross COM apartments).
 /// </summary>
-public sealed class MicCapture(MMDevice device) : IAudioCapture
+public sealed class MicCapture(bool avoidBluetooth, Action<string>? log = null) : IAudioCapture
 {
     private WasapiCapture? capture;
+    private MMDeviceEnumerator? enumerator;
+    private volatile bool stopping;
 
     public event Action<CapturedAudio>? Audio;
     public event Action<Exception?>? Stopped;
-    public string? DeviceName { get; } = device.FriendlyName;
+    public string? DeviceName { get; private set; }
 
     public void Start()
     {
         try
         {
+            enumerator = new MMDeviceEnumerator();
+            var device = Pick(enumerator);
+            DeviceName = device.FriendlyName;
             capture = new WasapiCapture(device, useEventSync: true, audioBufferMillisecondsLength: 100);
             var format = capture.WaveFormat;
             capture.DataAvailable += (_, e) =>
             {
                 if (e.BytesRecorded > 0) Audio?.Invoke(new CapturedAudio(AudioConversion.ToMono(e.Buffer.AsSpan(0, e.BytesRecorded), format), format.SampleRate));
             };
-            capture.RecordingStopped += (_, e) => Stopped?.Invoke(e.Exception);
+            capture.RecordingStopped += (_, e) =>
+            {
+                if (!stopping) Stopped?.Invoke(e.Exception);
+            };
             capture.StartRecording();
         }
         catch (COMException error) when ((uint)error.HResult == 0x80070005)
@@ -92,8 +102,28 @@ public sealed class MicCapture(MMDevice device) : IAudioCapture
         }
     }
 
+    /// <summary>
+    /// The microphone call apps use (Communications role), else the default one. When that is a
+    /// Bluetooth headset, the PC's own microphone instead (see <see cref="MicChoice"/>); listing
+    /// every microphone can take seconds, so only then.
+    /// </summary>
+    private MMDevice Pick(MMDeviceEnumerator devices)
+    {
+        var role = devices.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Communications) ? Role.Communications
+            : devices.HasDefaultAudioEndpoint(DataFlow.Capture, Role.Console) ? Role.Console
+            : throw new CaptureException("There is no microphone. Plug one in, or check Settings › System › Sound.");
+        var defaultInput = devices.GetDefaultAudioEndpoint(DataFlow.Capture, role);
+        var described = AudioDevices.Describe(defaultInput);
+        if (!avoidBluetooth || !described.IsBluetooth) return defaultInput;
+        var inputs = devices.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active).ToList();
+        if (MicChoice.Pick(described, [.. inputs.Select(AudioDevices.Describe)], avoidBluetooth) is not { } chosen) return defaultInput;
+        log?.Invoke($"recording You with {chosen.Name} instead of a Bluetooth headset");
+        return inputs.First(d => d.ID == chosen.Id);
+    }
+
     public void Stop()
     {
+        stopping = true;
         try
         {
             capture?.StopRecording();
@@ -108,6 +138,8 @@ public sealed class MicCapture(MMDevice device) : IAudioCapture
         Stop();
         capture?.Dispose();
         capture = null;
+        enumerator?.Dispose();
+        enumerator = null;
     }
 }
 

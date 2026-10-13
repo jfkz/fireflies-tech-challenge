@@ -40,14 +40,14 @@ public sealed record AppConfig(Uri ApiUrl, Uri WebUrl)
 
 /// <summary>
 /// Folders the app keeps its data in: <c>%APPDATA%\BoringTalks</c> for the queue, recordings and
-/// settings (they roam with the profile), <c>%LOCALAPPDATA%\BoringTalks\models</c> for the speech
-/// models (large, and per machine).
+/// settings, <c>%LOCALAPPDATA%\BoringTalks-Models</c> for the speech models (large, and per machine;
+/// outside <c>%LOCALAPPDATA%\BoringTalks</c>, where the installer keeps the app and replaces it on update).
 /// </summary>
 public sealed record AppFolders(string Root, string ModelsRoot)
 {
     public static AppFolders Standard { get; } = new(
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "BoringTalks"),
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BoringTalks", "models"));
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BoringTalks-Models"));
 
     public string Recordings => Path.Combine(Root, "Recordings");
     public string Models => ModelsRoot;
