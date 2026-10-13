@@ -9,7 +9,7 @@ import { usePlatform } from '@/hooks/usePlatform';
 import { stillPose } from '@/lib/avatar/pose';
 import { TALKER } from '@/lib/avatar/styles';
 import { formatBytes } from '@/lib/format';
-import { chooseDownloads, minimumOsLabel, type DownloadChoice } from '@/lib/landing/downloads';
+import { chooseDownloads, fileName, minimumOsLabel, type DownloadChoice } from '@/lib/landing/downloads';
 import { PLATFORM_NAME } from '@/lib/platform';
 import { DownloadGlyph } from './MeetingStory';
 
@@ -62,7 +62,7 @@ function Offer({ downloads, choice }: { downloads: Downloads; choice: DownloadCh
           <AlsoFor key={p} download={downloads[p]!} platform={p} />
         ))}
       </div>
-      <FirstLaunch platform={choice.primary} notarized={primary.notarized} />
+      <FirstLaunch platform={choice.primary} download={primary} />
     </>
   );
 }
@@ -155,8 +155,8 @@ function CardSkeleton() {
   );
 }
 
-function FirstLaunch({ platform, notarized }: { platform: DownloadPlatform; notarized: boolean }) {
-  const steps = platform === 'windows' ? windowsSteps(notarized) : macSteps(notarized);
+function FirstLaunch({ platform, download }: { platform: DownloadPlatform; download: LatestDownload }) {
+  const steps = platform === 'windows' ? windowsSteps(download.notarized, fileName(download.url)) : macSteps(download.notarized);
   return (
     <div className="rounded-[20px] bg-sun-soft p-5 sm:p-6" data-testid={`first-launch-${platform}`}>
       <h3 className="text-xl font-extrabold text-ink">The first launch</h3>
@@ -190,9 +190,9 @@ function macSteps(notarized: boolean): React.ReactNode[] {
   ].filter(Boolean);
 }
 
-function windowsSteps(signed: boolean): React.ReactNode[] {
+function windowsSteps(signed: boolean, file: string): React.ReactNode[] {
   return [
-    'Run BoringTalks-Setup.exe. It installs just for you, no admin rights needed.',
+    `Run ${file || 'the installer'}. It installs just for you, no admin rights needed.`,
     !signed && (
       <>
         This build isn’t code-signed yet. If your browser says the file isn’t commonly downloaded, choose <strong>Keep</strong>. If Windows says it

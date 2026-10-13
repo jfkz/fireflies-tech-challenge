@@ -210,7 +210,8 @@ function DownloadCard() {
                 </p>
               </div>
               {build ? (
-                <a href={build.url} className="btn btn-primary" download>
+                // The visitor's own computer gets the main button.
+                <a href={build.url} className={p === platform || (platform !== 'macos' && platform !== 'windows') ? 'btn btn-primary' : 'btn btn-secondary'} download>
                   Download
                 </a>
               ) : (

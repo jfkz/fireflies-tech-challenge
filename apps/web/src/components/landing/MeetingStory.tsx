@@ -10,7 +10,8 @@ import { SpeechBubble } from '@/components/avatar/SpeechBubble';
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { TypeLine } from '@/components/avatar/TypeLine';
 import { MEN, WOMEN, type AvatarStyle } from '@/lib/avatar/styles';
-import { heroDownloadLabel } from '@/lib/landing/downloads';
+import { heroDownload } from '@/lib/landing/downloads';
+import { PLATFORM_NAME } from '@/lib/platform';
 import { CHATTER, clockMinutes, MEETING_BEATS, meetingBeatAt, type HeadMood, type MeetingBeat } from '@/lib/landing/story';
 import { Mug, OfficeWindow, Plant, WallClock, Whiteboard } from './RoomArt';
 
@@ -255,13 +256,44 @@ function Table() {
 }
 
 /** "Download for Windows" / "for Mac": the app the visitor would get, which the card below offers first. */
+/**
+ * The big button gets the visitor's own app straight away (and shows the first-launch steps
+ * below); the other apps are small links under it.
+ */
 function HeroDownload() {
   const platform = usePlatform();
   const { data } = useDownloads();
+  const hero = heroDownload(platform, data);
   return (
-    <a href="#download" className="btn btn-primary btn-lg">
-      <DownloadGlyph /> {heroDownloadLabel(platform, data)}
-    </a>
+    <div className="flex flex-col items-start gap-1.5">
+      <a
+        href={hero.href}
+        className="btn btn-primary btn-lg"
+        data-testid="hero-download"
+        {...(hero.direct
+          ? { download: true, onClick: () => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' }) }
+          : {})}
+      >
+        <DownloadGlyph /> {hero.label}
+      </a>
+      {hero.others.length > 0 && data && (
+        <p className="pl-1 text-sm font-bold text-white/80">
+          Also for{' '}
+          {hero.others.map((p, i) => (
+            <span key={p}>
+              {i > 0 && ', '}
+              <a href={data[p]!.url} download className="font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white">
+                {PLATFORM_NAME[p]}
+              </a>
+            </span>
+          ))}
+          {' · '}
+          <a href="#download" className="font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white">
+            all downloads
+          </a>
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -55,9 +55,14 @@ download and sign-up calls to action.
    Mac/Windows”). A visitor whose computer can't be told gets both cards side by
    side. A PC visitor before the Windows app ships still gets the Mac card first.
    With no build at all: “The desktop app is still in the oven” and a link to the
-   browser recorder. The hero button names the same app (“Download for Windows”,
+   browser recorder. The hero's big button names the same app (“Download for Windows”,
    “Download for Mac”, otherwise “Download the app”); it reads `unknown` on the
-   server so the first render matches, then updates.
+   server so the first render matches, then updates. When the visitor's own app has
+   shipped, the button downloads it straight away and scrolls to the first-launch
+   steps; under it, “Also for Mac/Windows · all downloads” links the other installer
+   and the card. Otherwise (unknown computer, own app not out yet) it scrolls to the
+   card, so a PC never gets a disk image. The Windows steps name the downloaded file.
+   Settings › Desktop app gives the visitor's own app the main button.
 6. *FAQ* (`#faq`): price, which apps, no bot, how names are found, is there a
    Windows app, languages, privacy, telling people you record. Native `<details>`, and the same
    entries go out as FAQPage structured data.

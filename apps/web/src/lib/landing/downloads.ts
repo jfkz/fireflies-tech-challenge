@@ -27,6 +27,33 @@ export function heroDownloadLabel(platform: Platform | 'unknown', downloads: Dow
   return 'Download the app';
 }
 
+export type HeroDownload = {
+  label: string;
+  /** The installer itself when the visitor's own app has shipped; otherwise the download card. */
+  href: string;
+  direct: boolean;
+  /** The other apps that have shipped, offered as small links under the button. */
+  others: DownloadPlatform[];
+};
+
+/**
+ * The hero's big button: the visitor's own app, downloaded straight away. Anything else (an
+ * unknown computer, an app that hasn't shipped, still loading) goes to the download card, so a
+ * PC never starts downloading a disk image.
+ */
+export function heroDownload(platform: Platform | 'unknown', downloads: Downloads | undefined): HeroDownload {
+  const label = heroDownloadLabel(platform, downloads);
+  const own = platform === 'macos' || platform === 'windows' ? platform : null;
+  const build = own ? downloads?.[own] : null;
+  const others = ORDER.filter((p) => p !== own && downloads?.[p]);
+  return build ? { label, href: build.url, direct: true, others } : { label, href: '#download', direct: false, others: own ? others : [] };
+}
+
+/** The file name a download URL ends in: "BoringTalks-Setup-0.5.0.exe". */
+export function fileName(url: string): string {
+  return decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
+}
+
 /** "26.0" → "macOS 26 or later"; "10.0.19041" → "Windows 10 or later" (build 22000 and up is Windows 11). */
 export function minimumOsLabel(platform: DownloadPlatform, minimumOs: string): string {
   if (platform === 'windows') {

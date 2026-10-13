@@ -1,6 +1,6 @@
 import type { Downloads, LatestDownload } from '@boringtalks/shared';
 import { describe, expect, it } from 'vitest';
-import { chooseDownloads, heroDownloadLabel, minimumOsLabel } from './downloads';
+import { chooseDownloads, fileName, heroDownload, heroDownloadLabel, minimumOsLabel } from './downloads';
 
 const build = { version: '1', build: '1', url: 'https://d.test/x', sizeBytes: 1, minimumOs: '26.0', notarized: true, publishedAt: '2026-10-01T10:00:00.000Z' };
 const mac: LatestDownload = { ...build, platform: 'macos' };
@@ -37,6 +37,32 @@ describe('heroDownloadLabel', () => {
     expect(heroDownloadLabel('macos', both)).toBe('Download for Mac');
     expect(heroDownloadLabel('other', both)).toBe('Download the app');
     expect(heroDownloadLabel('unknown', undefined)).toBe('Download the app');
+  });
+});
+
+describe('heroDownload', () => {
+  const macUrl = 'https://download.boringtalks.lol/BoringTalks-1.dmg';
+  const winUrl = 'https://download.boringtalks.lol/BoringTalks-Setup-1.exe';
+  const shipped: Downloads = { macos: { ...mac, url: macUrl }, windows: { ...win, url: winUrl } };
+
+  it('downloads the visitor’s own app at once and offers the other one', () => {
+    expect(heroDownload('windows', shipped)).toEqual({ label: 'Download for Windows', href: winUrl, direct: true, others: ['macos'] });
+    expect(heroDownload('macos', shipped)).toEqual({ label: 'Download for Mac', href: macUrl, direct: true, others: ['windows'] });
+    expect(heroDownload('macos', { macos: shipped.macos, windows: null })).toEqual({ label: 'Download for Mac', href: macUrl, direct: true, others: [] });
+  });
+
+  it('goes to the download card when the own app is missing, unknown or still loading', () => {
+    expect(heroDownload('windows', { macos: shipped.macos, windows: null })).toEqual({ label: 'Download for Mac', href: '#download', direct: false, others: ['macos'] });
+    expect(heroDownload('windows', undefined)).toEqual({ label: 'Download for Windows', href: '#download', direct: false, others: [] });
+    expect(heroDownload('other', shipped)).toEqual({ label: 'Download the app', href: '#download', direct: false, others: [] });
+    expect(heroDownload('unknown', shipped)).toEqual({ label: 'Download the app', href: '#download', direct: false, others: [] });
+  });
+});
+
+describe('fileName', () => {
+  it('is the last part of the URL', () => {
+    expect(fileName('https://download.boringtalks.lol/dev/BoringTalks-Dev-Setup-0.5.0.exe')).toBe('BoringTalks-Dev-Setup-0.5.0.exe');
+    expect(fileName('https://d.test/a%20b.dmg?x=1')).toBe('a b.dmg');
   });
 });
 
