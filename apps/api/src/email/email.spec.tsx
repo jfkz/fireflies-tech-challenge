@@ -114,6 +114,8 @@ describe('EmailService', () => {
     expect(sender.sent[0]).toMatchObject({
       to: 'ann@example.com',
       from: 'BoringTalks <hello@send.boringtalks.lol>',
+      // Replies reach a mailbox (the sending subdomain receives nothing).
+      replyTo: 'BoringTalks <hello@boringtalks.lol>',
       idempotencyKey: `welcome_${user().id}`,
     });
   });

@@ -57,6 +57,9 @@ and https://download.boringtalks.lol/BoringTalks-Setup-latest.exe.
 | Object storage | Cloudflare R2 bucket `boringtalks` | `prod/` | `dev/` |
 | Installers (DMG, Setup.exe), speech-model mirror (`models/`) | same bucket, `downloads/`, served at `download.boringtalks.lol` | `downloads/` → `/` | `downloads/dev/` → `/dev/` |
 | Auth | Firebase project `boringtalks-fe45f` (Email/Password, Google) | shared | shared |
+| AI | Vercel AI Gateway (team `jfkz0`) | key `boringtalks-worker-prod` | key `boringtalks-worker-dev` |
+| Email | Resend, domain `send.boringtalks.lol` | | allow-listed recipients only |
+| DNS | Cloudflare zone `boringtalks.lol`, all records DNS-only | | |
 
 Google sign-in uses the site's own domain as Firebase's auth domain: `next.config.ts` proxies
 `/__/auth/*` to `boringtalks-fe45f.firebaseapp.com`, and the OAuth client
@@ -69,9 +72,25 @@ Firebase's emails (password reset) link to our own page: Firebase console › Au
 Templates › Password reset › edit › **Customize action URL** = `https://boringtalks.lol/auth/action`.
 It is one setting for the shared project, so dev resets open on boringtalks.lol too and the page
 sends them back to dev to sign in. Without it the links point at `boringtalks-fe45f.firebaseapp.com`.
-| AI | Vercel AI Gateway (team `jfkz0`) | key `boringtalks-worker-prod` | key `boringtalks-worker-dev` |
-| Email | Resend, domain `send.boringtalks.lol` | | allow-listed recipients only |
-| DNS | Cloudflare zone `boringtalks.lol`, all records DNS-only | | |
+Set it only once production serves `/auth/action` (it ships with the Windows-app PR), or every
+reset link 404s.
+
+**Email deliverability** (what keeps `hello@send.boringtalks.lol` out of spam):
+
+- Resend domain `send.boringtalks.lol` (eu-west-1): DKIM at `resend._domainkey.send`, the bounce
+  domain `send.send.boringtalks.lol` (MX + SPF), open/click tracking **off** (rewritten links hurt
+  deliverability), TLS opportunistic.
+- DMARC on the zone (subdomains inherit it): `v=DMARC1; p=quarantine; sp=quarantine; adkim=r;
+  aspf=r; pct=100; rua=mailto:…@dmarc-reports.cloudflare.net`. Resend's mail passes it (DKIM and
+  SPF align with the From domain); nothing else sends as `boringtalks.lol`. Reports arrive in
+  Cloudflare › Email › DMARC Management; check them before tightening to `p=reject`.
+- Replies: `EMAIL_REPLY_TO` (default `hello@boringtalks.lol`). The sending subdomain receives no
+  mail; Cloudflare Email Routing's catch-all forwards `@boringtalks.lol` to the owner's inbox.
+- Not done: BIMI (needs a VMC certificate for Gmail), a dedicated IP (Resend's shared pool is
+  fine at this volume), Google Postmaster Tools / Microsoft SNDS sign-ups (owner's accounts).
+  Firebase's own emails (password reset) still come from `noreply@boringtalks-fe45f.firebaseapp.com`;
+  Firebase console › Authentication › Templates › **Customize domain** moves them to
+  `boringtalks.lol` (it asks for DNS records to add in Cloudflare).
 
 One R2 bucket holds every environment under its own prefix. An R2 custom domain exposes the whole
 bucket, so a URL-rewrite rule on `download.boringtalks.lol` prepends `/downloads` to every path:
@@ -82,7 +101,7 @@ the public domain can only ever reach the `downloads/` folder, never meeting aud
 **Railway** (per environment, shared variables referenced by both services): `DATABASE_URL`,
 `REDIS_URL` (references to the Postgres/Redis services), `NODE_ENV`, `WEB_URL`, `WEB_ORIGINS`,
 `FIREBASE_PROJECT_ID`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_KEY_PREFIX` (`prod/` / `dev/`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-`DOWNLOADS_BASE_URL`, `AI_GATEWAY_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_ALLOWLIST` (dev),
+`DOWNLOADS_BASE_URL`, `AI_GATEWAY_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, optional `EMAIL_REPLY_TO`, `EMAIL_ALLOWLIST` (dev),
 `SUMMARIZE_CONCURRENCY`, optional `REPORTS_NOTIFY_EMAIL` (where Mac problem reports are announced; unset today). CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
 [apps/api/README.md](../apps/api/README.md#environment).
 

@@ -40,7 +40,7 @@ export class EmailService {
     if (!email) return this.skip(job, 'its subject no longer exists');
     if (!(await this.log.claim(key, user.id, job.type))) return 'duplicate';
     try {
-      await this.sender.send({ from: this.config.env.EMAIL_FROM, to, ...email, idempotencyKey: key });
+      await this.sender.send({ from: this.config.env.EMAIL_FROM, replyTo: this.config.env.EMAIL_REPLY_TO, to, ...email, idempotencyKey: key });
     } catch (err) {
       await this.log.release(key);
       throw err;
