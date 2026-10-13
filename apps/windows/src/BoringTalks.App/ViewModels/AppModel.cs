@@ -11,6 +11,7 @@ using BoringTalks.Core;
 using BoringTalks.Core.Api;
 using BoringTalks.Core.Auth;
 using BoringTalks.Core.Calls;
+using BoringTalks.Core.Updates;
 using BoringTalks.Core.Uploads;
 using BoringTalks.Speech;
 
@@ -65,6 +66,9 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         authenticator = new DeviceAuthenticator(api, new CredentialStore(), $"device-token.{config.ApiUrl.Host}");
         Queue = new UploadQueue(api, new FileUploadStore(folders.UploadQueue), folders.Recordings, Settings.KeepAudioDays, log: Log.For("uploads"));
         Queue.Changed += snapshot => ui.BeginInvoke(() => Receive(snapshot));
+        Updater = new AppUpdater(new VelopackFeed(AppFlavor.Current.UpdateFeed), log: Log.For("updates"));
+        UpdateState = Updater.State;
+        Updater.Changed += state => ui.BeginInvoke(() => UpdateState = state);
 
         Notifier.KeepRecording += () => ui.BeginInvoke(KeepRecording);
         Notifier.RecordCall += () => ui.BeginInvoke(RecordCall);
@@ -86,6 +90,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     public SpeechModels Models { get; }
     public MeetingRecorder Recorder { get; }
     public UploadQueue Queue { get; }
+    public AppUpdater Updater { get; }
     public Notifier Notifier { get; } = new();
 
     [ObservableProperty] public partial Settings Settings { get; private set; }
@@ -104,6 +109,8 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     [ObservableProperty] public partial string? CallOffer { get; private set; }
     /// <summary>The live transcript window is showing.</summary>
     [ObservableProperty] public partial bool LiveWindowVisible { get; set; }
+    /// <summary>Where the self-update stands: checking, downloading, a new build waiting for a restart…</summary>
+    [ObservableProperty] public partial UpdateState UpdateState { get; private set; }
     /// <summary>Optional title for the next meeting.</summary>
     [ObservableProperty] public partial string TitleDraft { get; set; } = "";
 
@@ -111,6 +118,9 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
 
     /// <summary>The menu should open (a notification was clicked, the app was launched again).</summary>
     public event Action? ShowMenuRequested;
+
+    /// <summary>"Restart to update": the app should quit, and the updater starts the new build.</summary>
+    public event Action? RestartToUpdateRequested;
 
     public static string Version => Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "dev";
 
@@ -149,6 +159,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         micMonitor.Changed += () => ui.BeginInvoke(EvaluateCalls);
         micMonitor.Start();
         callTimer.Start();
+        _ = Updater.RunAsync();
     }
 
     private void Receive(UploadSnapshot snapshot)
@@ -488,6 +499,18 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
 
     public void ToggleLiveWindow() => LiveWindowVisible = !LiveWindowVisible;
 
+    // ---- Updates
+
+    public void CheckForUpdates() => _ = Updater.CheckNowAsync();
+
+    /// <summary>A new build is waiting and nothing is being recorded, so restarting loses nothing.</summary>
+    public bool CanRestartToUpdate => UpdateState is UpdateState.Ready && Recorder.Phase == RecorderPhase.Idle;
+
+    public void RestartToUpdate()
+    {
+        if (CanRestartToUpdate) RestartToUpdateRequested?.Invoke();
+    }
+
     public static void Open(Uri url)
     {
         try
@@ -510,6 +533,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     {
         callTimer.Stop();
         refreshTimer.Stop();
+        Updater.Dispose();
         micMonitor.Dispose();
         await Queue.DisposeAsync();
         Notifier.Dispose();

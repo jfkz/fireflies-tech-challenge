@@ -32,7 +32,9 @@ Each deploy run:
    the separate BoringTalks Dev app) builds the
    self-contained app, packs the per-user installer with Velopack and publishes it to R2 with
    `latest-windows.json` (needs the AWS CLI and `.local/secrets/r2`). It isn't code-signed yet
-   (`notarized: false`); setting `SIGN_PARAMS` signs it.
+   (`notarized: false`); setting `SIGN_PARAMS` signs it. The same run publishes the update feed
+   the installed apps check (`downloads/[dev/]updates/windows/`: the full package, then
+   `releases.win.json`). A production release needs a higher `Version` than the live one.
 
 The landing page's download card reads both manifests via `GET /downloads`; links elsewhere
 (README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg

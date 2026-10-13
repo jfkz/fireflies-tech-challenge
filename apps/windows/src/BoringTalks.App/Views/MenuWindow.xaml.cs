@@ -106,6 +106,7 @@ public partial class MenuWindow : Window
     }
 
     private void DismissNotice_Click(object sender, RoutedEventArgs e) => model.App.DismissAutoStopNotice();
+    private void RestartToUpdate_Click(object sender, RoutedEventArgs e) => model.App.RestartToUpdate();
     private void Live_Click(object sender, RoutedEventArgs e) => model.App.ToggleLiveWindow();
 
     // ---- Uploads and meetings

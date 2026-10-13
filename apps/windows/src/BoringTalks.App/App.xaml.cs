@@ -50,6 +50,7 @@ public partial class App : Application
         live = new LiveTranscriptWindow(model);
         model.PropertyChanged += OnModelChanged;
         model.ShowMenuRequested += () => menu.ShowMenu();
+        model.RestartToUpdateRequested += () => Quit(restartForUpdate: true);
 
         AppModel.TryRegister(Registration.RegisterProtocol);
         AppModel.TryRegister(() => Registration.SetOpenAtSignIn(model.Settings.OpenAtSignIn));
@@ -83,6 +84,13 @@ public partial class App : Application
             _ = DebugRecordAsync(seconds);
         }
 #endif
+        if (Array.IndexOf(args, "--show-settings") is var tab and >= 0)
+        {
+            // Settings on a given tab (transcription, recording, calls, account), for screenshots and QA.
+            ShowSettings();
+            if (tab + 1 < args.Length && !args[tab + 1].StartsWith("--", StringComparison.Ordinal)) settings?.ShowTab(args[tab + 1]);
+            return;
+        }
         if (args.Contains("--show-menu"))
         {
             // The menu as an ordinary window that stays open, for screenshots and QA.
@@ -129,12 +137,16 @@ public partial class App : Application
         return window;
     }
 
-    private async void Quit()
+    private void Quit() => Quit(restartForUpdate: false);
+
+    private async void Quit(bool restartForUpdate)
     {
         if (quitting || model is null) return;
         quitting = true;
         // A meeting still recording: keep what was captured so far.
         await model.SaveRecordingOnQuitAsync();
+        // A downloaded update installs once we're gone ("Restart to update" also starts it again).
+        model.Updater.ApplyOnExit(restart: restartForUpdate);
         tray?.Dispose();
         await model.DisposeAsync();
         Log.Flush();

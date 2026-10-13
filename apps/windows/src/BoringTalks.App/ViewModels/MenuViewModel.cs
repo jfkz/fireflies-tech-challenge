@@ -57,6 +57,14 @@ public sealed partial class MenuViewModel : ObservableObject
     // ---- Header
 
     public static string AppName => AppFlavor.Current.Name;
+
+    /// <summary>A new build has downloaded: offer the restart (not while recording).</summary>
+    public string? UpdateBanner => App.UpdateState is Core.Updates.UpdateState.Ready ready
+        ? App.CanRestartToUpdate
+            ? $"{AppName} {ready.Version} is ready."
+            : $"{AppName} {ready.Version} is ready. It installs after this meeting, when you restart or quit."
+        : null;
+    public bool CanRestartToUpdate => App.CanRestartToUpdate;
     public string HeaderCaption => App.Auth == AuthState.SignedIn ? App.Email ?? "Signed in" : "Meetings, written down for you";
     public string? DevHost => App.Config.IsProduction ? null : App.Config.ApiUrl.Host;
 

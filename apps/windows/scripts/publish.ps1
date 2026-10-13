@@ -9,11 +9,15 @@
 #      R2_DOWNLOADS_KEY_PREFIX (default "downloads/": the folder of the shared bucket
 #      that download.boringtalks.lol serves).
 # Writes <key prefix>[prefix]<name>-<version>.exe, …<name>-latest.exe and
-# …latest-windows.json, whose shape is LatestDownload in packages/shared/src/user.ts.
+# …latest-windows.json, whose shape is LatestDownload in packages/shared/src/user.ts. With -Feed
+# (build.ps1's build\Releases\<flavor>), also the update feed the installed apps check:
+# …updates/windows/<package>.nupkg, then …updates/windows/releases.win.json.
 # Uploads with the AWS CLI when it's installed (winget install Amazon.AWSCLI), otherwise with
 # scripts/r2-put.mjs (Node and the API's S3 SDK: pnpm install at the repo root).
 param(
   [Parameter(Mandatory = $true)][string]$Exe,
+  # Velopack's output folder: releases.win.json and the full package.
+  [string]$Feed = '',
   [Parameter(Mandatory = $true)][string]$Version,
   [Parameter(Mandatory = $true)][string]$Build,
   [bool]$Signed = $false,
@@ -56,6 +60,16 @@ function Upload([string]$From, [string]$To, [string]$Type, [int]$MaxAge) {
 Upload $Exe $file 'application/vnd.microsoft.portable-executable' 3600
 Upload $Exe "$Name-latest.exe" 'application/vnd.microsoft.portable-executable' 300
 
+if ($Feed) {
+  $index = Join-Path $Feed 'releases.win.json'
+  if (-not (Test-Path $index)) { throw "no releases.win.json in $Feed" }
+  # The packages first, so the index never names one that isn't there yet.
+  foreach ($package in Get-ChildItem $Feed -Filter '*.nupkg') {
+    Upload $package.FullName "updates/windows/$($package.Name)" 'application/octet-stream' 86400
+  }
+  Upload $index 'updates/windows/releases.win.json' 'application/json' 60
+}
+
 $latest = [ordered]@{
   platform    = 'windows'
   version     = $Version
@@ -75,3 +89,4 @@ finally {
   Remove-Item $json -ErrorAction SilentlyContinue
 }
 Write-Host "published $($latest.url) ($([math]::Round($latest.sizeBytes / 1MB, 1)) MB) and $base/${Prefix}latest-windows.json"
+if ($Feed) { Write-Host "update feed: $base/${Prefix}updates/windows/releases.win.json" }

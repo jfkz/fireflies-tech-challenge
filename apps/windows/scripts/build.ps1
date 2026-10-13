@@ -7,7 +7,8 @@
 #
 # Output:
 #   build\publish\                     the app (self-contained .NET, win-x64)
-#   build\Releases\                    Velopack's packages (full .nupkg, releases.win.json) for updates
+#   build\Releases\<flavor>\           this build's update feed (full .nupkg, releases.win.json), which
+#                                      publish.ps1 uploads to download.boringtalks.lol/[dev/]updates/windows/
 #   build\BoringTalks-Setup.exe        the per-user installer people download (Dev: BoringTalks-Dev-Setup.exe)
 #
 # Signing: unsigned for now. Set SIGN_PARAMS (signtool.exe arguments, e.g. "/a /fd sha256 /tr <url> /td sha256")
@@ -39,15 +40,18 @@ if ($SkipInstaller) { return }
 
 dotnet tool restore
 if ($LASTEXITCODE -ne 0) { throw 'dotnet tool restore failed' }
+# Only this build in the feed: installed apps need just the newest full package.
+$releases = "build\Releases\$Flavor"
+if (Test-Path $releases) { Remove-Item -Recurse -Force $releases }
 $pack = @(
   'pack', '--packId', $packId, '--packVersion', $Version, '--packDir', $publish,
   '--mainExe', 'BoringTalks.exe', '--packTitle', $title, '--packAuthors', 'BoringTalks',
-  '--icon', 'assets\BoringTalks.ico', '--outputDir', "build\Releases\$Flavor", '--delta', 'None'
+  '--icon', 'assets\BoringTalks.ico', '--outputDir', $releases, '--delta', 'None'
 )
 if ($env:SIGN_PARAMS) { $pack += @('--signParams', $env:SIGN_PARAMS) }
 dotnet vpk @pack
 if ($LASTEXITCODE -ne 0) { throw 'vpk pack failed' }
 
-Copy-Item "build\Releases\$Flavor\$packId-win-Setup.exe" "build\$setup.exe" -Force
+Copy-Item "$releases\$packId-win-Setup.exe" "build\$setup.exe" -Force
 $size = (Get-Item "build\$setup.exe").Length
 Write-Host ("build\$setup.exe  {0:N1} MB  {1} {2} ({3})" -f ($size / 1MB), $title, $Version, $Build)

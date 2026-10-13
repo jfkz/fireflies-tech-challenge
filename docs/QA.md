@@ -423,13 +423,26 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 | Settings › **Show recordings in Explorer** | `%APPDATA%\BoringTalks\Recordings\<id>.m4a`, ~43 MB per hour, playable with both sides |
 | Keep recordings "Delete after upload" | The file disappears once the upload finishes |
 
-### 6. Uninstall
+### 6. Settings and updates
+
+| Step | Expected |
+|---|---|
+| Open Settings from the menu | Tabs **Transcription**, **Recording**, **Calls**, **Account** with icons, like the Mac; the window is as tall as the tab; it reopens on the tab last used |
+| Calls › Never for Zoom (from an offer), then Settings › Calls | A “Never asked” group lists Zoom with **Ask again** |
+| Install a dev build, publish a newer one (`release.ps1 dev`), relaunch and wait 30 s (or Account › **Check for updates**) | Account: “Downloading 0.5.0-dev.… 40 %” with a bar, then “… is ready”; the menu says it's ready with **Restart to update** |
+| Start a meeting while an update is ready | The menu says it installs after this meeting; no restart button until the meeting is stopped |
+| **Restart to update** | The app quits, comes back in the tray within a few seconds, and Settings shows the new version; waiting uploads continue |
+| Ready update, then Quit and start the app again | It starts on the new version |
+| Offline, Account › **Check for updates** | “Couldn't check for updates: …”; it tries again at the next check |
+| A build run from `bin\` (not installed) | Account says updates come with the installed app; no checks |
+
+### 7. Uninstall
 
 | Step | Expected |
 |---|---|
 | Settings › Apps › BoringTalks › Uninstall | The app, its shortcuts and `%LOCALAPPDATA%\BoringTalks-Models` are gone; `HKCU\Software\Classes\boringtalks` and the Startup entry are removed; meetings and settings in `%APPDATA%\BoringTalks` stay |
 
-### 7. Command line
+### 8. Command line
 
 ```powershell
 Add-Type -AssemblyName System.Speech   # make a two-voice clip with Windows' voices

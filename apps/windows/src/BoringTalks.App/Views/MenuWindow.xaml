@@ -126,6 +126,15 @@
           </DockPanel>
         </Border>
 
+        <!-- A new build, downloaded -->
+        <Border Style="{StaticResource Notice}" Background="{StaticResource SunSoft}" Visibility="{Binding UpdateBanner, Converter={StaticResource VisibleWhen}}">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Style="{StaticResource Link}" Content="Restart to update" FontSize="12" Margin="8,0,0,0"
+                    Click="RestartToUpdate_Click" Visibility="{Binding CanRestartToUpdate, Converter={StaticResource VisibleWhen}}" />
+            <TextBlock Text="{Binding UpdateBanner}" FontSize="12" TextWrapping="Wrap" />
+          </DockPanel>
+        </Border>
+
         <!-- Speech model -->
         <StackPanel Margin="0,8,0,0" Visibility="{Binding ModelHint, Converter={StaticResource VisibleWhen}}">
           <ProgressBar Height="4" Maximum="1" Value="{Binding ModelFraction, Mode=OneWay, TargetNullValue=0}"

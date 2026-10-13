@@ -697,16 +697,19 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
 
 ### Settings, environments, command line
 
-- **What:** the Mac's settings (language, Bluetooth, upload audio, keep recordings, stop after
-  silence, offer to record, stop when the call ends, ignored apps, account) plus **Open
-  BoringTalks when I sign in to Windows**, saved in `%APPDATA%\BoringTalks\settings.json`, which
+- **What:** the Mac's settings in the same four tabs (**Transcription**: speech model and
+  language; **Recording**: Bluetooth, upload audio, keep recordings, stop after silence;
+  **Calls**: offer to record, stop when the call ends, **Open BoringTalks when I sign in to
+  Windows**, apps never asked about; **Account**: sign-in, API and dashboard, updates, version and
+  Quit). The window is as tall as the open tab (a tab taller than the screen scrolls) and reopens
+  on the tab last used. Saved in `%APPDATA%\BoringTalks\settings.json`, which
   also takes `apiUrl` / `webUrl` (or `--api-url` / `--web-url`). Two builds, as on the Mac:
   **BoringTalks** connects to production; **BoringTalks Dev** (`release.ps1 dev`, download
   `https://download.boringtalks.lol/dev/BoringTalks-Dev-Setup-latest.exe`) to the dev environment.
   They install and run side by side, each with its own name, sign-in link (`boringtalks-dev://`,
   asked for with `&app=dev`), data folder (`%APPDATA%\BoringTalksDev`) and Start menu entry; they
   share the speech models. Command line: `--transcribe`,
-  `--listen-test`, `--mic-users`, `--demo`, `--show-menu`; debug builds add `--debug-sign-in`,
+  `--listen-test`, `--mic-users`, `--demo`, `--show-menu`, `--show-settings [tab]`; debug builds add `--debug-sign-in`,
   `--debug-print-connect-url`, `--debug-sign-out`, `--debug-record <seconds>`.
 - **Where:** `BoringTalks.App/Views/SettingsWindow.xaml`, `BoringTalks.Core/Settings.cs`,
   `BoringTalks.Core/AppFlavor.cs` (chosen at build time, `-p:BoringTalksFlavor=dev`),
@@ -718,8 +721,19 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   `latest-windows.json` on R2 next to the DMGs; the website's `GET /downloads` offers it.
   Uninstalling removes the link handler, the sign-in entry, notifications and the models (kept
   while the other build is still installed).
+- **Updates itself:** the installed app checks its feed
+  (`download.boringtalks.lol/[dev/]updates/windows/releases.win.json`) 30 s after launch and then
+  every 4 hours, and downloads a newer build in the background. The menu then says
+  “BoringTalks 0.5.1 is ready.” with **Restart to update**; Settings › Account shows where it
+  stands (up to date, downloading with a progress bar, ready, or why the check failed) with
+  **Check for updates**. It never restarts by itself and offers no restart while a meeting is
+  recording; a waiting build otherwise installs when the app quits (or Windows signs out), and
+  the restarted app comes back in the tray. Production releases need a higher `Version`
+  (`release.ps1 prod` refuses one that's already out); BoringTalks Dev builds are
+  `<Version>-dev.<build>`, so each is newer.
 - **Where:** `apps/windows/scripts/` (`release.ps1` runs `build.ps1` and `publish.ps1` on a
-  developer's PC; CI runs `test.ps1` and keeps each PR's installer as an artifact).
+  developer's PC; CI runs `test.ps1` and keeps each PR's installer as an artifact);
+  `BoringTalks.Core/Updates/AppUpdater.cs`, `BoringTalks.App/Platform/VelopackFeed.cs`.
 - **Limits:** not code-signed yet: browsers and SmartScreen warn on the first run
   (**More info → Run anyway**), which the landing page explains.
 

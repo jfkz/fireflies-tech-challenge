@@ -70,6 +70,16 @@ registers, for this user only:
 Uninstalling (Settings › Apps) removes both, the notifications, and the models folder.
 Meetings, recordings and settings stay in `%APPDATA%\BoringTalks`.
 
+**Updates.** The installed app checks `https://download.boringtalks.lol/updates/windows/releases.win.json`
+(BoringTalks Dev: `/dev/updates/windows/`) 30 s after launch and every 4 hours, downloads a newer
+full package in the background (Velopack's `UpdateManager`), and installs it after the app exits:
+**Restart to update** in the menu or Settings › Account (not offered while recording), or simply
+the next quit. `publish.ps1 -Feed build\Releases\<flavor>` uploads the package first and then
+`releases.win.json`. Velopack only moves to a higher version: `release.ps1 prod` refuses a
+`Version` that's already live, and dev builds are versioned `<Version>-dev.<build>`. The logic is
+`BoringTalks.Core/Updates/AppUpdater.cs` (tested with a fake feed); the Velopack side is
+`BoringTalks.App/Platform/VelopackFeed.cs`. A build run from `bin\` isn't installed and doesn't update.
+
 ## Permissions
 
 Windows asks nothing up front. Recording "You" needs **Settings › Privacy & security ›

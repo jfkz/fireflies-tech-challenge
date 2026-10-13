@@ -7,11 +7,14 @@ namespace BoringTalks.Core;
 /// The two install side by side: each has its own name, sign-in link scheme, data folder and default
 /// API; they share the speech models. Chosen at build time (<c>-p:BoringTalksFlavor=dev</c>).
 /// </summary>
-public sealed record AppFlavor(string Name, string Scheme, string? ConnectApp, Uri DefaultApi, Uri DefaultWeb)
+/// <param name="UpdateFeed">Where Velopack finds newer builds (<c>releases.win.json</c> and the packages).</param>
+public sealed record AppFlavor(string Name, string Scheme, string? ConnectApp, Uri DefaultApi, Uri DefaultWeb, Uri UpdateFeed)
 {
-    public static AppFlavor Release { get; } = new("BoringTalks", "boringtalks", null, new("https://api.boringtalks.lol"), new("https://boringtalks.lol"));
+    public static AppFlavor Release { get; } = new("BoringTalks", "boringtalks", null, new("https://api.boringtalks.lol"), new("https://boringtalks.lol"),
+        new("https://download.boringtalks.lol/updates/windows/"));
 
-    public static AppFlavor Dev { get; } = new("BoringTalks Dev", "boringtalks-dev", "dev", new("https://api.dev.boringtalks.lol"), new("https://dev.boringtalks.lol"));
+    public static AppFlavor Dev { get; } = new("BoringTalks Dev", "boringtalks-dev", "dev", new("https://api.dev.boringtalks.lol"), new("https://dev.boringtalks.lol"),
+        new("https://download.boringtalks.lol/dev/updates/windows/"));
 
     /// <summary>This process's build: the entry assembly's <c>BoringTalksFlavor</c> metadata.</summary>
     public static AppFlavor Current { get; } = Of(Assembly.GetEntryAssembly());

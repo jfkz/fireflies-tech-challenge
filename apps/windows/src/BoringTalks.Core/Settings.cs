@@ -42,6 +42,9 @@ public sealed record Settings
     /// <summary>Start BoringTalks when you sign in to Windows, so it can offer to record calls.</summary>
     public bool OpenAtSignIn { get; init; } = true;
 
+    /// <summary>The Settings tab last open: transcription, recording, calls or account.</summary>
+    public string SettingsTab { get; init; } = "transcription";
+
     /// <summary>The API to use instead of production (dev and QA).</summary>
     public string? ApiUrl { get; init; }
 
