@@ -33,7 +33,7 @@ jobs:
         with:
           global-json-file: apps/windows/global.json
       - run: scripts/test.ps1
-      - run: scripts/build.ps1 -Version 0.0.0-ci.${{ github.run_number }} -Build ${{ github.run_number }}
+      - run: scripts/build.ps1 -Version 0.0.1-ci.${{ github.run_number }} -Build ${{ github.run_number }}
       - uses: actions/upload-artifact@v7
         with:
           name: BoringTalks-Setup

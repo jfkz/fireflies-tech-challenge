@@ -268,7 +268,8 @@ function HeroDownload() {
     <div className="flex flex-col items-start gap-1.5">
       <a
         href={hero.href}
-        className="btn btn-primary btn-lg"
+        // Narrower between lg and xl, where the text column sits right next to the first head.
+        className="btn btn-primary btn-lg lg:max-xl:px-5 lg:max-xl:py-3 lg:max-xl:text-base"
         data-testid="hero-download"
         {...(hero.direct
           ? { download: true, onClick: () => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' }) }

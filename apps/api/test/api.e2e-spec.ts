@@ -330,7 +330,7 @@ describe('device link', () => {
 
     const devices = await h.http.get('/devices').set(bearer(firebase)).expect(200);
     expect(devices.body).toEqual([expect.objectContaining({ id: tok.body.deviceId, name: "Dev's MacBook", lastSeenAt: expect.any(String) })]);
-    await waitFor(async () => h.mail.sent.find((m) => m.to === 'device@example.com' && m.subject === "New Mac connected: Dev's MacBook"));
+    await waitFor(async () => h.mail.sent.find((m) => m.to === 'device@example.com' && m.subject === "New computer connected: Dev's MacBook"));
 
     // "Report a Problem…" from the Mac: kept with the device, announced to the operator.
     const report = {
