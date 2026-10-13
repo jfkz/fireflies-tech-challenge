@@ -15,10 +15,11 @@ public static class Program
             {
                 Registration.Remove();
                 Notifier.Uninstall();
-                // The speech models live outside the install folder (so updates keep them); they go too.
+                // The speech models live outside the install folder (so updates keep them); they go
+                // too, unless the other build (BoringTalks / BoringTalks Dev) still uses them.
                 try
                 {
-                    Directory.Delete(AppFolders.Standard.Models, recursive: true);
+                    if (!Directory.Exists(AppFolders.For(AppFlavor.Current.Other).Root)) Directory.Delete(AppFolders.Standard.Models, recursive: true);
                 }
                 catch (Exception error) when (error is IOException or UnauthorizedAccessException)
                 {
@@ -37,7 +38,7 @@ public static class Program
         }
 
         Log.Start(AppFolders.Standard.Logs);
-        Log.For("app")($"BoringTalks {ViewModels.AppModel.Version} starting");
+        Log.For("app")($"{AppFlavor.Current.Name} {ViewModels.AppModel.Version} starting");
         var app = new App(args, instance);
         app.InitializeComponent();
         return app.Run();

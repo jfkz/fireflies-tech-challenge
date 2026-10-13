@@ -1,6 +1,7 @@
 <Window x:Class="BoringTalks.App.Views.MenuWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:BoringTalks.App.ViewModels"
         Title="BoringTalks" Width="360" SizeToContent="Height" ResizeMode="NoResize"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" Topmost="True" FontFamily="{StaticResource UiFont}" FontSize="13"
@@ -19,7 +20,7 @@
           <TextBlock Text="{Binding DevHost}" FontFamily="Consolas" FontSize="11" />
         </Border>
         <StackPanel VerticalAlignment="Center">
-          <TextBlock Text="BoringTalks" Style="{StaticResource Heading}" />
+          <TextBlock Text="{x:Static vm:MenuViewModel.AppName}" Style="{StaticResource Heading}" />
           <TextBlock Text="{Binding HeaderCaption}" Style="{StaticResource Caption}" />
         </StackPanel>
       </DockPanel>

@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- The app version; release.ps1 reads it and the installer, latest-windows.json and the About text use it. -->
-    <Version>0.1.0</Version>
+    <Version>0.5.0</Version>
     <Authors>BoringTalks</Authors>
     <Product>BoringTalks</Product>
     <Copyright>BoringTalks</Copyright>

@@ -39,8 +39,8 @@ dotnet test --project tests/BoringTalks.Core.Tests      # unit tests
 | Script | What it does |
 |---|---|
 | `scripts/test.ps1` | unit tests with the coverage gate (BoringTalks.Core ≥ 80 % of lines; `-Threshold`), then a Release build of the app. What CI runs. |
-| `scripts/build.ps1 [-Version 0.1.0] [-Build 42] [-SkipInstaller]` | self-contained Release build in `build\publish`, then Velopack's `vpk pack`: `build\BoringTalks-Setup.exe` (per-user installer, no admin rights) and `build\Releases\` (the update feed). `SIGN_PARAMS` (signtool arguments) signs both. |
-| `scripts/publish.ps1 <exe> <version> <build> [-Signed $true] [-Prefix dev/]` | uploads `BoringTalks-Setup-<version>.exe`, `BoringTalks-Setup-latest.exe` and `latest-windows.json` (shared `LatestDownload` shape, `platform: "windows"`) to R2 with `aws s3 cp --endpoint-url $R2_ENDPOINT`; same env as the Mac's `publish.sh` |
+| `scripts/build.ps1 [-Version 0.5.0] [-Build 42] [-Flavor release\|dev] [-SkipInstaller]` | self-contained Release build in `build\publish`, then Velopack's `vpk pack`: `build\BoringTalks-Setup.exe` (Dev: `BoringTalks-Dev-Setup.exe`; per-user installer, no admin rights) and `build\Releases\<flavor>\` (the update feed). `SIGN_PARAMS` (signtool arguments) signs both. |
+| `scripts/publish.ps1 <exe> <version> <build> [-Signed $true] [-Prefix dev/] [-Name BoringTalks-Dev-Setup]` | uploads `<name>-<version>.exe`, `<name>-latest.exe` and `latest-windows.json` (shared `LatestDownload` shape, `platform: "windows"`) to R2 with `aws s3 cp --endpoint-url $R2_ENDPOINT`; same env as the Mac's `publish.sh` |
 | `scripts/mirror-models.ps1` | copies the speech models (from a PC where the app has downloaded and checked them) to `download.boringtalks.lol/models/`, the first place the app downloads them from. Until then the app falls back to Hugging Face and the sherpa-onnx releases. |
 | `scripts/release.ps1 prod\|dev` | `build.ps1` + `publish.ps1` with the version from `Directory.Build.props`, build number = minutes since 2026-01-01, R2 keys from the repo's gitignored `.local/secrets/r2` |
 
@@ -49,7 +49,7 @@ artifact for a week):
 
 ```powershell
 winget install Amazon.AWSCLI    # once
-scripts/release.ps1 dev         # → download.boringtalks.lol/dev/BoringTalks-Setup-latest.exe
+scripts/release.ps1 dev         # BoringTalks Dev → download.boringtalks.lol/dev/BoringTalks-Dev-Setup-latest.exe
 scripts/release.ps1 prod        # → download.boringtalks.lol/BoringTalks-Setup-latest.exe
 ```
 
@@ -93,8 +93,12 @@ until you sign in again. Computers can be disconnected from the dashboard's Sett
 
 ## Dev vs prod
 
-Production by default: API `https://api.boringtalks.lol`, dashboard `https://boringtalks.lol`.
-`%APPDATA%\BoringTalks\settings.json`:
+BoringTalks talks to production (API `https://api.boringtalks.lol`, dashboard `https://boringtalks.lol`);
+**BoringTalks Dev** (`build.ps1 -Flavor dev`, `release.ps1 dev`) to the dev environment, with its own
+name, `boringtalks-dev://` sign-in link (`&app=dev` on the connect page), `%APPDATA%\BoringTalksDev`
+data folder and Velopack package id `BoringTalksDev` (installed in `%LOCALAPPDATA%\BoringTalksDev`),
+so the two install side by side and share `%LOCALAPPDATA%\BoringTalks-Models` (see
+`BoringTalks.Core/AppFlavor.cs`). Either can be pointed elsewhere in its `settings.json`:
 
 ```json
 { "apiUrl": "https://api.dev.boringtalks.lol", "webUrl": "https://dev.boringtalks.lol" }

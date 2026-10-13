@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using H.NotifyIcon;
 using BoringTalks.App.Recording;
 using BoringTalks.App.ViewModels;
+using BoringTalks.Core;
 
 namespace BoringTalks.App.Views;
 
@@ -40,17 +41,17 @@ public sealed class TrayIcon : IDisposable
             else await app.StartMeetingAsync();
         };
         var menu = new ContextMenu();
-        menu.Items.Add(Item("Open BoringTalks", openMenu));
+        menu.Items.Add(Item($"Open {AppFlavor.Current.Name}", openMenu));
         menu.Items.Add(recordItem);
         menu.Items.Add(Item("Dashboard", app.OpenDashboard));
         menu.Items.Add(Item("Settings…", openSettings));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Quit BoringTalks", quit));
+        menu.Items.Add(Item($"Quit {AppFlavor.Current.Name}", quit));
 
         icon = new TaskbarIcon
         {
             Icon = (Icon)idle.Clone(),
-            ToolTipText = "BoringTalks",
+            ToolTipText = AppFlavor.Current.Name,
             ContextMenu = menu,
             NoLeftClickDelay = true,
         };
@@ -75,18 +76,18 @@ public sealed class TrayIcon : IDisposable
         if (recorder.Phase != RecorderPhase.Idle)
         {
             Show(recording);
-            icon.ToolTipText = recorder.Phase == RecorderPhase.Finishing ? "BoringTalks — finishing the transcript" : "BoringTalks — recording";
+            icon.ToolTipText = recorder.Phase == RecorderPhase.Finishing ? $"{AppFlavor.Current.Name} — finishing the transcript" : $"{AppFlavor.Current.Name} — recording";
         }
         else if (app.CallOffer is { } offer)
         {
             // A call started: visible even with notifications off.
             Show(calling);
-            icon.ToolTipText = $"BoringTalks — {offer} is in a call";
+            icon.ToolTipText = $"{AppFlavor.Current.Name} — {offer} is in a call";
         }
         else
         {
             Show(idle);
-            icon.ToolTipText = app.Uploads.Waiting > 0 ? $"BoringTalks — {app.Uploads.Waiting} uploading" : "BoringTalks";
+            icon.ToolTipText = app.Uploads.Waiting > 0 ? $"{AppFlavor.Current.Name} — {app.Uploads.Waiting} uploading" : AppFlavor.Current.Name;
         }
         recordItem.Header = recorder.IsRecording ? "Stop meeting" : "Start meeting";
         recordItem.IsEnabled = recorder.Phase is RecorderPhase.Idle or RecorderPhase.Recording && app.Auth == AuthState.SignedIn;

@@ -322,8 +322,8 @@ around (“This page left the meeting early.”).
 (the `apps/web` package version and the deployed commit; `dev` locally). The dashboard's footer goes on
 with the API's and the Mac app's versions on the same line, `v0.5.1 · abc1234 · API v0.5.2 · Mac v0.5.0`
 (from `GET /health` and `GET /downloads/latest`, asked once per page load; hovering shows the API's
-commit and the Mac build number; a part that doesn't answer is left out). The web app, the API and the Mac
-app share major.minor (0.4.x); `pnpm check:versions` enforces it in CI. Each deployment serves its
+commit and the Mac build number; a part that doesn't answer is left out). The web app, the API, the Mac app
+and the Windows app share major.minor (0.5.x); `pnpm check:versions` enforces it in CI. Each deployment serves its
 own build at `GET /version.json` (uncached). An open tab checks it every 5 minutes while visible, and
 when it comes back into view (at most once a minute). When a different deployment is live, a dialog
 says “A new version is out” with **Reload now** / **Later**; **Later** leaves a “New version: reload”
@@ -695,17 +695,24 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
 - **What:** the Mac's settings (language, Bluetooth, upload audio, keep recordings, stop after
   silence, offer to record, stop when the call ends, ignored apps, account) plus **Open
   BoringTalks when I sign in to Windows**, saved in `%APPDATA%\BoringTalks\settings.json`, which
-  also takes `apiUrl` / `webUrl` (or `--api-url` / `--web-url`). Command line: `--transcribe`,
+  also takes `apiUrl` / `webUrl` (or `--api-url` / `--web-url`). Two builds, as on the Mac:
+  **BoringTalks** connects to production; **BoringTalks Dev** (`release.ps1 dev`, download
+  `https://download.boringtalks.lol/dev/BoringTalks-Dev-Setup-latest.exe`) to the dev environment.
+  They install and run side by side, each with its own name, sign-in link (`boringtalks-dev://`,
+  asked for with `&app=dev`), data folder (`%APPDATA%\BoringTalksDev`) and Start menu entry; they
+  share the speech models. Command line: `--transcribe`,
   `--listen-test`, `--mic-users`, `--demo`, `--show-menu`; debug builds add `--debug-sign-in`,
   `--debug-print-connect-url`, `--debug-sign-out`, `--debug-record <seconds>`.
 - **Where:** `BoringTalks.App/Views/SettingsWindow.xaml`, `BoringTalks.Core/Settings.cs`,
+  `BoringTalks.Core/AppFlavor.cs` (chosen at build time, `-p:BoringTalksFlavor=dev`),
   `BoringTalks.App/CommandLineTools.cs`.
 
 ### Distribution
 
 - **What:** a self-contained per-user installer (Velopack, no admin rights, ~97 MB) and
   `latest-windows.json` on R2 next to the DMGs; the website's `GET /downloads` offers it.
-  Uninstalling removes the link handler, the sign-in entry, notifications and the models.
+  Uninstalling removes the link handler, the sign-in entry, notifications and the models (kept
+  while the other build is still installed).
 - **Where:** `apps/windows/scripts/` (`release.ps1` runs `build.ps1` and `publish.ps1` on a
   developer's PC; CI runs `test.ps1` and keeps each PR's installer as an artifact).
 - **Limits:** not code-signed yet: browsers and SmartScreen warn on the first run

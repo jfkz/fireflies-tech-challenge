@@ -57,7 +57,7 @@ public sealed class SettingsViewModel : ObservableObject
         [new("Never", 0), .. Settings.SilenceChoices(S.SilenceStopMinutes).Select(m => new Choice(m == 1 ? "1 minute" : $"{m} minutes", m))];
 
     public string DeviceName => AppModel.DeviceName;
-    public string VersionText => $"BoringTalks {AppModel.Version}";
+    public string VersionText => $"{AppFlavor.Current.Name} {AppModel.Version}";
 }
 
 public partial class SettingsWindow : Window

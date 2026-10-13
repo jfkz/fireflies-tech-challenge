@@ -4,23 +4,30 @@ namespace BoringTalks.Core.Auth;
 
 /// <summary>
 /// The browser half of signing a PC in: the page the app opens, and the
-/// <c>boringtalks://callback?code=…</c> link the dashboard sends back.
+/// <c>boringtalks://callback?code=…</c> link the dashboard sends back (BoringTalks Dev:
+/// <c>boringtalks-dev://</c>, asked for with <c>app=dev</c>).
 /// </summary>
 public static class DeviceLink
 {
-    public const string CallbackScheme = "boringtalks";
     public const string CallbackHost = "callback";
 
-    /// <summary><c>https://boringtalks.lol/connect?challenge=&lt;c&gt;&amp;device=&lt;name&gt;</c>.</summary>
-    public static Uri ConnectUrl(Uri webUrl, string challenge, string deviceName) =>
-        new($"{webUrl.ToString().TrimEnd('/')}/connect?challenge={Encode(challenge)}&device={Encode(deviceName)}");
+    /// <summary><c>https://boringtalks.lol/connect?challenge=&lt;c&gt;&amp;device=&lt;name&gt;[&amp;app=dev]</c>.</summary>
+    public static Uri ConnectUrl(Uri webUrl, string challenge, string deviceName, AppFlavor? flavor = null)
+    {
+        var app = (flavor ?? AppFlavor.Current).ConnectApp is { } name ? $"&app={Encode(name)}" : "";
+        return new($"{webUrl.ToString().TrimEnd('/')}/connect?challenge={Encode(challenge)}&device={Encode(deviceName)}{app}");
+    }
+
+    /// <summary>Whether a launch argument is this build's sign-in link.</summary>
+    public static bool IsCallback(string argument, AppFlavor? flavor = null) =>
+        argument.StartsWith($"{(flavor ?? AppFlavor.Current).Scheme}:", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The one-time code from the callback link.</summary>
-    /// <exception cref="CallbackException">Not a callback, sign-in declined, or no code.</exception>
-    public static string CodeFromCallback(string link)
+    /// <exception cref="CallbackException">Not this build's callback, sign-in declined, or no code.</exception>
+    public static string CodeFromCallback(string link, AppFlavor? flavor = null)
     {
         if (!Uri.TryCreate(link.Trim(), UriKind.Absolute, out var url)
-            || !url.Scheme.Equals(CallbackScheme, StringComparison.OrdinalIgnoreCase)
+            || !url.Scheme.Equals((flavor ?? AppFlavor.Current).Scheme, StringComparison.OrdinalIgnoreCase)
             || !url.Host.Equals(CallbackHost, StringComparison.OrdinalIgnoreCase))
         {
             throw new CallbackException(CallbackError.NotACallback);
@@ -32,15 +39,15 @@ public static class DeviceLink
     }
 
     /// <summary>What the user pasted into "Paste code": the bare code, or the whole callback link.</summary>
-    public static string? CodeFromPasted(string text)
+    public static string? CodeFromPasted(string text, AppFlavor? flavor = null)
     {
         var trimmed = text.Trim();
         if (trimmed.Length == 0) return null;
-        if (trimmed.StartsWith($"{CallbackScheme}://", StringComparison.OrdinalIgnoreCase))
+        if (trimmed.Contains("://", StringComparison.Ordinal))
         {
             try
             {
-                return CodeFromCallback(trimmed);
+                return CodeFromCallback(trimmed, flavor);
             }
             catch (CallbackException)
             {

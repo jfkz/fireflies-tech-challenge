@@ -15,6 +15,10 @@
     <!-- WPF code-behind and XAML event handlers. -->
     <NoWarn>$(NoWarn);CA1001;CA1063;CA1816;CA2000;CA1416;CA1508;CA1515;CA1060;CA1401;CA2101;CA5392;SYSLIB1054;SYSLIB1096</NoWarn>
   </PropertyGroup>
+  <ItemGroup Condition="'$(BoringTalksFlavor)' != ''">
+    <!-- -p:BoringTalksFlavor=dev builds BoringTalks Dev (AppFlavor reads this). -->
+    <AssemblyMetadata Include="BoringTalksFlavor" Value="$(BoringTalksFlavor)" />
+  </ItemGroup>
   <ItemGroup>
     <!-- WPF leaves these out of the implicit usings. -->
     <Using Include="System.IO" />

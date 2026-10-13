@@ -1,18 +1,19 @@
 using Microsoft.Win32;
-using BoringTalks.Core.Auth;
+using BoringTalks.Core;
 
 namespace BoringTalks.App.Platform;
 
 /// <summary>
 /// What BoringTalks registers with Windows, all per user (no admin rights): the
-/// <c>boringtalks://</c> link the dashboard sends back after sign-in, and opening at sign-in.
+/// <c>boringtalks://</c> link the dashboard sends back after sign-in (BoringTalks Dev:
+/// <c>boringtalks-dev://</c>), and opening at sign-in.
 /// Written on every launch, so they follow the app when an update moves it.
 /// </summary>
 public static class Registration
 {
-    private const string ProtocolKey = @"Software\Classes\" + DeviceLink.CallbackScheme;
+    private static readonly string ProtocolKey = @"Software\Classes\" + AppFlavor.Current.Scheme;
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string RunValue = "BoringTalks";
+    private static readonly string RunValue = AppFlavor.Current.Id;
 
     public static string Executable => Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "BoringTalks.exe");
 
@@ -20,7 +21,7 @@ public static class Registration
     public static void RegisterProtocol()
     {
         using var key = Registry.CurrentUser.CreateSubKey(ProtocolKey);
-        key.SetValue("", "URL:BoringTalks sign-in");
+        key.SetValue("", $"URL:{AppFlavor.Current.Name} sign-in");
         key.SetValue("URL Protocol", "");
         using var icon = key.CreateSubKey("DefaultIcon");
         icon.SetValue("", $"\"{Executable}\",0");

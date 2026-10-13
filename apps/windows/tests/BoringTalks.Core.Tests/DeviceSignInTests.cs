@@ -94,6 +94,65 @@ public sealed class DeviceLinkTests
         Assert.Null(DeviceLink.CodeFromPasted(new string('x', 600)));
         Assert.Null(DeviceLink.CodeFromPasted("boringtalks://callback?error=denied"));
     }
+
+    [Fact]
+    public void BoringTalks_Dev_asks_for_its_own_scheme_and_only_takes_that()
+    {
+        var dev = AppFlavor.Dev;
+        Assert.Equal("https://dev.boringtalks.lol/connect?challenge=abc&device=PC&app=dev",
+            DeviceLink.ConnectUrl(new Uri("https://dev.boringtalks.lol"), "abc", "PC", dev).AbsoluteUri);
+        Assert.Equal("d1", DeviceLink.CodeFromCallback("boringtalks-dev://callback?code=d1", dev));
+        Assert.Equal("d2", DeviceLink.CodeFromPasted("boringtalks-dev://callback?code=d2", dev));
+        Assert.Null(DeviceLink.CodeFromPasted("boringtalks://callback?code=x", dev));
+        Assert.Equal(CallbackError.NotACallback, Assert.Throws<CallbackException>(() => DeviceLink.CodeFromCallback("boringtalks://callback?code=x", dev)).Error);
+        Assert.Equal(CallbackError.NotACallback, Assert.Throws<CallbackException>(() => DeviceLink.CodeFromCallback("boringtalks-dev://callback?code=x")).Error);
+        Assert.True(DeviceLink.IsCallback("boringtalks-dev://callback?code=x", dev));
+        Assert.False(DeviceLink.IsCallback("boringtalks://callback?code=x", dev));
+        Assert.True(DeviceLink.IsCallback("BoringTalks:callback"));
+        Assert.False(DeviceLink.IsCallback("--background"));
+    }
+}
+
+public sealed class AppFlavorTests
+{
+    [Fact]
+    public void Two_builds_that_install_side_by_side()
+    {
+        Assert.Equal(("BoringTalks", "boringtalks", null), (AppFlavor.Release.Id, AppFlavor.Release.Scheme, AppFlavor.Release.ConnectApp));
+        Assert.Equal(("BoringTalksDev", "boringtalks-dev", "dev"), (AppFlavor.Dev.Id, AppFlavor.Dev.Scheme, AppFlavor.Dev.ConnectApp));
+        Assert.Equal("BoringTalks Dev", AppFlavor.Dev.Name);
+        Assert.Same(AppFlavor.Dev, AppFlavor.Release.Other);
+        Assert.Same(AppFlavor.Release, AppFlavor.Dev.Other);
+        Assert.True(AppFlavor.Dev.IsDev);
+        Assert.False(AppFlavor.Release.IsDev);
+    }
+
+    [Theory]
+    [InlineData("dev", true)]
+    [InlineData(" DEV ", true)]
+    [InlineData("release", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void Named(string? name, bool dev) => Assert.Equal(dev, AppFlavor.Named(name).IsDev);
+
+    [Fact]
+    public void Read_from_the_build()
+    {
+        // The test assembly isn't built with BoringTalksFlavor: the release app.
+        Assert.Same(AppFlavor.Release, AppFlavor.Of(typeof(AppFlavorTests).Assembly));
+        Assert.Same(AppFlavor.Release, AppFlavor.Of(null));
+        Assert.Same(AppFlavor.Release, AppFlavor.Current);
+    }
+
+    [Fact]
+    public void Each_keeps_its_own_data_and_shares_the_models()
+    {
+        var release = AppFolders.For(AppFlavor.Release);
+        var dev = AppFolders.For(AppFlavor.Dev);
+        Assert.EndsWith(@"\BoringTalks", release.Root);
+        Assert.EndsWith(@"\BoringTalksDev", dev.Root);
+        Assert.Equal(release.Models, dev.Models);
+    }
 }
 
 /// <summary>A device-token endpoint that checks the verifier against the challenge it saw.</summary>
@@ -213,5 +272,15 @@ public sealed class AppConfigTests
     {
         var config = AppConfig.Resolve(["x", "--api-url", "not a url", "--web-url", "ftp://x.y", "--api-url"], "javascript:alert(1)", null);
         Assert.Equal(AppConfig.Production, config);
+    }
+
+    [Fact]
+    public void BoringTalks_Dev_defaults_to_the_dev_environment()
+    {
+        var config = AppConfig.Resolve([], null, null, AppFlavor.Dev);
+        Assert.Equal("https://api.dev.boringtalks.lol/", config.ApiUrl.ToString());
+        Assert.Equal("https://dev.boringtalks.lol/", config.WebUrl.ToString());
+        Assert.False(config.IsProduction);
+        Assert.Equal("http://localhost:3001/", AppConfig.Resolve(["--api-url", "http://localhost:3001"], null, null, AppFlavor.Dev).ApiUrl.ToString());
     }
 }

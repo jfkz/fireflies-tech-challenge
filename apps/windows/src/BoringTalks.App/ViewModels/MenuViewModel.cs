@@ -56,6 +56,7 @@ public sealed partial class MenuViewModel : ObservableObject
 
     // ---- Header
 
+    public static string AppName => AppFlavor.Current.Name;
     public string HeaderCaption => App.Auth == AuthState.SignedIn ? App.Email ?? "Signed in" : "Meetings, written down for you";
     public string? DevHost => App.Config.IsProduction ? null : App.Config.ApiUrl.Host;
 

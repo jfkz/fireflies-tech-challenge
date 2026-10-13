@@ -357,9 +357,17 @@ On Windows 10 (2004 or later) or 11. A clean start: uninstall BoringTalks (Setti
 delete `%APPDATA%\BoringTalks` and `%LOCALAPPDATA%\BoringTalks-Models`, and the
 `BoringTalks:device-token.*` entries in Control Panel › Credential Manager › Windows Credentials.
 
-Against dev: put `{ "apiUrl": "https://api.dev.boringtalks.lol", "webUrl": "https://dev.boringtalks.lol" }`
-in `%APPDATA%\BoringTalks\settings.json` (or launch with `--api-url` / `--web-url`). Logs:
-`%APPDATA%\BoringTalks\logs\boringtalks-<date>.log`.
+Against dev: install **BoringTalks Dev** from https://download.boringtalks.lol/dev/BoringTalks-Dev-Setup-latest.exe
+(its data is in `%APPDATA%\BoringTalksDev`; a clean start deletes that instead). Or point the release
+app at dev with `{ "apiUrl": "https://api.dev.boringtalks.lol", "webUrl": "https://dev.boringtalks.lol" }`
+in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
+`%APPDATA%\BoringTalks\logs\boringtalks-<date>.log` (Dev: `%APPDATA%\BoringTalksDev\logs\`).
+
+| Check | Expected |
+|---|---|
+| Install BoringTalks Dev next to BoringTalks | Both run at once, each with its own tray icon; the Dev menu says "BoringTalks Dev" with an `api.dev.boringtalks.lol` badge |
+| BoringTalks Dev: **Sign in with browser** | Opens `dev.boringtalks.lol/connect?…&app=dev`; after approving, the page's button says **Open BoringTalks Dev** and the Dev app (not the release one) signs in |
+| Uninstall one of the two | The other keeps working, and `%LOCALAPPDATA%\BoringTalks-Models` stays |
 
 ### 1. Install, SmartScreen, first launch
 
@@ -489,5 +497,6 @@ deploy, and against production after a merge.
    **Expected:** `401`.
 
 ### 10. Versions
-1. Compare `GET /health` `version`, the web footer and the Mac app's About/menu version.
-   **Expected:** all three share major.minor (0.4.x); `pnpm check:versions` passes.
+1. Compare `GET /health` `version`, the web footer, the Mac app's About/menu version and the Windows
+   app's Settings version.
+   **Expected:** all share major.minor (0.5.x); `pnpm check:versions` passes.

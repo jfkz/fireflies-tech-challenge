@@ -63,7 +63,7 @@ public partial class App : Application
     private void Handle(string[] args, bool launched)
     {
         if (model is null || menu is null) return;
-        if (args.FirstOrDefault(a => a.StartsWith($"{DeviceLink.CallbackScheme}:", StringComparison.OrdinalIgnoreCase)) is { } link)
+        if (args.FirstOrDefault(a => DeviceLink.IsCallback(a)) is { } link)
         {
             model.HandleLink(link);
             return;

@@ -28,7 +28,8 @@ Each deploy run:
 5. **Windows app.** `windows.yml` runs the unit tests (with the Core coverage gate), builds the app
    and the installer on `windows-latest` when `apps/windows/**` (or the shared contract fixtures)
    changes, and keeps each run's unsigned `BoringTalks-Setup.exe` as an artifact for a week.
-   Releases run on a developer's PC: `apps/windows/scripts/release.ps1 prod` (or `dev`) builds the
+   Releases run on a developer's PC: `apps/windows/scripts/release.ps1 prod` (or `dev`, which builds
+   the separate BoringTalks Dev app) builds the
    self-contained app, packs the per-user installer with Velopack and publishes it to R2 with
    `latest-windows.json` (needs the AWS CLI and `.local/secrets/r2`). It isn't code-signed yet
    (`notarized: false`); setting `SIGN_PARAMS` signs it.

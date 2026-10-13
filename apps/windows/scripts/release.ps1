@@ -1,8 +1,8 @@
 # Releases the Windows app from this machine: build, installer, R2 publish.
 # CI only builds and tests (and keeps an unsigned installer of each PR as an artifact).
 #
-#   scripts/release.ps1 prod     # → download.boringtalks.lol/BoringTalks-Setup-latest.exe
-#   scripts/release.ps1 dev      # → download.boringtalks.lol/dev/…
+#   scripts/release.ps1 prod     # BoringTalks → download.boringtalks.lol/BoringTalks-Setup-latest.exe
+#   scripts/release.ps1 dev      # BoringTalks Dev (dev environment) → download.boringtalks.lol/dev/BoringTalks-Dev-Setup-latest.exe
 #
 # Env (defaults point at the gitignored .local/secrets of this repo, as for the Mac release):
 #   R2_SECRETS     file with the R2 access key id and secret, one per line
@@ -18,8 +18,9 @@ if (-not (Test-Path $secrets)) { throw "no R2 secrets at $secrets (the access ke
 $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
 $build = if ($env:BUILD_NUMBER) { $env:BUILD_NUMBER } else { [string][math]::Floor(((Get-Date).ToUniversalTime() - [datetime]'2026-01-01').TotalMinutes) }
 
-& (Join-Path $PSScriptRoot 'build.ps1') -Version $version -Build $build
-Set-Content 'build\BoringTalks.build' $build
+$flavor, $setup = if ($Target -eq 'dev') { 'dev', 'BoringTalks-Dev-Setup' } else { 'release', 'BoringTalks-Setup' }
+& (Join-Path $PSScriptRoot 'build.ps1') -Version $version -Build $build -Flavor $flavor
+Set-Content "build\$setup.build" $build
 
 $keys = Get-Content $secrets
 $env:R2_ACCESS_KEY_ID = $keys[0].Trim()
@@ -28,4 +29,4 @@ $env:R2_ENDPOINT = 'https://924ba8ce0dcdcd4e131bebe3dc05b84c.r2.cloudflarestorag
 $env:R2_DOWNLOADS_BUCKET = 'boringtalks'
 $env:DOWNLOADS_BASE_URL = 'https://download.boringtalks.lol'
 $prefix = if ($Target -eq 'dev') { 'dev/' } else { '' }
-& (Join-Path $PSScriptRoot 'publish.ps1') -Exe 'build\BoringTalks-Setup.exe' -Version $version -Build $build -Signed ([bool]$env:SIGN_PARAMS) -Prefix $prefix
+& (Join-Path $PSScriptRoot 'publish.ps1') -Exe "build\$setup.exe" -Name $setup -Version $version -Build $build -Signed ([bool]$env:SIGN_PARAMS) -Prefix $prefix

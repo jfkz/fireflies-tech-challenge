@@ -1,16 +1,17 @@
 using System.IO.Pipes;
 using System.Text;
+using BoringTalks.Core;
 
 namespace BoringTalks.App.Platform;
 
 /// <summary>
-/// One BoringTalks per user. A second launch (a <c>boringtalks://</c> link from the browser, a
+/// One BoringTalks (and one BoringTalks Dev) per user. A second launch (a <c>boringtalks://</c> link from the browser, a
 /// click on the Start menu shortcut) hands its arguments to the running one over a named pipe
 /// and exits.
 /// </summary>
 public sealed class SingleInstance : IDisposable
 {
-    private static readonly string Name = $"BoringTalks-{Environment.UserName}";
+    private static readonly string Name = $"{AppFlavor.Current.Id}-{Environment.UserName}";
     private readonly Mutex mutex;
     private readonly CancellationTokenSource cancel = new();
 
