@@ -47,6 +47,8 @@ export function authValue(overrides: Partial<AuthContextValue> = {}): AuthContex
     signUp: vi.fn(() => Promise.resolve()),
     signInWithGoogle: vi.fn(() => Promise.resolve()),
     resetPassword: vi.fn(() => Promise.resolve()),
+    checkResetCode: vi.fn(() => Promise.resolve('me@example.com')),
+    confirmReset: vi.fn(() => Promise.resolve()),
     signOut: vi.fn(() => Promise.resolve()),
     ...overrides,
   };

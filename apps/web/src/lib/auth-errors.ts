@@ -26,8 +26,33 @@ export function authErrorMessage(err: unknown): string {
       return 'Could not reach the sign-in service. Check your connection.';
     case 'auth/unauthorized-domain':
       return 'Sign-in is not enabled for this domain yet.';
+    case 'auth/expired-action-code':
+      return 'This link has expired. Ask for a new one.';
+    case 'auth/invalid-action-code':
+      return 'This link was already used, or it’s incomplete. Ask for a new one.';
+    case 'auth/user-disabled':
+      return 'This account is disabled.';
     default:
       return err instanceof Error && err.message ? err.message : 'Something went wrong. Try again.';
+  }
+}
+
+/** Our sites: where a reset link may send the person back to. */
+const OWN_HOSTS = ['boringtalks.lol', 'dev.boringtalks.lol', 'localhost', '127.0.0.1'];
+
+/**
+ * The page a Firebase action link (`continueUrl`) should return to: a URL on one of our own sites
+ * (the reset may have started on dev, while every link opens on boringtalks.lol), else null.
+ */
+export function safeContinue(url: string | null | undefined): URL | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const local = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    if (parsed.protocol !== 'https:' && !(local && parsed.protocol === 'http:')) return null;
+    return OWN_HOSTS.includes(parsed.hostname) && !parsed.username && !parsed.password ? parsed : null;
+  } catch {
+    return null;
   }
 }
 

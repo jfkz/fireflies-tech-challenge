@@ -18,6 +18,10 @@
 #   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH            App Store Connect API key for notarytool
 #   R2_SECRETS                                         file with the R2 access key id and secret, one per line
 #   BUILD_NUMBER                                       default: seconds since 2026-01-01 / 60
+#
+# Every release moves the patch up (scripts/next-version.mjs: one above what's live for that target,
+# or project.yml's MARKETING_VERSION when that's higher) and writes it back to project.yml: commit it.
+# Installers only take a version newer than the one installed. `staple` reuses the version as built.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(cd ../.. && pwd)"
@@ -56,6 +60,16 @@ if [[ "$STAPLE" == 1 ]]; then
 fi
 
 BUILD="${BUILD_NUMBER:-$(( ($(date +%s) - 1767225600) / 60 ))}"
+
+if [[ "${NO_PUBLISH:-0}" != 1 ]]; then
+  NEXT=$(node "$ROOT/scripts/next-version.mjs" "$VERSION" "https://download.boringtalks.lol/${PREFIX}latest.json")
+  if [[ "$NEXT" != "$VERSION" ]]; then
+    sed -i '' "s/^\( *MARKETING_VERSION: *\)\"\{0,1\}$VERSION\"\{0,1\}$/\1\"$NEXT\"/" project.yml
+    grep -q "MARKETING_VERSION: \"$NEXT\"" project.yml || { echo "couldn't set MARKETING_VERSION to $NEXT in project.yml" >&2; exit 1; }
+    echo "version $VERSION -> $NEXT (project.yml; commit it)"
+    VERSION="$NEXT"
+  fi
+fi
 
 # The certificate goes into a throwaway keychain that is on the search list only during the build.
 KEYCHAIN="$(mktemp -d)/release.keychain-db"

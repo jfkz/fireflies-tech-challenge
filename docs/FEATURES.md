@@ -108,6 +108,11 @@ on errors and cheers on success. Firebase error codes become plain sentences.
 sign-up forms. Google sign-in runs through the site's own domain (`/__/auth/*`, proxied to
 Firebase by `next.config.ts`; `ownAuthDomain` in `lib/firebase.ts`), so Google's account picker
 says “to continue to boringtalks.lol” instead of the Firebase project's address.
+The reset email's link opens our own page, `boringtalks.lol/auth/action` (the Firebase project's
+action URL), not Firebase's: it checks the link, shows which account it's for, takes the new
+password, then signs in and opens the meetings. A reset started on dev goes back to dev's
+`/signin` instead (`continueUrl`, our own sites only). A used or expired link says so and offers
+a new one; other Firebase actions (email verification) go on to Firebase's page through `/__/auth/`.
 
 **Where.** `app/(auth)/*`, `components/auth/AuthForm.tsx`, `components/auth/AuthMood.tsx`,
 `components/providers/AuthProvider.tsx`, `lib/firebase.ts`, `lib/auth-errors.ts`.
@@ -728,9 +733,9 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   stands (up to date, downloading with a progress bar, ready, or why the check failed) with
   **Check for updates**. It never restarts by itself and offers no restart while a meeting is
   recording; a waiting build otherwise installs when the app quits (or Windows signs out), and
-  the restarted app comes back in the tray. Production releases need a higher `Version`
-  (`release.ps1 prod` refuses one that's already out); BoringTalks Dev builds are
-  `<Version>-dev.<build>`, so each is newer.
+  the restarted app comes back in the tray. Every release (prod or dev) moves the patch up
+  (`scripts/next-version.mjs`), so each build is newer than the one installed; the Mac's
+  `release.sh` does the same.
 - **Where:** `apps/windows/scripts/` (`release.ps1` runs `build.ps1` and `publish.ps1` on a
   developer's PC; CI runs `test.ps1` and keeps each PR's installer as an artifact);
   `BoringTalks.Core/Updates/AppUpdater.cs`, `BoringTalks.App/Platform/VelopackFeed.cs`.

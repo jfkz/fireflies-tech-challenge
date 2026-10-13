@@ -34,7 +34,13 @@ Each deploy run:
    `latest-windows.json` (needs the AWS CLI and `.local/secrets/r2`). It isn't code-signed yet
    (`notarized: false`); setting `SIGN_PARAMS` signs it. The same run publishes the update feed
    the installed apps check (`downloads/[dev/]updates/windows/`: the full package, then
-   `releases.win.json`). A production release needs a higher `Version` than the live one.
+   `releases.win.json`).
+
+Desktop versions: every `release.sh` / `release.ps1` run (prod or dev) moves the patch up,
+because installers and the Windows updater only take a newer version. `scripts/next-version.mjs`
+picks one patch above the build that's live for that target (`latest.json` / `latest-windows.json`,
+prod or `dev/`), or the repo's version when that's higher already (a new minor), and the script
+writes it back to `project.yml` / `Directory.Build.props`. Commit that change.
 
 The landing page's download card reads both manifests via `GET /downloads`; links elsewhere
 (README, docs, structured data) use the stable https://download.boringtalks.lol/BoringTalks-latest.dmg
@@ -58,6 +64,11 @@ Google sign-in uses the site's own domain as Firebase's auth domain: `next.confi
 `https://boringtalks.lol/__/auth/handler` and `https://dev.boringtalks.lol/__/auth/handler` as
 authorized redirect URIs. A new domain needs its handler added there first, or Google answers
 `redirect_uri_mismatch`.
+
+Firebase's emails (password reset) link to our own page: Firebase console › Authentication ›
+Templates › Password reset › edit › **Customize action URL** = `https://boringtalks.lol/auth/action`.
+It is one setting for the shared project, so dev resets open on boringtalks.lol too and the page
+sends them back to dev to sign in. Without it the links point at `boringtalks-fe45f.firebaseapp.com`.
 | AI | Vercel AI Gateway (team `jfkz0`) | key `boringtalks-worker-prod` | key `boringtalks-worker-dev` |
 | Email | Resend, domain `send.boringtalks.lol` | | allow-listed recipients only |
 | DNS | Cloudflare zone `boringtalks.lol`, all records DNS-only | | |

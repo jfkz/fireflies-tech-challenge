@@ -75,8 +75,9 @@ Meetings, recordings and settings stay in `%APPDATA%\BoringTalks`.
 full package in the background (Velopack's `UpdateManager`), and installs it after the app exits:
 **Restart to update** in the menu or Settings › Account (not offered while recording), or simply
 the next quit. `publish.ps1 -Feed build\Releases\<flavor>` uploads the package first and then
-`releases.win.json`. Velopack only moves to a higher version: `release.ps1 prod` refuses a
-`Version` that's already live, and dev builds are versioned `<Version>-dev.<build>`. The logic is
+`releases.win.json`. Velopack only moves to a higher version, so every `release.ps1` run
+moves the patch up (`scripts/next-version.mjs`: one above what's live for that target) and writes
+it to `Directory.Build.props`, which you then commit. The logic is
 `BoringTalks.Core/Updates/AppUpdater.cs` (tested with a fake feed); the Velopack side is
 `BoringTalks.App/Platform/VelopackFeed.cs`. A build run from `bin\` isn't installed and doesn't update.
 

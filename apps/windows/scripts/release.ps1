@@ -7,11 +7,11 @@
 # Env (defaults point at the gitignored .local/secrets of this repo, as for the Mac release):
 #   R2_SECRETS     file with the R2 access key id and secret, one per line
 #   BUILD_NUMBER   default: minutes since 2026-01-01
-#   FORCE          1: publish to prod even if that version is already out (installed apps then don't update)
-#
-# Installed apps update themselves only to a higher version. Dev builds are "<Version>-dev.<build>",
-# so every one is newer; prod needs Version in Directory.Build.props bumped for each release.
 #   SIGN_PARAMS    signtool.exe arguments; once set, the build is code-signed and published as such
+#
+# Every release moves the patch up (scripts/next-version.mjs: one above what's live for that target,
+# or Directory.Build.props when that's higher) and writes it back to Directory.Build.props: commit it.
+# Installers and the app's updater only take a version newer than the one installed.
 param([Parameter(Mandatory = $true)][ValidateSet('prod', 'dev')][string]$Target)
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
@@ -23,20 +23,14 @@ $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Vers
 $build = if ($env:BUILD_NUMBER) { $env:BUILD_NUMBER } else { [string][math]::Floor(((Get-Date).ToUniversalTime() - [datetime]'2026-01-01').TotalMinutes) }
 
 $flavor, $setup = if ($Target -eq 'dev') { 'dev', 'BoringTalks-Dev-Setup' } else { 'release', 'BoringTalks-Setup' }
-if ($Target -eq 'dev') {
-  $version = "$version-dev.$build"
-}
-else {
-  # The version that's out now; the new one must be higher or nobody gets it.
-  try {
-    $live = (Invoke-RestMethod 'https://download.boringtalks.lol/latest-windows.json' -TimeoutSec 20).version
-  }
-  catch {
-    $live = $null
-  }
-  if ($live -and [version]($live -replace '[-+].*$', '') -ge [version]$version -and $env:FORCE -ne '1') {
-    throw "$version isn't newer than $live, which is out already: bump Version in Directory.Build.props (or FORCE=1)"
-  }
+$prefix = if ($Target -eq 'dev') { 'dev/' } else { '' }
+$next = node (Join-Path $root 'scripts/next-version.mjs') $version "https://download.boringtalks.lol/${prefix}latest-windows.json"
+if ($LASTEXITCODE -ne 0 -or -not $next) { throw 'next-version.mjs failed' }
+if ($next -ne $version) {
+  $props = Get-Content Directory.Build.props -Raw
+  [IO.File]::WriteAllText((Resolve-Path Directory.Build.props), ($props -replace "<Version>$([regex]::Escape($version))</Version>", "<Version>$next</Version>"), (New-Object Text.UTF8Encoding $false))
+  Write-Host "version $version -> $next (Directory.Build.props; commit it)"
+  $version = $next
 }
 & (Join-Path $PSScriptRoot 'build.ps1') -Version $version -Build $build -Flavor $flavor
 Set-Content "build\$setup.build" $build
@@ -47,5 +41,4 @@ $env:R2_SECRET_ACCESS_KEY = $keys[1].Trim()
 $env:R2_ENDPOINT = 'https://924ba8ce0dcdcd4e131bebe3dc05b84c.r2.cloudflarestorage.com'
 $env:R2_DOWNLOADS_BUCKET = 'boringtalks'
 $env:DOWNLOADS_BASE_URL = 'https://download.boringtalks.lol'
-$prefix = if ($Target -eq 'dev') { 'dev/' } else { '' }
 & (Join-Path $PSScriptRoot 'publish.ps1') -Exe "build\$setup.exe" -Feed "build\Releases\$flavor" -Name $setup -Version $version -Build $build -Signed ([bool]$env:SIGN_PARAMS) -Prefix $prefix

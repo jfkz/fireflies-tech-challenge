@@ -19,6 +19,9 @@ export interface AuthContextValue {
   signUp(email: string, password: string): Promise<void>;
   signInWithGoogle(): Promise<void>;
   resetPassword(email: string): Promise<void>;
+  /** The account a reset link (its `oobCode`) is for; throws when the link is used up or expired. */
+  checkResetCode(code: string): Promise<string>;
+  confirmReset(code: string, password: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -92,6 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async resetPassword(email) {
         const [{ sendPasswordResetEmail }, { firebaseAuth }] = await loadAuth();
         await sendPasswordResetEmail(firebaseAuth(), email, { url: `${window.location.origin}/signin` });
+      },
+      async checkResetCode(code) {
+        const [{ verifyPasswordResetCode }, { firebaseAuth }] = await loadAuth();
+        return verifyPasswordResetCode(firebaseAuth(), code);
+      },
+      async confirmReset(code, password) {
+        const [{ confirmPasswordReset }, { firebaseAuth }] = await loadAuth();
+        await confirmPasswordReset(firebaseAuth(), code, password);
       },
       async signOut() {
         const [{ signOut }, { firebaseAuth }] = await loadAuth();

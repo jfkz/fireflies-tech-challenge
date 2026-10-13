@@ -50,7 +50,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 2.6 | Sign out (Settings), sign in at `/signin` with a wrong password. | “Wrong email or password.”, head looks sad. |
 | 2.7 | Sign in with the right password. | Back on `/meetings`. |
 | 2.8 | **Continue with Google**. | Google popup; on success lands on `/meetings`. Closing the popup shows a plain message. |
-| 2.9 | `/signin` → **Forgot it?** → submit your email. | “a reset link is on its way”; the email arrives and its link leads to setting a new password, then back to `/signin`. |
+| 2.9 | `/signin` → **Forgot it?** → submit your email. | “a reset link is on its way”; the email's link starts with `https://boringtalks.lol/auth/action` (not `firebaseapp.com`) and opens “Choose a new password” for your address; **Save password** signs you in and opens the meetings (started on dev: “Sign in with it” goes back to dev). Opening the link again says it was already used. |
 | 2.10 | Signed out, open `/meetings/<any id>` or `/settings`. | Redirected to `/signin?next=…`; after signing in you land on the page you asked for. |
 
 ### 3. Meetings list
@@ -429,7 +429,7 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 |---|---|
 | Open Settings from the menu | Tabs **Transcription**, **Recording**, **Calls**, **Account** with icons, like the Mac; the window is as tall as the tab; it reopens on the tab last used |
 | Calls › Never for Zoom (from an offer), then Settings › Calls | A “Never asked” group lists Zoom with **Ask again** |
-| Install a dev build, publish a newer one (`release.ps1 dev`), relaunch and wait 30 s (or Account › **Check for updates**) | Account: “Downloading 0.5.0-dev.… 40 %” with a bar, then “… is ready”; the menu says it's ready with **Restart to update** |
+| Install a dev build, publish a newer one (`release.ps1 dev`), relaunch and wait 30 s (or Account › **Check for updates**) | Account: “Downloading 0.5.2… 40 %” with a bar, then “… is ready”; the menu says it's ready with **Restart to update** |
 | Start a meeting while an update is ready | The menu says it installs after this meeting; no restart button until the meeting is stopped |
 | **Restart to update** | The app quits, comes back in the tray within a few seconds, and Settings shows the new version; waiting uploads continue |
 | Ready update, then Quit and start the app again | It starts on the new version |
