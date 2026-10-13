@@ -95,6 +95,11 @@ public sealed partial class MenuViewModel : ObservableObject
         ? "Recording. The speech model is still loading — the transcript catches up once it's ready."
         : App.Models.State is ModelState.Loading ? App.ModelSummary : null;
 
+    /// <summary>The download failed: say so, and that it tries again (meanwhile the server transcribes).</summary>
+    public string? ModelFailedText => App.Models.State is ModelState.Failed failed
+        ? $"The speech model couldn't download ({failed.Message}). It tries again by itself; until then, meetings are transcribed online."
+        : null;
+
     public double? ModelFraction => App.Models.State is ModelState.Loading { Fraction: { } f } && !(Recorder.IsRecording && Recorder.WaitingForModel) ? f : null;
 
     public bool ModelIndeterminate => ModelFraction is null;

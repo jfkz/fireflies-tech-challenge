@@ -24,7 +24,7 @@ public static class CommandLineTools
         if (Has("--listen-test"))
         {
             ConsoleOutput.Attach();
-            return ListenTest(double.TryParse(Value("--listen-test"), out var s) ? s : 6);
+            return ListenTest(double.TryParse(Value("--listen-test"), out var s) ? s : 6, Has("--mic"));
         }
         if (Has("--mic-users"))
         {
@@ -40,10 +40,15 @@ public static class CommandLineTools
         return null;
     }
 
-    /// <summary><c>--listen-test [seconds]</c>: how much system audio arrives, at which rate, and how loud.</summary>
-    private static int ListenTest(double seconds)
+    /// <summary>
+    /// <c>--listen-test [seconds] [--mic]</c>: how much system audio (or, with <c>--mic</c>, microphone
+    /// audio) arrives, at which rate, and how loud; the start is timed step by step.
+    /// </summary>
+    private static int ListenTest(double seconds, bool microphone)
     {
-        using var capture = new SystemAudioCapture(ConsoleOutput.Status);
+        using IAudioCapture capture = microphone
+            ? new MicCapture(new JsonSettingsStore(AppFolders.Standard.Settings).Load().AvoidBluetoothMic, ConsoleOutput.Status)
+            : new SystemAudioCapture(ConsoleOutput.Status);
         var gate = new Lock();
         int chunks = 0, rate = 0;
         long frames = 0, converted = 0;
@@ -78,7 +83,7 @@ public static class CommandLineTools
             {
                 seconds,
                 source = capture.DeviceName,
-                allOutputDevices = capture.AllDevices,
+                allOutputDevices = (capture as SystemAudioCapture)?.AllDevices,
                 captureSampleRate = rate,
                 chunks,
                 framesPerSecond = frames / seconds,

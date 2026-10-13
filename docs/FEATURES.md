@@ -636,8 +636,13 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   Start/Stop with the elapsed time, level bars for "You" and "Others", warnings, the stop
   countdown with **Keep recording**, the call offer, the "stopped by itself" notice, model
   progress, the live transcript toggle, upload status with Retry/Discard, the 5 recent meetings,
-  and Dashboard / Settings… / Quit. One instance per user; launching it again opens the menu.
-  Opens at sign-in by default (`--background`, quietly).
+  and Dashboard / Settings… / Quit. One BoringTalks per user, of either build (two would record
+  the same calls): launching it again opens the menu; launching the other build (BoringTalks /
+  BoringTalks Dev) asks to quit the running one first. The app the updater restarts waits for the
+  old one to exit, and quitting always ends the process within 10 s, even with an audio driver
+  stuck. Opens at sign-in by default (`--background`, quietly). Starting a meeting never waits
+  more than 10 s for a side: a microphone that doesn't answer is reported and the meeting records
+  the others (each step of the microphone's start is logged).
 - **Where:** `BoringTalks.App/Views/TrayIcon.cs`, `MenuWindow.xaml`, `ViewModels/MenuViewModel.cs`,
   `ViewModels/AppModel.cs`, `Platform/SingleInstance.cs`, `Platform/Registration.cs`.
 
@@ -683,9 +688,11 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   CPU, with the Mac's phrase logic (previews, pauses, 15 s cap, pitch and voice cuts, turns).
   Voices are TitaNet-small embeddings, recalibrated for that model (same < 0.55, new > 0.70;
   0.9 % of phrases to the wrong speaker in simulated 2–4 person meetings on LibriSpeech).
-  Models (~717 MB) download once, with resume and SHA-256 checks, into `%LOCALAPPDATA%\BoringTalks-Models`;
-  a meeting recorded before they're ready waits (up to 20 min per side), else goes to the
-  server's transcription with its audio.
+  Models (~717 MB) download at the first launch (and whenever files are missing or incomplete),
+  with resume and SHA-256 checks, into `%LOCALAPPDATA%\BoringTalks-Models`; the menu shows the
+  progress. A failed download says so in the menu with **Try again**, and retries by itself when
+  the network comes back and every 5 minutes. A meeting recorded before they're ready waits (up
+  to 20 min per side), else goes to the server's transcription with its audio.
 - **Where:** `BoringTalks.Speech/`, `BoringTalks.Core/Speech/`.
 - **Limits:** the language setting only labels the transcript (Parakeet in sherpa-onnx detects it);
   without a setting, `LanguageGuess` (alphabet, common words) does.

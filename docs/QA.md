@@ -435,6 +435,11 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 | Ready update, then Quit and start the app again | It starts on the new version |
 | Offline, Account › **Check for updates** | “Couldn't check for updates: …”; it tries again at the next check |
 | A build run from `bin\` (not installed) | Account says updates come with the installed app; no checks |
+| After **Restart to update**, Task Manager | One `BoringTalks.exe`, the new version; one tray icon |
+| BoringTalks running, open BoringTalks Dev (or the other way round) | “BoringTalks is running. Only one BoringTalks can record at a time. Quit BoringTalks and open BoringTalks Dev?” **Yes**: the first quits, the second opens; **No**: nothing changes |
+| Open BoringTalks again while it runs | No second copy; the menu opens |
+| Offline at the first launch (models not downloaded) | The menu says the speech model couldn't download, with **Try again**; back online, the download resumes by itself |
+| Start a meeting with a microphone that doesn't answer (e.g. a wireless headset switched off mid-start) | Within 10 s the meeting records the others, and the menu says the microphone didn't answer; the log has `microphone: …` steps |
 
 ### 7. Uninstall
 

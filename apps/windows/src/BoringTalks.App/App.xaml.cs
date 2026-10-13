@@ -69,6 +69,12 @@ public partial class App : Application
             model.HandleLink(link);
             return;
         }
+        if (args.Contains("--quit"))
+        {
+            // The other build is starting and asked this one to make way.
+            Quit();
+            return;
+        }
         if (args.Contains("--demo"))
         {
             // Sample phrases in the live transcript window.
@@ -143,6 +149,14 @@ public partial class App : Application
     {
         if (quitting || model is null) return;
         quitting = true;
+        // Whatever happens below, the process ends: a capture stuck in a driver must not keep it
+        // alive (after "Restart to update" that would be the old build running next to the new one).
+        _ = Task.Delay(TimeSpan.FromSeconds(10)).ContinueWith(_ =>
+        {
+            Log.For("app")("quitting took too long; exiting");
+            Log.Flush();
+            Environment.Exit(0);
+        }, TaskScheduler.Default);
         // A meeting still recording: keep what was captured so far.
         await model.SaveRecordingOnQuitAsync();
         // A downloaded update installs once we're gone ("Restart to update" also starts it again).

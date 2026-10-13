@@ -41,6 +41,9 @@ public sealed partial class MeetingRecorder : ObservableObject
 {
     private readonly SpeechModels models;
     private readonly AppFolders folders;
+    /// <summary>How long a side may take to start before the meeting goes on without it.</summary>
+    public static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(10);
+
     private readonly AudioDevices devices;
     private readonly Dispatcher ui;
     private readonly Action<string> log;
@@ -243,7 +246,18 @@ public sealed partial class MeetingRecorder : ObservableObject
                 ScheduleRestart(kind);
             });
             var clock = Stopwatch.StartNew();
-            await Task.Run(capture.Start);
+            var starting = Task.Run(capture.Start);
+            if (await Task.WhenAny(starting, Task.Delay(StartTimeout)) != starting)
+            {
+                // A driver that never answers mustn't hold the meeting up: record the other side,
+                // and let the stuck capture go whenever it returns.
+                log($"{kind} didn't start in {StartTimeout.TotalSeconds:0} s; recording without it");
+                _ = starting.ContinueWith(_ => capture.Dispose(), TaskScheduler.Default);
+                throw new CaptureException(kind == AudioChannel.Microphone
+                    ? "The microphone didn't answer. Check it's connected and not held by another app, then start again."
+                    : "The PC's sound didn't answer.");
+            }
+            await starting;
             log($"{kind} started in {clock.ElapsedMilliseconds} ms: {capture.DeviceName}");
             captures[kind] = capture;
             if (kind == AudioChannel.Microphone) MicrophoneName = capture.DeviceName;

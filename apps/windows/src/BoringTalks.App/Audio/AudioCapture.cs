@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -75,13 +76,18 @@ public sealed class MicCapture(bool avoidBluetooth, Action<string>? log = null) 
 
     public void Start()
     {
+        // Each step is logged with its time, so a microphone that hangs shows where.
+        var clock = Stopwatch.StartNew();
+        void Step(string what) => log?.Invoke($"microphone: {what} ({clock.ElapsedMilliseconds} ms)");
         try
         {
             enumerator = new MMDeviceEnumerator();
             var device = Pick(enumerator);
             DeviceName = device.FriendlyName;
+            Step($"picked {DeviceName}");
             capture = new WasapiCapture(device, useEventSync: true, audioBufferMillisecondsLength: 100);
             var format = capture.WaveFormat;
+            Step($"format {format.SampleRate} Hz, {format.Channels} ch, {format.BitsPerSample} bit");
             capture.DataAvailable += (_, e) =>
             {
                 if (e.BytesRecorded > 0) Audio?.Invoke(new CapturedAudio(AudioConversion.ToMono(e.Buffer.AsSpan(0, e.BytesRecorded), format), format.SampleRate));
@@ -91,6 +97,7 @@ public sealed class MicCapture(bool avoidBluetooth, Action<string>? log = null) 
                 if (!stopping) Stopped?.Invoke(e.Exception);
             };
             capture.StartRecording();
+            Step("started");
         }
         catch (COMException error) when ((uint)error.HResult == 0x80070005)
         {

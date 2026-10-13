@@ -41,6 +41,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     private readonly CallSignals callSignals = new();
     private readonly DispatcherTimer callTimer;
     private readonly DispatcherTimer refreshTimer;
+    private readonly DispatcherTimer modelRetry;
     private readonly Action<string> log = Log.For("app");
 
     public AppModel(AppConfig config, AppFolders folders, JsonSettingsStore settingsStore, Dispatcher ui)
@@ -52,7 +53,15 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         Settings = settingsStore.Load();
         Devices = new AudioDevices();
         Models = new SpeechModels(new ModelStore(folders.Models, http, Log.For("models")), Log.For("models"));
-        Models.Changed += _ => ui.BeginInvoke(() => OnPropertyChanged(nameof(ModelSummary)));
+        modelRetry = new DispatcherTimer(TimeSpan.FromMinutes(5), DispatcherPriority.Background, (_, _) => RetryModels(), ui);
+        modelRetry.Stop();
+        Models.Changed += state => ui.BeginInvoke(() =>
+        {
+            OnPropertyChanged(nameof(ModelSummary));
+            // A download that failed (offline, a dropped connection) tries again by itself.
+            if (state is ModelState.Failed) modelRetry.Start();
+            else modelRetry.Stop();
+        });
         Recorder = new MeetingRecorder(Models, folders, Devices, ui, Log.For("recorder"));
         Recorder.SilenceWarning += left =>
         {
@@ -151,7 +160,11 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         }
         PruneRecordings();
         Queue.SetOnline(NetworkInterface.GetIsNetworkAvailable());
-        NetworkChange.NetworkAvailabilityChanged += (_, e) => Queue.SetOnline(e.IsAvailable);
+        NetworkChange.NetworkAvailabilityChanged += (_, e) =>
+        {
+            Queue.SetOnline(e.IsAvailable);
+            if (e.IsAvailable) ui.BeginInvoke(RetryModels);
+        };
         NetworkChange.NetworkAddressChanged += (_, _) => Queue.SetOnline(NetworkInterface.GetIsNetworkAvailable());
         // Start downloading the speech model right away; it takes a while the first time.
         _ = Models.PrepareAsync();
@@ -499,6 +512,12 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
 
     public void ToggleLiveWindow() => LiveWindowVisible = !LiveWindowVisible;
 
+    /// <summary>Downloads (or finishes downloading) the speech model again after a failure.</summary>
+    public void RetryModels()
+    {
+        if (Models.State is ModelState.Failed) _ = Models.PrepareAsync();
+    }
+
     // ---- Updates
 
     public void CheckForUpdates() => _ = Updater.CheckNowAsync();
@@ -533,6 +552,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     {
         callTimer.Stop();
         refreshTimer.Stop();
+        modelRetry.Stop();
         Updater.Dispose();
         micMonitor.Dispose();
         await Queue.DisposeAsync();
