@@ -4,15 +4,17 @@ Submission for the "Clone the Fireflies.ai app" technical challenge.
 
 - **Repository:** this repo
 - **Working app:** https://boringtalks.lol (sign up; a demo meeting is waiting) · Mac app:
-  https://download.boringtalks.lol/BoringTalks-latest.dmg (macOS 26, Developer ID signed)
+  https://download.boringtalks.lol/BoringTalks-latest.dmg (macOS 26, Developer ID signed) · Windows app:
+  https://download.boringtalks.lol/BoringTalks-Setup-latest.exe (Windows 10 2004+ / 11, not code-signed yet)
 - **Brief requirements → where they are:**
-  - Meeting recording → Mac menu-bar app (real capture of both sides of any call) and a browser
-    recorder / file upload as a fallback
-  - Transcription → on the Mac (Parakeet, speaker-labelled); MAI-Transcribe 2 (with speakers) on the server for browser audio
+  - Meeting recording → Mac menu-bar app and Windows tray app (real capture of both sides of any
+    call) and a browser recorder / file upload as a fallback
+  - Transcription → on the user's computer (Parakeet, speaker-labelled; Neural Engine on the Mac,
+    sherpa-onnx on the CPU on Windows); MAI-Transcribe 2 (with speakers) on the server for browser audio
   - Summary & action items → server worker with Claude Haiku 4.5: title, description, summary, key
     topics, action items with owners and due dates, decisions, and names for the speakers
   - User interface → Next.js dashboard (meetings with search and filters, tasks, calendar) + Mac
-    app; landing page with cartoon heads
+    and Windows apps; landing page with cartoon heads that offers the visitor's app
 
 ## The idea
 
@@ -55,6 +57,9 @@ server-side speech-to-text. Numbers in [COSTS.md](COSTS.md).
 
 - **Mac app:** menu bar, Start/Stop, live transcript window with cartoon heads, offline-safe upload
   queue that resumes after relaunch, browser sign-in, model download progress, settings.
+- **Windows app:** the same features from the system tray (C#/WPF): process-loopback capture of
+  whatever the PC plays, Parakeet + TitaNet voices through sherpa-onnx, call detection from Windows'
+  microphone privacy records, toasts, a per-user Velopack installer.
 - **Backend:** NestJS API + worker, Postgres, Redis, R2, AI Gateway (Haiku 4.5, MAI-Transcribe 2), Resend
   emails ("your meeting is ready" with the summary and action items), per-user rate limits,
   idempotent creates, full-text search, health checks.
@@ -75,7 +80,8 @@ server-side speech-to-text. Numbers in [COSTS.md](COSTS.md).
 ## Testing
 
 - Unit tests in every package with coverage gates in CI (API ≈ 99 %, web ≈ 95 %, shared ≈ 94 %
-  lines); XCTest for the Mac app's logic (PKCE, upload queue state machine, transcript assembly).
+  lines); XCTest for the Mac app's logic (PKCE, upload queue state machine, transcript assembly);
+  xUnit for the Windows app's Core (the Mac suites ported, plus speech logic; ≈ 97 % lines).
 - API e2e: the real API and worker against Postgres, Redis and MinIO: Mac flow, browser flow,
   device link, isolation between users, idempotency, deletion.
 - Playwright: sign-up through the Firebase Auth emulator, meeting page, Mac connect, upload, settings,

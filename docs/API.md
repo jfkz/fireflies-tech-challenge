@@ -76,14 +76,27 @@ recording ──► summarizing ──► ready ──(reprocess)──► summa
 `200 { "status": "ok", "version": "0.1.0", "commit": "abc123", "checks": { "db": true, "redis": true } }`,
 or `503` with `status: "error"` when Postgres or Redis does not answer.
 
-### `GET /downloads/latest`
-Latest Mac build (`LatestDownload`), read from `<DOWNLOADS_BASE_URL>/latest.json` and cached for 5 minutes.
-`404` until a build has been published.
+### `GET /downloads` → `Downloads`
+The latest build of each desktop app, `null` for one that hasn't shipped. Always `200`. The Mac build
+comes from `<DOWNLOADS_BASE_URL>/latest.json`, the Windows build from `latest-windows.json`; each is
+cached for 5 minutes (30 seconds while missing), and a manifest that doesn't match `LatestDownload`
+or names the other platform counts as missing.
 
 ```json
-{ "version": "1.0.0", "build": "42", "url": "https://download.boringtalks.lol/BoringTalks-1.0.0.dmg",
-  "sizeBytes": 14200000, "minimumOs": "26.0", "notarized": true, "publishedAt": "2026-10-06T10:00:00Z" }
+{
+  "macos": { "platform": "macos", "version": "1.0.0", "build": "42", "url": "https://download.boringtalks.lol/BoringTalks-1.0.0.dmg",
+             "sizeBytes": 14200000, "minimumOs": "26.0", "notarized": true, "publishedAt": "2026-10-06T10:00:00Z" },
+  "windows": { "platform": "windows", "version": "0.1.0", "build": "406080", "url": "https://download.boringtalks.lol/BoringTalks-Setup-0.1.0.exe",
+               "sizeBytes": 91234567, "minimumOs": "10.0.19041", "notarized": false, "publishedAt": "2026-10-12T10:00:00Z" }
+}
 ```
+
+`notarized` means the build opens without an OS warning: notarized by Apple, or code-signed on Windows.
+Manifests published before the Windows app have no `platform`; they read as `macos`.
+
+### `GET /downloads/latest` and `GET /downloads/latest/:platform` → `LatestDownload`
+One platform's build: `/latest` is the Mac (kept from before the Windows app), `:platform` is `macos`
+or `windows`. `404` until that build has been published, and for any other platform.
 
 ## Account
 
@@ -169,7 +182,7 @@ call creates a new meeting.
 curl -XPOST $API/meetings -H "Authorization: Bearer $T" -H 'content-type: application/json' \
   -H 'Idempotency-Key: 7b0e4c1e-3f7a-4d0b-9a59-1f6c2f0a9d11' -d '{"source":"macos"}'
 ```
-`source` is `macos`, `browser` or `upload`. The meeting starts in `recording` with a placeholder
+`source` is `macos`, `windows`, `browser` or `upload`. The meeting starts in `recording` with a placeholder
 title such as `Meeting on Oct 6, 14:05` (UTC) that the summarizer replaces. A title given here (or
 later through `PATCH`) is kept: the summarizer never overwrites a title the user chose.
 

@@ -68,9 +68,9 @@ for (const size of SIZES) {
     await page.getByText('Studio').or(page.getByText('MacBook')).first().waitFor();
     await shot(page, `settings-${size.name}`);
     await page.goto('/connect?challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&device=Mike%E2%80%99s%20MacBook%20Air');
-    await page.getByRole('button', { name: 'Connect this Mac' }).waitFor();
+    await page.getByRole('button', { name: 'Connect this computer' }).waitFor();
     await shot(page, `connect-${size.name}`);
-    await page.getByRole('button', { name: 'Connect this Mac' }).click();
+    await page.getByRole('button', { name: 'Connect this computer' }).click();
     await page.getByTestId('device-code').waitFor();
     await shot(page, `connect-done-${size.name}`);
     await page.goto('/this-does-not-exist');

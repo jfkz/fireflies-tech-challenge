@@ -1,0 +1,255 @@
+<Window x:Class="BoringTalks.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding WindowTitle}" Width="540" SizeToContent="Height" ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen" FontFamily="{StaticResource UiFont}" FontSize="13"
+        Foreground="{StaticResource Ink}" Background="#FAFAFE" Icon="/Assets/BoringTalks.ico">
+  <!-- In tabs, like the Mac's Settings, so the window stays short; a tab taller than the screen scrolls. -->
+  <Window.Resources>
+    <Style x:Key="Group" TargetType="Border">
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#1F292133" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="16,12" />
+      <Setter Property="Margin" Value="0,0,0,14" />
+    </Style>
+    <Style x:Key="Help" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+      <Setter Property="Margin" Value="0,2,0,10" />
+    </Style>
+    <Style x:Key="GroupTitle" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="4,0,0,6" />
+    </Style>
+    <!-- A tab page: as tall as its content, at most as tall as the screen allows (then it scrolls). -->
+    <Style x:Key="Page" TargetType="ScrollViewer">
+      <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+      <Setter Property="MaxHeight" Value="{Binding PageMaxHeight}" />
+      <Setter Property="Padding" Value="20,18,20,6" />
+    </Style>
+    <!-- Icon over the name, centered in a strip at the top, as on the Mac. -->
+    <Style TargetType="TabItem">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="Chip" Margin="2,0" Padding="14,6" CornerRadius="8" Background="Transparent" Cursor="Hand">
+              <StackPanel>
+                <TextBlock x:Name="Glyph" Text="{TemplateBinding Tag}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18"
+                           HorizontalAlignment="Center" Foreground="#6B6680" />
+                <ContentPresenter x:Name="Name" ContentSource="Header" HorizontalAlignment="Center" Margin="0,3,0,0" TextElement.Foreground="#6B6680" />
+              </StackPanel>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Chip" Property="Background" Value="#E8E9FC" />
+                <Setter TargetName="Glyph" Property="Foreground" Value="#3845DB" />
+                <Setter TargetName="Name" Property="TextElement.Foreground" Value="#3845DB" />
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chip" Property="Background" Value="#F0F0FA" />
+              </Trigger>
+              <MultiTrigger>
+                <MultiTrigger.Conditions>
+                  <Condition Property="IsSelected" Value="True" />
+                  <Condition Property="IsMouseOver" Value="True" />
+                </MultiTrigger.Conditions>
+                <Setter TargetName="Chip" Property="Background" Value="#E8E9FC" />
+              </MultiTrigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="TabControl">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabControl">
+            <DockPanel>
+              <Border DockPanel.Dock="Top" Background="White" BorderBrush="#1F292133" BorderThickness="0,0,0,1" Padding="0,8">
+                <TabPanel IsItemsHost="True" HorizontalAlignment="Center" />
+              </Border>
+              <ContentPresenter ContentSource="SelectedContent" />
+            </DockPanel>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <TabControl x:Name="Tabs" SelectedIndex="{Binding TabIndex}">
+
+    <TabItem Header="Transcription" Tag="&#xE8BD;" AutomationProperties.Name="Transcription">
+      <ScrollViewer Style="{StaticResource Page}">
+        <StackPanel>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <TextBlock Text="Transcribe" Margin="0,0,0,6" />
+              <RadioButton Content="On this PC" GroupName="Transcribe" IsChecked="{Binding TranscribeOnPc}" Margin="0,0,0,4" />
+              <RadioButton Content="Online, after the meeting (upload only)" GroupName="Transcribe" IsChecked="{Binding UploadOnly}" />
+              <TextBlock Style="{StaticResource Help}" Margin="0,8,0,0" Text="{Binding TranscribeHelp}" />
+            </StackPanel>
+          </Border>
+
+          <TextBlock Text="Speech model" Style="{StaticResource GroupTitle}" />
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <DockPanel>
+                <TextBlock Text="Status" Width="150" />
+                <TextBlock Text="{Binding ModelStatus}" TextWrapping="Wrap" />
+              </DockPanel>
+              <ProgressBar Height="4" Margin="0,8,0,0" Maximum="1" Value="{Binding ModelFraction, Mode=OneWay, TargetNullValue=0}"
+                           IsIndeterminate="{Binding ModelIndeterminate, Mode=OneWay}"
+                           Visibility="{Binding ModelLoading, Converter={StaticResource VisibleWhen}}" />
+              <Button Content="Try downloading again" HorizontalAlignment="Left" Margin="0,8,0,0" Click="RetryModels_Click"
+                      Visibility="{Binding ModelFailed, Converter={StaticResource VisibleWhen}}" />
+              <DockPanel Margin="0,10,0,0">
+                <TextBlock Text="Language" Width="150" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding Languages}" DisplayMemberPath="Name" SelectedValuePath="Code"
+                          SelectedValue="{Binding Language}" AutomationProperties.Name="Language" />
+              </DockPanel>
+              <TextBlock Style="{StaticResource Help}" Margin="0,8,0,0"
+                         Text="25 European languages. Nothing is sent to a speech service." />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
+
+    <TabItem Header="Recording" Tag="&#xE720;" AutomationProperties.Name="Recording">
+      <ScrollViewer Style="{StaticResource Page}">
+        <StackPanel>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <DockPanel Margin="0,0,0,10">
+                <TextBlock Text="Microphone" Width="150" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding Microphones}" DisplayMemberPath="Name" SelectedValuePath="Id"
+                          SelectedValue="{Binding MicrophoneId}" AutomationProperties.Name="Microphone" />
+              </DockPanel>
+              <CheckBox Content="Keep Bluetooth headsets in high quality" IsChecked="{Binding AvoidBluetoothMic}" />
+              <TextBlock Style="{StaticResource Help}"
+                         Text="With System default: recording with a Bluetooth headset's microphone switches the headset to call quality, so “You” is recorded with the PC's own microphone instead." />
+              <CheckBox Content="Upload meeting audio" IsChecked="{Binding UploadAudio}" IsEnabled="{Binding TranscribeOnPc}" />
+              <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="{Binding UploadAudioHelp}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <DockPanel Margin="0,0,0,10">
+                <TextBlock Text="Keep recordings on this PC" Width="200" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding KeepChoices}" DisplayMemberPath="Name" SelectedValuePath="Value" SelectedValue="{Binding KeepAudioDays}"
+                          AutomationProperties.Name="Keep recordings on this PC" />
+              </DockPanel>
+              <Button Content="Show recordings in Explorer" HorizontalAlignment="Left" Click="ShowRecordings_Click" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <DockPanel>
+                <TextBlock Text="Stop after silence" Width="200" VerticalAlignment="Center" />
+                <ComboBox ItemsSource="{Binding SilenceChoices}" DisplayMemberPath="Name" SelectedValuePath="Value" SelectedValue="{Binding SilenceStopMinutes}"
+                          AutomationProperties.Name="Stop after silence" />
+              </DockPanel>
+              <TextBlock Style="{StaticResource Help}" Margin="0,8,0,0"
+                         Text="A meeting left recording after everyone has gone stops by itself when nobody has spoken for this long, and uploads as usual. A minute before, BoringTalks asks if you're still there." />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
+
+    <TabItem Header="Calls" Tag="&#xE717;" AutomationProperties.Name="Calls">
+      <ScrollViewer Style="{StaticResource Page}">
+        <StackPanel>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <CheckBox Content="Offer to record when a call starts" IsChecked="{Binding OfferToRecordCalls}" />
+              <TextBlock Style="{StaticResource Help}"
+                         Text="When Zoom, Teams, Webex, Slack, Discord or a browser has been using the microphone for a few seconds, BoringTalks asks whether to record. It only sees which app uses the microphone, never what it hears, and never records without asking." />
+              <CheckBox Content="Stop when the call ends" IsChecked="{Binding StopWhenCallEnds}" />
+              <TextBlock Style="{StaticResource Help}"
+                         Text="When the app of the call being recorded stops using the microphone, the recording stops 30 seconds after the others go quiet." />
+              <CheckBox Content="Record when a game starts" IsChecked="{Binding RecordGames}" />
+              <TextBlock Style="{StaticResource Help}"
+                         Text="A game from Steam, Epic, Xbox, GOG, EA, Ubisoft, Riot or Battle.net (or one Windows' Game Bar knows) that runs for 10 seconds starts a recording of the session, voice chat included; closing the game stops it. A notification says so, with a Stop button." />
+              <CheckBox Content="Open BoringTalks when I sign in to Windows" IsChecked="{Binding OpenAtSignIn}" />
+              <TextBlock Style="{StaticResource Help}" Margin="0,2,0,0" Text="It waits in the system tray, so it can offer to record your calls." />
+            </StackPanel>
+          </Border>
+
+          <StackPanel Visibility="{Binding HasIgnoredApps, Converter={StaticResource VisibleWhen}}">
+            <TextBlock Text="Never asked" Style="{StaticResource GroupTitle}" />
+            <Border Style="{StaticResource Group}">
+              <ItemsControl ItemsSource="{Binding IgnoredApps}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <DockPanel Margin="0,3">
+                      <Button DockPanel.Dock="Right" Content="Ask again" Padding="8,3" Tag="{Binding}" Click="AskAgain_Click" />
+                      <TextBlock Text="{Binding}" VerticalAlignment="Center" />
+                    </DockPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
+
+    <TabItem Header="Account" Tag="&#xE77B;" AutomationProperties.Name="Account">
+      <ScrollViewer Style="{StaticResource Page}">
+        <StackPanel>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <StackPanel Visibility="{Binding App.Auth, Converter={StaticResource VisibleWhen}, ConverterParameter=SignedIn}">
+                <DockPanel Margin="0,0,0,4">
+                  <TextBlock Text="Signed in as" Width="150" />
+                  <TextBlock Text="{Binding App.Email, TargetNullValue=—}" />
+                </DockPanel>
+                <DockPanel Margin="0,0,0,8">
+                  <TextBlock Text="This PC" Width="150" />
+                  <TextBlock Text="{Binding DeviceName}" />
+                </DockPanel>
+                <Button Style="{StaticResource DangerButton}" Content="Sign out" HorizontalAlignment="Left" Click="SignOut_Click" />
+              </StackPanel>
+              <Button Style="{StaticResource Primary}" Content="Sign in with browser" HorizontalAlignment="Left" Click="SignIn_Click"
+                      Visibility="{Binding App.Auth, Converter={StaticResource HiddenWhen}, ConverterParameter=SignedIn}" />
+            </StackPanel>
+          </Border>
+
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <DockPanel Margin="0,0,0,2">
+                <TextBlock Text="API" Width="150" />
+                <TextBlock Text="{Binding App.Config.ApiUrl}" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+              </DockPanel>
+              <DockPanel>
+                <TextBlock Text="Dashboard" Width="150" />
+                <TextBlock Text="{Binding App.Config.WebUrl}" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+              </DockPanel>
+            </StackPanel>
+          </Border>
+
+          <TextBlock Text="Updates" Style="{StaticResource GroupTitle}" />
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
+              <TextBlock Text="{Binding UpdateText}" TextWrapping="Wrap" />
+              <ProgressBar Height="4" Margin="0,8,0,0" Maximum="100" Value="{Binding UpdatePercent, Mode=OneWay}"
+                           Visibility="{Binding UpdateDownloading, Converter={StaticResource VisibleWhen}}" />
+              <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <Button Content="Check for updates" Click="CheckUpdates_Click" IsEnabled="{Binding CanCheckForUpdates}"
+                        Visibility="{Binding UpdatesAvailable, Converter={StaticResource VisibleWhen}}" />
+                <Button Style="{StaticResource Primary}" Content="Restart to update" Margin="8,0,0,0" Click="RestartToUpdate_Click"
+                        Visibility="{Binding CanRestartToUpdate, Converter={StaticResource VisibleWhen}}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <DockPanel Margin="4,0,0,14">
+            <Button DockPanel.Dock="Right" Content="{Binding QuitText}" Click="Quit_Click" />
+            <TextBlock Text="{Binding VersionText}" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+          </DockPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
+  </TabControl>
+</Window>

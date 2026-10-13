@@ -19,7 +19,7 @@ test('a signed-out visitor signs in, approves the Mac and is sent to boringtalks
 
   // No app handles boringtalks:// in the test browser, but Chromium still issues (and fails) the request: that's the hand-off.
   const launched = page.waitForRequest((r) => r.url() === 'boringtalks://callback?code=MOCK-CODE-1234', { timeout: 15_000 });
-  await page.getByRole('button', { name: 'Connect this Mac' }).click();
+  await page.getByRole('button', { name: 'Connect this computer' }).click();
 
   await expect(page.getByRole('heading', { name: 'You can go back to the app.' })).toBeVisible();
   await expect(page.getByTestId('open-app')).toHaveAttribute('href', 'boringtalks://callback?code=MOCK-CODE-1234');
@@ -47,4 +47,15 @@ test('a damaged challenge gets a friendly explanation and no API call', async ({
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByRole('heading', { name: 'This connect link doesn’t work' })).toBeVisible();
   expect(api.callsTo('POST', /^\/devices\/authorize$/)).toHaveLength(0);
+});
+
+test('a Windows PC connects the same way', async ({ page, api }) => {
+  await page.goto('/signup?next=' + encodeURIComponent(`/connect?challenge=${CHALLENGE}&device=DESKTOP-4K2Q9`));
+  await page.getByLabel('Email').fill(uniqueEmail('pc'));
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('heading', { name: 'Connect DESKTOP-4K2Q9 to your BoringTalks account?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Connect this computer' }).click();
+  await expect(page.getByRole('heading', { name: 'You can go back to the app.' })).toBeVisible();
+  expect(api.callsTo('POST', /^\/devices\/authorize$/)[0].body).toEqual({ codeChallenge: CHALLENGE, deviceName: 'DESKTOP-4K2Q9' });
 });

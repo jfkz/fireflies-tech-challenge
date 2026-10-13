@@ -2,6 +2,7 @@ import type { Page, Route } from '@playwright/test';
 import {
   AuthorizeDeviceRequest,
   CreateMeetingRequest,
+  Downloads,
   MeetingDetail,
   UpdateMeetingRequest,
   UpdateSettingsRequest,
@@ -27,7 +28,10 @@ export interface MockApi {
   me: Me;
   meetings: MeetingDetail[];
   devices: Device[];
+  /** The Mac build (`latest.json`). */
   latest: LatestDownload | null;
+  /** The Windows build (`latest-windows.json`). */
+  windows: LatestDownload | null;
   calls: Call[];
   uploads: { url: string; contentType: string | undefined; size: number }[];
   /** Status a processing meeting moves to on each GET, so polling can be observed. */
@@ -61,7 +65,7 @@ function error(route: Route, status: number, message: string) {
  */
 export async function mockApi(
   page: Page,
-  init: { meetings?: MeetingDetail[]; devices?: Device[]; latest?: LatestDownload | null; me?: Partial<Me>; demoOnFirstMe?: boolean } = {},
+  init: { meetings?: MeetingDetail[]; devices?: Device[]; latest?: LatestDownload | null; windows?: LatestDownload | null; me?: Partial<Me>; demoOnFirstMe?: boolean } = {},
 ): Promise<MockApi> {
   let created = false;
   const state: MockApi = {
@@ -69,6 +73,7 @@ export async function mockApi(
     meetings: init.meetings ?? [],
     devices: init.devices ?? [device()],
     latest: init.latest === undefined ? null : init.latest,
+    windows: init.windows ?? null,
     calls: [],
     uploads: [],
     progression: ['transcribing', 'summarizing', 'ready'],
@@ -93,6 +98,9 @@ export async function mockApi(
     const headers = await req.allHeaders();
     state.calls.push({ method, path, query: Object.fromEntries(url.searchParams), body, headers });
 
+    if (path === '/downloads' && method === 'GET') {
+      return json(route, 200, Downloads.parse({ macos: state.latest, windows: state.windows }));
+    }
     if (path === '/downloads/latest' && method === 'GET') {
       return state.latest ? json(route, 200, state.latest) : error(route, 404, 'No build published yet');
     }

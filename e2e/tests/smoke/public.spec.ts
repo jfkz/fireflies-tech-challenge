@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { LatestDownload } from '@boringtalks/shared';
+import { Downloads, LatestDownload } from '@boringtalks/shared';
 
 /** Read-only checks of a deployed environment: BASE_URL (web) and API_URL (api). */
 const API_URL = (process.env.API_URL ?? 'https://api.dev.boringtalks.lol').replace(/\/+$/, '');
@@ -33,6 +33,14 @@ test('latest download is a DMG or not published yet', async ({ request }) => {
     const latest = LatestDownload.parse(await res.json());
     expect(latest.url).toMatch(/\.dmg$/);
   }
+});
+
+test('downloads lists each platform with the right installer', async ({ request }) => {
+  const res = await request.get(`${API_URL}/downloads`);
+  expect(res.status()).toBe(200);
+  const { macos, windows } = Downloads.parse(await res.json());
+  if (macos) expect(macos.url).toMatch(/\.dmg$/);
+  if (windows) expect(windows.url).toMatch(/\.exe$/);
 });
 
 test('web reports the deployed build', async ({ request }) => {

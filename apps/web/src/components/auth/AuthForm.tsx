@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { authErrorMessage, safeNext } from '@/lib/auth-errors';
+import { authErrorMessage, safeContinue, safeNext } from '@/lib/auth-errors';
 import { useAuthMood } from './AuthMood';
 
 type Mode = 'signin' | 'signup';
@@ -206,6 +206,166 @@ export function ResetForm() {
           Back to sign in
         </Link>
       </p>
+    </div>
+  );
+}
+
+/**
+ * Where Firebase's email links land (the project's action URL is https://boringtalks.lol/auth/action).
+ * A password reset gets our own page; anything else (verifying or recovering an email) goes on to
+ * Firebase's handler, which `/__/auth/*` serves from our domain too.
+ */
+export function AuthAction() {
+  const params = useSearchParams();
+  const mode = params.get('mode');
+  const code = params.get('oobCode');
+  const firebaseHandler = mode && mode !== 'resetPassword' && code ? `/__/auth/action?${params.toString()}` : null;
+
+  useEffect(() => {
+    if (firebaseHandler) window.location.replace(firebaseHandler);
+  }, [firebaseHandler]);
+
+  if (firebaseHandler) return <p className="font-semibold text-ink-soft">One moment…</p>;
+  if (mode !== 'resetPassword' || !code) {
+    return (
+      <div>
+        <h1 className="font-display text-4xl leading-none sm:text-5xl">That link is incomplete</h1>
+        <p role="alert" className="mt-4 font-semibold text-ink-soft">
+          Open it straight from the email, or ask for a new one.
+        </p>
+        <Link href="/reset" className="btn btn-primary btn-lg mt-6 w-full">
+          Reset your password
+        </Link>
+      </div>
+    );
+  }
+  return <NewPasswordForm code={code} continueUrl={safeContinue(params.get('continueUrl'))} />;
+}
+
+type NewPasswordState =
+  | { kind: 'checking' }
+  | { kind: 'ready'; email: string }
+  | { kind: 'busy'; email: string }
+  | { kind: 'error'; email: string; message: string }
+  | { kind: 'done'; email: string }
+  | { kind: 'broken'; message: string };
+
+/**
+ * The page a password-reset email links to (`/auth/action?mode=resetPassword&oobCode=…`), on our
+ * own domain instead of Firebase's. Same site: signs in with the new password and opens the
+ * meetings. Started on another of our sites (dev): goes back there to sign in.
+ */
+export function NewPasswordForm({ code, continueUrl }: { code: string; continueUrl: URL | null }) {
+  const auth = useAuth();
+  const router = useRouter();
+  const { poke } = useAuthMood();
+  const [state, setState] = useState<NewPasswordState>({ kind: 'checking' });
+  const [password, setPassword] = useState('');
+  const id = useId();
+  const elsewhere = continueUrl && typeof window !== 'undefined' && continueUrl.origin !== window.location.origin ? continueUrl : null;
+
+  useEffect(() => {
+    let live = true;
+    auth.checkResetCode(code).then(
+      (email) => live && setState({ kind: 'ready', email }),
+      (err) => live && setState({ kind: 'broken', message: authErrorMessage(err) }),
+    );
+    return () => {
+      live = false;
+    };
+    // Checked once per link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (state.kind !== 'ready' && state.kind !== 'error') return;
+    const { email } = state;
+    setState({ kind: 'busy', email });
+    try {
+      await auth.confirmReset(code, password);
+    } catch (err) {
+      setState({ kind: 'error', email, message: authErrorMessage(err) });
+      poke('oops');
+      return;
+    }
+    poke('yay');
+    setState({ kind: 'done', email });
+    if (elsewhere) return;
+    // The password is saved; signing in is a convenience, and the sign-in page is the fallback.
+    await auth.signIn(email, password).then(
+      () => router.replace('/meetings'),
+      () => router.replace(`/signin`),
+    );
+  }
+
+  const resetAgain = (
+    <Link href="/reset" className="btn btn-primary btn-lg mt-6 w-full">
+      Send a new link
+    </Link>
+  );
+
+  return (
+    <div>
+      <h1 className="font-display text-4xl leading-none sm:text-5xl">Choose a new password</h1>
+      {state.kind === 'checking' && (
+        <p className="mt-3 font-semibold text-ink-soft" aria-busy="true">
+          Checking the link…
+        </p>
+      )}
+      {state.kind === 'broken' && (
+        <>
+          <p role="alert" className="mt-6 rounded-xl bg-danger-soft px-3 py-2 font-bold text-danger">
+            {state.message}
+          </p>
+          {resetAgain}
+        </>
+      )}
+      {state.kind === 'done' && (
+        <div role="status" className="mt-7 rounded-2xl border-2 border-ink bg-mint-soft p-4 font-bold">
+          Your password is changed.{' '}
+          {elsewhere ? (
+            <a href={elsewhere.href} className="font-extrabold text-call-deep underline underline-offset-2">
+              Sign in with it
+            </a>
+          ) : (
+            'Signing you in…'
+          )}
+        </div>
+      )}
+      {(state.kind === 'ready' || state.kind === 'busy' || state.kind === 'error') && (
+        <form onSubmit={onSubmit} className="mt-7">
+          <p className="mb-5 font-semibold text-ink-soft">
+            For <strong className="text-ink">{state.email}</strong>.
+          </p>
+          <label htmlFor={id} className="label">
+            New password
+          </label>
+          <input
+            id={id}
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={6}
+            className="field"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              poke('shy');
+            }}
+            onFocus={() => poke('shy')}
+          />
+          <p className="mt-1.5 text-sm font-semibold text-ink-soft">At least 6 characters.</p>
+          {state.kind === 'error' && (
+            <p role="alert" className="mt-4 rounded-xl bg-danger-soft px-3 py-2 font-bold text-danger">
+              {state.message}
+            </p>
+          )}
+          <button type="submit" className="btn btn-primary btn-lg mt-6 w-full" disabled={state.kind === 'busy'}>
+            {state.kind === 'busy' ? 'Saving…' : 'Save password'}
+          </button>
+        </form>
+      )}
     </div>
   );
 }

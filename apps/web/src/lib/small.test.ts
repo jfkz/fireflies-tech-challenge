@@ -26,7 +26,7 @@ describe('connect params', () => {
     expect(declinedCallbackUrl()).toBe('boringtalks://callback?error=access_denied');
   });
   it('defaults the device name and caps its length', () => {
-    expect(parseConnectParams(params(`challenge=${CHALLENGE}`))).toMatchObject({ deviceName: 'your Mac' });
+    expect(parseConnectParams(params(`challenge=${CHALLENGE}`))).toMatchObject({ deviceName: 'your computer' });
     const long = parseConnectParams(params(`challenge=${CHALLENGE}&device=${'x'.repeat(200)}`));
     expect(long.ok && long.deviceName.length).toBe(80);
   });

@@ -7,8 +7,8 @@ export type ConnectParams =
 const challengeSchema = AuthorizeDeviceRequest.shape.codeChallenge;
 
 /**
- * Reads `/connect?challenge=…&device=…[&app=dev]` as opened by the Mac app. The challenge
- * must be a PKCE value; the device name is cleaned up and defaults to "your Mac"; `app=dev`
+ * Reads `/connect?challenge=…&device=…[&app=dev]` as opened by the desktop app. The challenge
+ * must be a PKCE value; the device name is cleaned up and defaults to "your computer"; `app=dev`
  * is BoringTalks Dev, anything else the release app.
  */
 export function parseConnectParams(params: { get(name: string): string | null }): ConnectParams {
@@ -16,7 +16,7 @@ export function parseConnectParams(params: { get(name: string): string | null })
   if (!challenge) return { ok: false, reason: 'missing' };
   if (!challengeSchema.safeParse(challenge).success) return { ok: false, reason: 'invalid' };
   const raw = (params.get('device') ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
-  const deviceName = raw ? raw.slice(0, 80) : 'your Mac';
+  const deviceName = raw ? raw.slice(0, 80) : 'your computer';
   const app: DeviceApp = params.get('app') === 'dev' ? 'dev' : 'release';
   return { ok: true, challenge, deviceName, app };
 }

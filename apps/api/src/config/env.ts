@@ -59,6 +59,8 @@ export const EnvSchema = z
 
     RESEND_API_KEY: z.string().optional(),
     EMAIL_FROM: z.string().default('BoringTalks <hello@send.boringtalks.lol>'),
+    /** Where replies go: an address that receives mail (Cloudflare Email Routing) — the sending subdomain doesn't. */
+    EMAIL_REPLY_TO: z.string().default('BoringTalks <hello@boringtalks.lol>'),
     EMAIL_ALLOWLIST: csv,
     /** Where problem reports from the Mac app are announced; empty sends nothing (they are still kept). */
     REPORTS_NOTIFY_EMAIL: z.string().email().optional().or(z.literal('').transform(() => undefined)),

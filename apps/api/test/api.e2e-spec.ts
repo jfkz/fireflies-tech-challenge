@@ -54,6 +54,14 @@ describe('public endpoints', () => {
 
   it('answers 404 for downloads before a build exists', async () => {
     await h.http.get('/downloads/latest').expect(404);
+    await h.http.get('/downloads/latest/windows').expect(404);
+    await h.http.get('/downloads/latest/linux').expect(404);
+  });
+
+  it('lists every platform, with null where no build exists', async () => {
+    const res = await h.http.get('/downloads').expect(200);
+    expect(res.body).toEqual({ macos: null, windows: null });
+    expect(res.headers['cache-control']).toBe('public, max-age=300');
   });
 
   it('requires a token everywhere else', async () => {
@@ -322,7 +330,7 @@ describe('device link', () => {
 
     const devices = await h.http.get('/devices').set(bearer(firebase)).expect(200);
     expect(devices.body).toEqual([expect.objectContaining({ id: tok.body.deviceId, name: "Dev's MacBook", lastSeenAt: expect.any(String) })]);
-    await waitFor(async () => h.mail.sent.find((m) => m.to === 'device@example.com' && m.subject === "New Mac connected: Dev's MacBook"));
+    await waitFor(async () => h.mail.sent.find((m) => m.to === 'device@example.com' && m.subject === "New computer connected: Dev's MacBook"));
 
     // "Report a Problem…" from the Mac: kept with the device, announced to the operator.
     const report = {

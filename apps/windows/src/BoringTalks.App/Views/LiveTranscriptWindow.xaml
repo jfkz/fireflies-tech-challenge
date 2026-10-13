@@ -1,0 +1,44 @@
+<Window x:Class="BoringTalks.App.Views.LiveTranscriptWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="clr-namespace:BoringTalks.App.Views"
+        Title="BoringTalks — live transcript" Width="420" Height="520" MinWidth="320" MinHeight="300"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" WindowStyle="ToolWindow"
+        FontFamily="{StaticResource UiFont}" FontSize="13" Foreground="{StaticResource Ink}" Background="White">
+  <DockPanel>
+    <!-- The two sides of the call, as cartoon heads that talk when they're heard. -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource Paper}" Padding="12,8">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition />
+          <ColumnDefinition />
+        </Grid.ColumnDefinitions>
+        <StackPanel HorizontalAlignment="Center">
+          <v:AvatarView x:Name="YouHead" Width="96" Height="96" />
+          <TextBlock Text="You" HorizontalAlignment="Center" FontWeight="SemiBold" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+          <v:AvatarView x:Name="OthersHead" Width="96" Height="96" />
+          <TextBlock Text="Others" HorizontalAlignment="Center" FontWeight="SemiBold" />
+        </StackPanel>
+      </Grid>
+    </Border>
+    <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" Padding="12,8">
+      <StackPanel>
+        <TextBlock x:Name="Empty" Text="Words show up here as people speak." Style="{StaticResource Caption}" Margin="0,8" />
+        <ItemsControl x:Name="Lines">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Margin="0,0,0,8" Opacity="{Binding Opacity}">
+                <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{Binding SpeakerBrush}">
+                  <Run Text="{Binding Speaker, Mode=OneWay}" /><Run Text=" · " Foreground="{StaticResource InkSoft}" /><Run Text="{Binding Time, Mode=OneWay}" Foreground="{StaticResource InkSoft}" />
+                </TextBlock>
+                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

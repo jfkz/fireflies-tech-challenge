@@ -1,0 +1,6 @@
+{
+  "url": "https://storage.example.com/boringtalks-dev/users/u1/meetings/m1/audio.m4a?X-Amz-Signature=abc",
+  "key": "users/u1/meetings/m1/audio.m4a",
+  "headers": { "Content-Type": "audio/mp4" },
+  "expiresInSec": 900
+}

@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
 /** Where a meeting came from. */
-export const MeetingSource = z.enum(['macos', 'browser', 'upload', 'demo']);
+export const MeetingSource = z.enum(['macos', 'windows', 'browser', 'upload', 'demo']);
 export type MeetingSource = z.infer<typeof MeetingSource>;
 
 /**
- * Lifecycle of a meeting. A Mac recording arrives with its transcript and goes
+ * Lifecycle of a meeting. A desktop recording arrives with its transcript and goes
  * straight to `summarizing`; browser recordings and uploads go through
  * `transcribing` on the server first.
  */

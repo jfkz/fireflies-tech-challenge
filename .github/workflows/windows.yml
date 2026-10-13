@@ -1,0 +1,41 @@
+name: Windows app
+
+# Every PR and push touching the app (or the shared contract fixtures it reads): unit tests
+# with the Core coverage gate, a Release build, and the unsigned installer as an artifact
+# for testers. Releases (publishing the installer to R2) run on a developer's PC with
+# apps/windows/scripts/release.ps1.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths: [apps/windows/**, packages/shared/fixtures/**, .github/workflows/windows.yml]
+  push:
+    branches: [main]
+    paths: [apps/windows/**, packages/shared/fixtures/**, .github/workflows/windows.yml]
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: apps/windows
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: apps/windows/global.json
+      - run: scripts/test.ps1
+      - run: scripts/build.ps1 -Version 0.0.1-ci.${{ github.run_number }} -Build ${{ github.run_number }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: BoringTalks-Setup
+          path: apps/windows/build/BoringTalks-Setup.exe
+          retention-days: 7

@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { authValue, renderWithProviders } from '@/test/utils';
-import { AuthForm, ResetForm } from './AuthForm';
+import { safeContinue } from '@/lib/auth-errors';
+import { AuthAction, AuthForm, ResetForm } from './AuthForm';
 import { AuthMoodProvider, DOZE_AFTER_MS, SleepyHead } from './AuthMood';
 
 const nav = vi.hoisted(() => ({ router: { push: vi.fn(), replace: vi.fn() }, search: new URLSearchParams() }));
@@ -91,6 +92,94 @@ describe('ResetForm', () => {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'nope' } });
     fireEvent.submit(screen.getByRole('button', { name: 'Send reset link' }).closest('form')!);
     expect(await screen.findByRole('alert')).toHaveTextContent('doesn’t look right');
+  });
+});
+
+describe('AuthAction (the page Firebase’s reset emails link to)', () => {
+  const reset = (extra: Record<string, string> = {}) => new URLSearchParams({ mode: 'resetPassword', oobCode: 'CODE', ...extra });
+
+  it('sets the new password, then signs in and opens the meetings', async () => {
+    nav.search = reset({ continueUrl: `${window.location.origin}/signin` });
+    const auth = authValue({ user: null });
+    renderForm(<AuthAction />, auth);
+    expect(await screen.findByText('me@example.com')).toBeInTheDocument();
+    expect(auth.checkResetCode).toHaveBeenCalledWith('CODE');
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'better1' } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Save password' }).closest('form')!);
+    expect(await screen.findByRole('status')).toHaveTextContent('Your password is changed. Signing you in…');
+    expect(auth.confirmReset).toHaveBeenCalledWith('CODE', 'better1');
+    await waitFor(() => expect(nav.router.replace).toHaveBeenCalledWith('/meetings'));
+    expect(auth.signIn).toHaveBeenCalledWith('me@example.com', 'better1');
+  });
+
+  it('started on the dev site: goes back there to sign in', async () => {
+    nav.search = reset({ continueUrl: 'https://dev.boringtalks.lol/signin' });
+    const auth = authValue({ user: null });
+    renderForm(<AuthAction />, auth);
+    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'better1' } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Save password' }).closest('form')!);
+    expect(await screen.findByRole('link', { name: 'Sign in with it' })).toHaveAttribute('href', 'https://dev.boringtalks.lol/signin');
+    expect(auth.signIn).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the sign-in page when signing in afterwards fails', async () => {
+    nav.search = reset();
+    const auth = authValue({ user: null, signIn: vi.fn(async () => Promise.reject({ code: 'auth/network-request-failed' })) });
+    renderForm(<AuthAction />, auth);
+    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'better1' } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Save password' }).closest('form')!);
+    await waitFor(() => expect(nav.router.replace).toHaveBeenCalledWith('/signin'));
+  });
+
+  it('says when the link is used up, and offers a new one', async () => {
+    nav.search = reset();
+    renderForm(<AuthAction />, authValue({ user: null, checkResetCode: vi.fn(async () => Promise.reject({ code: 'auth/invalid-action-code' })) }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('already used');
+    expect(screen.getByRole('link', { name: 'Send a new link' })).toHaveAttribute('href', '/reset');
+  });
+
+  it('shows why saving failed and lets you try again', async () => {
+    nav.search = reset();
+    const auth = authValue({ user: null, confirmReset: vi.fn(async () => Promise.reject({ code: 'auth/weak-password' })) });
+    renderForm(<AuthAction />, auth);
+    fireEvent.change(await screen.findByLabelText('New password'), { target: { value: 'abcdef' } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Save password' }).closest('form')!);
+    expect(await screen.findByRole('alert')).toHaveTextContent('at least 6 characters');
+    expect(screen.getByRole('button', { name: 'Save password' })).toBeEnabled();
+  });
+
+  it('explains an incomplete link', () => {
+    nav.search = new URLSearchParams({ mode: 'resetPassword' });
+    renderForm(<AuthAction />);
+    expect(screen.getByRole('heading', { name: 'That link is incomplete' })).toBeInTheDocument();
+  });
+
+  it('hands other actions to Firebase’s own page on our domain', () => {
+    const replace = vi.fn();
+    const original = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, replace } });
+    try {
+      nav.search = new URLSearchParams({ mode: 'verifyEmail', oobCode: 'V', apiKey: 'k' });
+      renderForm(<AuthAction />);
+      expect(replace).toHaveBeenCalledWith('/__/auth/action?mode=verifyEmail&oobCode=V&apiKey=k');
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original });
+    }
+  });
+});
+
+describe('safeContinue', () => {
+  it('only returns to our own sites', () => {
+    expect(safeContinue('https://dev.boringtalks.lol/signin')?.href).toBe('https://dev.boringtalks.lol/signin');
+    expect(safeContinue('https://boringtalks.lol/signin')?.hostname).toBe('boringtalks.lol');
+    expect(safeContinue('http://localhost:3210/signin')?.port).toBe('3210');
+    expect(safeContinue('http://boringtalks.lol/signin')).toBeNull();
+    expect(safeContinue('https://evil.test/signin')).toBeNull();
+    expect(safeContinue('https://boringtalks.lol.evil.test/')).toBeNull();
+    expect(safeContinue('https://user:pw@boringtalks.lol/')).toBeNull();
+    expect(safeContinue('javascript:alert(1)')).toBeNull();
+    expect(safeContinue('not a url')).toBeNull();
+    expect(safeContinue(null)).toBeNull();
   });
 });
 

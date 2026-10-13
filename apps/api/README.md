@@ -74,7 +74,7 @@ Validated with zod at boot (`src/config/env.ts`); the process exits with a list 
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | yes | the shared `boringtalks` bucket |
 | `R2_KEY_PREFIX` | | `prod/`, `dev/`; every object key lives under it (empty by default) |
 | `R2_REGION` | | `auto` |
-| `DOWNLOADS_BASE_URL` | | `https://download.boringtalks.lol` (the bucket's `downloads/` folder; dev: `…/dev`) with `latest.json` |
+| `DOWNLOADS_BASE_URL` | | `https://download.boringtalks.lol` (the bucket's `downloads/` folder; dev: `…/dev`) with `latest.json` (Mac) and `latest-windows.json` |
 | `AI_GATEWAY_API_KEY` | worker | Vercel AI Gateway key (summaries and fallback transcription) |
 | `SUMMARY_MODEL` | | `anthropic/claude-haiku-4.5` |
 | `TRANSCRIBE_MODEL` | | `microsoft/mai-transcribe-2` (diarizes itself); `openai/whisper-1` also works, with `DIARIZE_MODEL` telling voices apart |
@@ -82,6 +82,7 @@ Validated with zod at boot (`src/config/env.ts`); the process exits with a list 
 | `AI_FAKE` | | `1` = fake summarizer, transcriber and email sender; refused unless `NODE_ENV=test` |
 | `RESEND_API_KEY` | | empty = log emails instead of sending |
 | `EMAIL_FROM` | | `BoringTalks <hello@send.boringtalks.lol>` |
+| `EMAIL_REPLY_TO` | | `BoringTalks <hello@boringtalks.lol>`: where replies go (the sending subdomain receives no mail) |
 | `EMAIL_ALLOWLIST` | | comma list; when set, mail only these addresses (dev) |
 | `REPORTS_NOTIFY_EMAIL` | | empty = reports are only stored; set, each Mac problem report is emailed there (without its log) |
 | `DIARIZE_MODEL` | | `google/gemini-3-flash`: tells voices apart when `TRANSCRIBE_MODEL` can't (Whisper); empty = off |
@@ -122,7 +123,7 @@ whose meeting is gone or in another status, does nothing. When the last retry fa
 is unrecoverable, e.g. no speech in the audio) the meeting becomes `failed` with the error message.
 
 **Pipeline.**
-- `transcribe` (fallback only — Mac recordings arrive with their transcript): downloads the audio
+- `transcribe` (fallback only — desktop recordings arrive with their transcript): downloads the audio
   from R2 and sends it to Whisper through the AI Gateway with segment timestamps. Server audio is
   one mixed channel and there is no server-side diarization, so every segment is `Speaker 1`. The
   result is stored exactly like an uploaded transcript, then `summarize` is queued.

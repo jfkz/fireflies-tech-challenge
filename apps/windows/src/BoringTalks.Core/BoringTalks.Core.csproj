@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Everything that can be tested without audio hardware or Windows APIs. Mirrors apps/macos/BoringTalksKit. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>BoringTalks.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BoringTalks.Core.Tests" />
+  </ItemGroup>
+</Project>

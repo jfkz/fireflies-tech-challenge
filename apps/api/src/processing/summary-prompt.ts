@@ -64,7 +64,7 @@ export interface PromptContext {
   /** Account name of the person recording (speaker "You"), when known. */
   ownerName?: string | null;
   /**
-   * The transcript has a "You" (the Mac app's microphone). Server transcripts don't: the person
+   * The transcript has a "You" (the desktop app's microphone). Server transcripts don't: the person
    * recording is one of the numbered speakers, and which one isn't known.
    */
   hasYou?: boolean;

@@ -7,7 +7,7 @@ import {
   keys,
   useDeleteMeeting,
   useDevices,
-  useLatestDownload,
+  useDownloads,
   useMe,
   useMeeting,
   useMeetings,
@@ -208,14 +208,14 @@ describe('people and navigation', () => {
   });
 });
 
-describe('useLatestDownload', () => {
+describe('useDownloads', () => {
   it('reads the public endpoint without a token', async () => {
-    const fetch = vi.fn(async (_url: RequestInfo | URL) => new Response(JSON.stringify({ statusCode: 404, message: 'none' }), { status: 404 }));
+    const fetch = vi.fn(async (_url: RequestInfo | URL) => new Response(JSON.stringify({ macos: null, windows: null }), { status: 200 }));
     vi.stubGlobal('fetch', fetch);
-    const { result } = renderHookWithProviders(() => useLatestDownload(), { auth: authValue({ user: null }) });
+    const { result } = renderHookWithProviders(() => useDownloads(), { auth: authValue({ user: null }) });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toBeNull();
-    expect(String(fetch.mock.calls[0][0])).toMatch(/\/downloads\/latest$/);
+    expect(result.current.data).toEqual({ macos: null, windows: null });
+    expect(String(fetch.mock.calls[0][0])).toMatch(/\/downloads$/);
     vi.unstubAllGlobals();
   });
 });

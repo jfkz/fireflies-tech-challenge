@@ -52,6 +52,7 @@ describe('requests', () => {
   it('does not let clients create demo meetings', () => {
     expect(CreateMeetingRequest.safeParse({ source: 'demo' }).success).toBe(false);
     expect(CreateMeetingRequest.parse({ source: 'macos' }).source).toBe('macos');
+    expect(CreateMeetingRequest.parse({ source: 'windows' }).source).toBe('windows');
   });
   it('caps audio size and type', () => {
     expect(UploadUrlRequest.safeParse({ contentType: 'audio/mp4', sizeBytes: MAX_AUDIO_BYTES + 1 }).success).toBe(false);

@@ -211,8 +211,8 @@ export class MeetingsService {
   /**
    * Runs the pipeline again. A meeting the server transcribed (browser recording, upload, a Mac
    * recording with both sides on their own channels) starts from its audio, so transcription
-   * improvements (telling voices apart) reach it; a Mac recording transcribed on the Mac keeps its
-   * transcript and is summarized again.
+   * improvements (telling voices apart) reach it; a desktop (Mac or Windows) recording transcribed
+   * on the computer keeps its transcript and is summarized again.
    */
   async reprocess(user: UserRow, id: string): Promise<MeetingDetail> {
     const meeting = await this.owned(user, id);

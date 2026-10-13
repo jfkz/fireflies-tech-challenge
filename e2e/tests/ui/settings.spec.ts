@@ -1,7 +1,7 @@
 import { signUp } from '../../fixtures/auth';
 import { expect, test } from '../../fixtures/test';
 
-test('settings: email toggle and revoking a connected Mac', async ({ page, api }) => {
+test('settings: email toggle and revoking a connected computer', async ({ page, api }) => {
   const email = await signUp(page);
   await page.getByRole('link', { name: 'Settings' }).first().click();
   await expect(page.getByTestId('account-email')).toHaveText(email);
@@ -18,7 +18,7 @@ test('settings: email toggle and revoking a connected Mac', async ({ page, api }
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText(`Disconnect ${name}?`);
   await dialog.getByRole('button', { name: 'Disconnect' }).click();
-  await expect(page.getByText('No Macs connected yet.')).toBeVisible();
+  await expect(page.getByText('No computers connected yet.')).toBeVisible();
   expect(api.callsTo('DELETE', /^\/devices\//)).toHaveLength(1);
 });
 

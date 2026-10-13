@@ -4,6 +4,7 @@ Manual test flows with steps and expected results. Automated coverage: unit test
 
 - [Web](#manual-qa-web-appsweb)
 - [Mac app](#boringtalks-for-mac--manual-qa)
+- [Windows app](#boringtalks-for-windows--manual-qa)
 - [Backend and end to end](#manual-qa-backend-and-end-to-end)
 
 ## Manual QA: web (apps/web)
@@ -25,15 +26,17 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 1.3 | Keep scrolling through “How it works”. | Step 1 (two heads recording, level meters), step 2 (transcript lines drop in), step 3 (summary card assembles, action items get ticked). The active step is highlighted on the left. |
 | 1.4 | Continue to the yellow section, “What you get”, download, FAQ, final CTA. | Heads pop up cheering, confetti moves at different speeds; the receipt lists what a meeting turns into and drifts; no prices or technical terms anywhere; FAQ answers open and close; footer reads “This website could have been an email.” |
 | 1.4a | Watch the wall clock while scrolling the first scene. | Both hands turn around the centre of the dial (5 min ≈ 10:05, 58 min ≈ 10:58); nothing sticks out of the clock face. |
-| 1.4b | Hero at 1280×720, 1440×900, 1024×768 and phone width. | **Download for Mac**, then “or try it in the browser →” under it; neither covers a face. |
+| 1.4b | Hero at 1280×720, 1440×900, 1024×768 and phone width, on a Windows PC (the longest label). | **Download for Windows**, “Also for Mac · all downloads”, then “or try it in the browser →” under it; none covers a face. |
 | 1.4c | Click **Sound off** (bottom right). | It turns into **Sound on**; the talking head babbles in a gibberish voice in time with its bubble and mouth; every head that talks (hero, How it works, the wake-up cheers, final CTA) has its own voice. Click again: silence. Reload: the button says Sound off until your first click, then the voices come back. |
-| 1.5 | Click **Download for Mac** in the hero. | Page scrolls to the download card. |
-| 1.6 | Download card, with a build published. | Version and build, “macOS 26 or later”, “Apple silicon & Intel”, size, date. The button downloads the `.dmg` from `download.boringtalks.lol`. If the build isn’t notarized, a step explains right-click → Open. |
-| 1.7 | Download card, before any build exists. | “The Mac app is still in the oven.” and a **Record in the browser** button; no broken link. |
+| 1.5 | On a Mac, click **Download for Mac** in the hero; on a Windows PC, **Download for Windows**. | The DMG / `Setup.exe` starts downloading at once and the page scrolls to the download card with the first-launch steps. **Also for …** under the button downloads the other app; **all downloads** scrolls to the card. On Linux, a phone, or a PC before the Windows app ships, the button only scrolls to the card. |
+| 1.6 | Download card on a Mac, with both builds published. | “Put a notetaker on your Mac.” Version and build, “macOS 26 or later”, “Apple silicon & Intel”, size, date. The button downloads the `.dmg` from `download.boringtalks.lol`. If the build isn’t notarized, a step explains right-click → Open. Underneath: “Also for Windows” with a link to the `.exe`. |
+| 1.6a | Download card on a Windows PC (or DevTools → Network conditions → user agent “Chrome — Windows”). | “Put a notetaker on your PC.” “BoringTalks for Windows”, “Windows 10 or later”, “64-bit PCs (x64)”, installer size. The button downloads `BoringTalks-Setup-<version>.exe`. While the build is unsigned, a step explains Keep and **More info → Run anyway**. Underneath: “Also for Mac”. Before the Windows app ships, the hero says **Download for Mac** and the card is the Mac one. |
+| 1.6b | Download card on an iPad, a phone or Linux (DevTools device toolbar / user agent). | Hero says **Download the app**; “Put a notetaker on your computer.” with the Mac and Windows cards side by side and no first-launch steps. |
+| 1.7 | Download card, before any build exists. | “The desktop app is still in the oven.” and a **Record in the browser** button; no broken link. |
 | 1.8 | Phone width (375 px): repeat 1.1–1.4. | No horizontal scrolling, nothing cut off; bubbles fit; headline readable above the heads. |
 | 1.9 | Turn on Reduce Motion (macOS: Accessibility → Display) and reload. | Nothing animates or sticks; the story captions and “Meetings are boring.” are shown as plain text; “How it works” is a static list with finished pictures. |
 | 1.10 | Paste the URL into Slack/iMessage or an OG debugger. | Card with title, description and the generated image (four heads at the table, the headline). Favicon is the two-heads app icon. |
-| 1.11 | Open `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`, and run the page through a rich-results test. | Signed-in pages disallowed; sitemap lists `/`, `/signup`, `/signin`; JSON-LD has SoftwareApplication (download link `BoringTalks-latest.dmg`) and FAQPage with every question. |
+| 1.11 | Open `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`, and run the page through a rich-results test. | Signed-in pages disallowed; sitemap lists `/`, `/signup`, `/signin`; JSON-LD has SoftwareApplication (macOS 26, Windows 10, Windows 11; download links `BoringTalks-latest.dmg` and `BoringTalks-Setup-latest.exe`) and FAQPage with every question. |
 
 ### 2. Sign up, sign in, reset
 
@@ -47,7 +50,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 2.6 | Sign out (Settings), sign in at `/signin` with a wrong password. | “Wrong email or password.”, head looks sad. |
 | 2.7 | Sign in with the right password. | Back on `/meetings`. |
 | 2.8 | **Continue with Google**. | Google popup; on success lands on `/meetings`. Closing the popup shows a plain message. |
-| 2.9 | `/signin` → **Forgot it?** → submit your email. | “a reset link is on its way”; the email arrives and its link leads to setting a new password, then back to `/signin`. |
+| 2.9 | `/signin` → **Forgot it?** → submit your email. | “a reset link is on its way”; the email's link starts with `https://boringtalks.lol/auth/action` (not `firebaseapp.com`) and opens “Choose a new password” for your address; **Save password** signs you in and opens the meetings (started on dev: “Sign in with it” goes back to dev). Opening the link again says it was already used. |
 | 2.10 | Signed out, open `/meetings/<any id>` or `/settings`. | Redirected to `/signin?next=…`; after signing in you land on the page you asked for. |
 
 ### 3. Meetings list
@@ -65,7 +68,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 3.6a | On a row, click a named person's chip (e.g. Maya), go back, then click “Speaker 2” or your own name. | Maya's person page opens; “Speaker 2” / you filter the list instead (`?speaker=…`), like on the meeting page. |
 | 3.7 | Filter to a combination with no meetings. | “No meetings with X about Y.” and a **Clear filters** button. |
 | 3.8 | Upload a recording with three people (e.g. a synthetic one made with `say`), wait for Ready. | Transcript has Speaker 1–3 per voice, then their names from the conversation; deadlines like “today or tomorrow” show the later day. A 26 MB+ or 2 h+ file transcribes too. **Reprocess** on an older upload separates its voices. |
-| 3.5 | New account with the demo deleted. | Empty state with a head (“Your calendar must be suspiciously free.”) and links to record or get the Mac app. |
+| 3.5 | New account with the demo deleted. | Empty state with a head (“Your calendar must be suspiciously free.”) and links to record or get the desktop app. |
 
 ### 4. Meeting page
 
@@ -140,12 +143,12 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 | 5.7 | Choose a `.pdf` or a file over 200 MB. | Clear message, Upload button disabled, nothing sent. |
 | 5.8 | Turn the network off during an upload (DevTools → Offline). | Error with **Try again**; the recording is not lost. |
 
-### 6. Connect the Mac app `/connect`
+### 6. Connect a desktop app `/connect`
 
 | # | Steps | Expected |
 |---|---|---|
-| 6.1 | In the Mac app choose Sign in while signed out on the web. | Browser opens `/connect?challenge=…&device=<Mac name>`, redirects to sign in; after signing in you’re back on the connect page. |
-| 6.2 | **Connect this Mac**. | Browser offers to open BoringTalks; the app shows it’s signed in. The page says “You can go back to the app.” with **Open BoringTalks** and the code. The new Mac appears in Settings → Connected Macs. |
+| 6.1 | In the Mac or Windows app choose Sign in while signed out on the web. | Browser opens `/connect?challenge=…&device=<computer name>`, redirects to sign in; after signing in you’re back on the connect page. |
+| 6.2 | **Connect this computer**. | Browser offers to open BoringTalks; the app shows it’s signed in. The page says “You can go back to the app.” with **Open BoringTalks** and the code. The new computer appears in Settings → Connected computers. |
 | 6.3 | Repeat, but use the app’s paste-code field with the shown code. | Works once; the code expires after the shown number of minutes. |
 | 6.4 | Click **Not now** instead. | The app receives `error=access_denied` and stays signed out; the page says “Okay, not connected.” |
 | 6.5 | Open `/connect` without `challenge`, or with `challenge=abc`. | “This connect link doesn’t work” with what to do; no API call. |
@@ -154,9 +157,9 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 
 | # | Steps | Expected |
 |---|---|---|
-| 7.1 | Open Settings. | Email and sign-in method; email switch reflects the account; connected Macs list; Mac app version with **Download**. |
+| 7.1 | Open Settings. | Email and sign-in method; email switch reflects the account; “Connected computers” list; **Desktop app** card with a row for Mac and Windows (your own computer's first), each with its version and **Download**, or “Not released yet”. |
 | 7.2 | Toggle “Email me when a meeting is ready” off and record a meeting; toggle on and record another. | No email for the first, a “Your meeting is ready” email for the second. Switch state persists after reload. |
-| 7.3 | **Disconnect** a Mac → confirm. | Dialog names the Mac; after confirming it disappears from the list and the Mac app can no longer upload (it asks to sign in again). |
+| 7.3 | **Disconnect** a Mac or PC → confirm. | Dialog names the computer; after confirming it disappears from the list and its app can no longer upload (it asks to sign in again). |
 | 7.5 | Type a name in **Your name** and Save. | Button says Saved; in the demo and other past meetings “You” becomes your first name (unless you renamed that speaker by hand); new meetings use it too. |
 | 7.4 | **Sign out**. | Lands on `/`; dashboard URLs now redirect to sign in. |
 
@@ -181,7 +184,7 @@ are what those can’t judge: looks, real Firebase, real API, real storage and e
 
 `BASE_URL=https://dev.boringtalks.lol API_URL=https://api.dev.boringtalks.lol pnpm --filter @boringtalks/e2e test:smoke`:
 landing renders with no console errors, `/signin` renders, `${API_URL}/health` is
-OK, `/downloads/latest` is a DMG or 404, `/version.json` is uncached and (in CI) reports the
+OK, `/downloads/latest` is a DMG or 404, `/downloads` parses with a `.dmg` / `.exe` for each published build, `/version.json` is uncached and (in CI) reports the
 deployed commit.
 
 ## BoringTalks for Mac — manual QA
@@ -348,6 +351,120 @@ BoringTalks.app/Contents/MacOS/BoringTalks --transcribe /tmp/meeting.wav --speak
 Expected: JSON with `segments` alternating `Speaker 1` / `Speaker 2`, times in ms that match
 the audio, `language: "en"`, exit code 0.
 
+## BoringTalks for Windows — manual QA
+
+On Windows 10 (2004 or later) or 11. A clean start: uninstall BoringTalks (Settings › Apps), then
+delete `%APPDATA%\BoringTalks` and `%LOCALAPPDATA%\BoringTalks-Models`, and the
+`BoringTalks:device-token.*` entries in Control Panel › Credential Manager › Windows Credentials.
+
+Against dev: install **BoringTalks Dev** from https://download.boringtalks.lol/dev/BoringTalks-Dev-Setup-latest.exe
+(its data is in `%APPDATA%\BoringTalksDev`; a clean start deletes that instead). Or point the release
+app at dev with `{ "apiUrl": "https://api.dev.boringtalks.lol", "webUrl": "https://dev.boringtalks.lol" }`
+in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
+`%APPDATA%\BoringTalks\logs\boringtalks-<date>.log` (Dev: `%APPDATA%\BoringTalksDev\logs\`).
+
+| Check | Expected |
+|---|---|
+| Install BoringTalks Dev next to BoringTalks | Both run at once, each with its own tray icon; the Dev menu says "BoringTalks Dev" with an `api.dev.boringtalks.lol` badge |
+| BoringTalks Dev: **Sign in with browser** | Opens `dev.boringtalks.lol/connect?…&app=dev`; after approving, the page's button says **Open BoringTalks Dev** and the Dev app (not the release one) signs in |
+| Uninstall one of the two | The other keeps working, and `%LOCALAPPDATA%\BoringTalks-Models` stays |
+
+### 1. Install, SmartScreen, first launch
+
+| Step | Expected |
+|---|---|
+| On the landing page in Edge or Chrome, **Download for Windows** | `BoringTalks-Setup-<version>.exe` from `download.boringtalks.lol`. Unsigned build: the browser says it "isn't commonly downloaded"; **Keep** (Edge: ⋯ › Keep › Show more › Keep anyway) |
+| Run it | Unsigned: "Windows protected your PC" → **More info** → **Run anyway**. No admin prompt; a short splash, then the app starts and its menu opens above the tray with **Sign in with browser** |
+| Look at the notification area (under **^** if hidden) | The BoringTalks icon; Start menu and desktop have BoringTalks shortcuts |
+| Settings… | "Speech model": "Downloading the speech model… n %", then "Ready · Parakeet v3 + voice separation" (~717 MB the first time) |
+| Launch BoringTalks again from the Start menu | No second icon; the menu of the running one opens |
+| Sign out of Windows and back in | BoringTalks is in the tray again, quietly (Settings › **Open BoringTalks when I sign in to Windows**; off removes it from Settings › Apps › Startup) |
+
+### 2. Sign in with the browser
+
+| Step | Expected |
+|---|---|
+| **Sign in with browser** | The browser opens `…/connect?challenge=…&device=<the PC's name>`; the menu shows "Finish signing in in your browser…" |
+| Sign in and **Connect this computer** | The browser asks to open BoringTalks; allow. The menu shows your email, **Start meeting** and "Recent meetings"; dashboard Settings lists the PC under "Connected computers" |
+| Quit (menu › Quit) and start it again | Still signed in (Credential Manager: `BoringTalks:device-token.<api host>`) |
+| **Paste code** with the code shown by the dashboard (or the `boringtalks://` link) | Signed in the same way; `two words` → "That doesn't look like a sign-in code." |
+| **Copy the sign-in link**, open it in another browser | Same flow from that browser |
+
+### 3. Record a two-voice meeting
+
+| Step | Expected |
+|---|---|
+| Title (optional), **Start meeting** | Red **Stop** with a timer; the tray icon gets a red dot; both level bars move (speak; play a video) |
+| **Show live transcript** | A window with two heads (You, Others) above other windows, not in Alt+Tab, never taking focus; lines appear labelled **Speaker 1/2** for the video's voices and **You** for yours, grey while being spoken; the mouths move with the sound |
+| Play a two-person interview for ~2 minutes on the speakers, then on headphones; speak in between | With headphones: clean "You" lines. On speakers: the video's words aren't duplicated under "You" (echo removal) |
+| Switch the default output device during the meeting (speakers ↔ headset) | Recording continues; the "Others" level keeps moving (process loopback records every output device) |
+| **Stop** | "Finishing transcript…", then idle; "1 upload waiting" → gone; the meeting appears under Recent meetings as Summarizing → Ready |
+| Open it on the dashboard | Speakers You / Speaker 1 / Speaker 2 with the right words, audio plays, summary and action items |
+| Bluetooth headset as default microphone, **Start meeting** | The menu shows "You · <the PC's own microphone>" and the headset keeps its music quality; Settings › **Keep Bluetooth headsets in high quality** off records with the headset instead |
+| Settings › Privacy & security › Microphone › desktop apps **off**, **Start meeting** | Recording starts with a warning that microphone access is off; only "Others" is transcribed |
+
+### 4. Stop after silence; calls
+
+| Step | Expected |
+|---|---|
+| Settings › Stop after silence **1 minute**, start a meeting, stay silent | After 30 s a toast "Still in a meeting?" with **Keep recording** and a countdown in the menu; **Keep recording** resets it; otherwise it stops and a toast says "Nobody spoke for 1 minute, so BoringTalks stopped recording…" |
+| Join a Zoom/Teams call, or a Google Meet in Chrome/Edge, without recording | After ~5 s (browsers ~15 s) a toast "<app> is in a call. Record it?" with **Record / Not now / Never for <app>**, the same banner in the menu, and a blue dot on the tray icon |
+| **Record** | Recording starts; **Not now**: no new offer during this call; **Never for <app>**: listed in Settings › Calls with **Ask again** |
+| Leave the call while recording | ~30 s after the others go quiet the recording stops by itself ("The Teams call ended…") |
+| `BoringTalks.exe --mic-users 60` while joining and leaving calls | One line per change: each app holding a microphone and the call app it counts as |
+
+### 5. Offline, relaunch, sign out, recordings
+
+| Step | Expected |
+|---|---|
+| Airplane mode (or unplug), record and stop | "1 upload waiting — offline"; reconnect → it uploads within seconds |
+| Kill BoringTalks (Task Manager) during an upload, start it again | The upload resumes where it stopped; no duplicate meeting (`Idempotency-Key`) |
+| Dashboard › Settings › **Disconnect** this PC | Next upload or refresh: "This PC was signed out…"; waiting uploads continue after signing in again |
+| Settings › **Show recordings in Explorer** | `%APPDATA%\BoringTalks\Recordings\<id>.m4a`, ~43 MB per hour, playable with both sides |
+| Keep recordings "Delete after upload" | The file disappears once the upload finishes |
+
+### 6. Settings and updates
+
+| Step | Expected |
+|---|---|
+| Open Settings from the menu | Tabs **Transcription**, **Recording**, **Calls**, **Account** with icons, like the Mac; the window is as tall as the tab; it reopens on the tab last used |
+| Transcription › **Online, after the meeting (upload only)**, record a call with your voice and the others', stop | The speech model status says it isn't needed; **Upload meeting audio** is on and greyed out; the log says "upload only"; the `.m4a` is stereo (you left, the others right); on the dashboard the meeting is transcribed by the server with "You" and the other speakers apart, and plays back as one mix |
+| Recording › **Microphone**: pick a USB or headset microphone, start a meeting | The log says it records with that microphone; the menu shows its name under You. Unplug it and start again: the system default records, and Settings shows the pick as not connected |
+| Settings › Calls › **Record when a game starts**, then start a Steam game | After ~10 s a notification "Recording your <game> session" with **Stop**; the menu is recording with that title. Close the game: ~20 s later it stops and the menu says the game closed; the meeting uploads. `BoringTalks.exe --games` lists the game while it runs |
+| Same, with the setting off | Nothing is recorded |
+| Back to **On this PC** | The speech model downloads (if it isn't there) and the next meeting is transcribed live again |
+| Calls › Never for Zoom (from an offer), then Settings › Calls | A “Never asked” group lists Zoom with **Ask again** |
+| Install a dev build, publish a newer one (`release.ps1 dev`), relaunch and wait 30 s (or Account › **Check for updates**) | Account: “Downloading 0.5.2… 40 %” with a bar, then “… is ready”; the menu says it's ready with **Restart to update** |
+| Start a meeting while an update is ready | The menu says it installs after this meeting; no restart button until the meeting is stopped |
+| **Restart to update** | The app quits, comes back in the tray within a few seconds, and Settings shows the new version; waiting uploads continue |
+| Ready update, then Quit and start the app again | It starts on the new version |
+| Offline, Account › **Check for updates** | “Couldn't check for updates: …”; it tries again at the next check |
+| A build run from `bin\` (not installed) | Account says updates come with the installed app; no checks |
+| After **Restart to update**, Task Manager | One `BoringTalks.exe`, the new version; one tray icon |
+| BoringTalks running, open BoringTalks Dev (or the other way round) | “BoringTalks is running. Only one BoringTalks can record at a time. Quit BoringTalks and open BoringTalks Dev?” **Yes**: the first quits, the second opens; **No**: nothing changes |
+| Open BoringTalks again while it runs | No second copy; the menu opens |
+| Offline at the first launch (models not downloaded) | The menu says the speech model couldn't download, with **Try again**; back online, the download resumes by itself |
+| Start a meeting with a microphone that doesn't answer (e.g. a wireless headset switched off mid-start) | Within 10 s the meeting records the others, and the menu says the microphone didn't answer; the log has `microphone: …` steps |
+
+### 7. Uninstall
+
+| Step | Expected |
+|---|---|
+| Settings › Apps › BoringTalks › Uninstall | The app, its shortcuts and `%LOCALAPPDATA%\BoringTalks-Models` are gone; `HKCU\Software\Classes\boringtalks` and the Startup entry are removed; meetings and settings in `%APPDATA%\BoringTalks` stay |
+
+### 8. Command line
+
+```powershell
+Add-Type -AssemblyName System.Speech   # make a two-voice clip with Windows' voices
+# (see apps/windows/README.md), then:
+& "$env:LOCALAPPDATA\BoringTalks\current\BoringTalks.exe" --transcribe two-voices.wav --speakers > out.json
+& "$env:LOCALAPPDATA\BoringTalks\current\BoringTalks.exe" --listen-test 6
+```
+
+Expected: `out.json` has segments for both voices with times that match the audio,
+`language: "en"`, exit code 0; `--listen-test` reports `"allOutputDevices": true` and a non-zero
+`peak` while something plays.
+
 ## Manual QA: backend and end-to-end
 
 Run against dev (`https://dev.boringtalks.lol`, `https://api.dev.boringtalks.lol`) after each
@@ -362,8 +479,8 @@ deploy, and against production after a merge.
    **Expected:** the meetings list shows one ready demo meeting with a specific title. A welcome
    email arrives (dev: only for allow-listed addresses; others appear in the worker log).
 
-### 3. Mac recording end to end
-1. Record a 2–3 minute call with the Mac app (see the Mac section) and stop.
+### 3. Desktop recording end to end
+1. Record a 2–3 minute call with the Mac or Windows app (see their sections) and stop.
    **Expected:** within a minute the meeting moves recording → summarizing → ready; the title
    names what was discussed; action items have owners; the speakers are "You" and "Speaker 1…";
    the audio plays and highlights the transcript; a "meeting ready" email arrives.
@@ -387,7 +504,11 @@ deploy, and against production after a merge.
 ### 8. Download
 1. On the landing page, click Download for Mac.
    **Expected:** `BoringTalks-<version>.dmg` from `download.boringtalks.lol` (dev: `/dev/BoringTalks-Dev-<version>.dmg`), version
-   and size match `GET /downloads/latest`.
+   and size match `GET /downloads` → `macos`.
+2. On a Windows PC, click Download for Windows.
+   **Expected:** `BoringTalks-Setup-<version>.exe` from the same host (dev: `/dev/`), version and size match
+   `GET /downloads` → `windows`. `GET /downloads/latest/windows` returns the same build;
+   `GET /downloads/latest/linux` is 404.
 
 ### 9. Problem reports
 1. Send a report from the Mac app (Report a Problem…), then on the API service run `node dist/reports.js`.
@@ -399,5 +520,6 @@ deploy, and against production after a merge.
    **Expected:** `401`.
 
 ### 10. Versions
-1. Compare `GET /health` `version`, the web footer and the Mac app's About/menu version.
-   **Expected:** all three share major.minor (0.4.x); `pnpm check:versions` passes.
+1. Compare `GET /health` `version`, the web footer, the Mac app's About/menu version and the Windows
+   app's Settings version.
+   **Expected:** all share major.minor (0.5.x); `pnpm check:versions` passes.

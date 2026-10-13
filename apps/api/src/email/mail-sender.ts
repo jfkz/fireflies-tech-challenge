@@ -4,6 +4,7 @@ import { Resend } from 'resend';
 export interface OutgoingEmail {
   from: string;
   to: string;
+  replyTo?: string;
   subject: string;
   html: string;
   text: string;

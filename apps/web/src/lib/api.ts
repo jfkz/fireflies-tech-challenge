@@ -2,7 +2,7 @@ import {
   ApiError,
   AuthorizeDeviceResponse,
   Device,
-  LatestDownload,
+  Downloads,
   Me,
   MeetingDetail,
   MeetingFacets,
@@ -138,14 +138,7 @@ export function createApiClient({ baseUrl, getToken, fetch: fetchImpl }: ApiClie
     listDevices: () => request('GET', '/devices', { schema: DeviceList }),
     revokeDevice: (id: string) => request<void>('DELETE', `/devices/${encodeURIComponent(id)}`),
 
-    /** The newest Mac build, or null while there is none yet (404). */
-    latestDownload: async (signal?: AbortSignal) => {
-      try {
-        return await request('GET', '/downloads/latest', { schema: LatestDownload, auth: false, signal });
-      } catch (err) {
-        if (err instanceof ApiRequestError && err.status === 404) return null;
-        throw err;
-      }
-    },
+    /** The newest build for each desktop app; null for one that hasn't shipped yet. */
+    downloads: (signal?: AbortSignal) => request('GET', '/downloads', { schema: Downloads, auth: false, signal }),
   };
 }

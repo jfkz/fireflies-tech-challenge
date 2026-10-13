@@ -2,11 +2,11 @@
 export const FAQ: readonly { q: string; a: string }[] = [
   {
     q: 'How much does it cost?',
-    a: 'Nothing. BoringTalks is free while it’s new: the Mac app, the dashboard and the summaries.',
+    a: 'Nothing. BoringTalks is free while it’s new: the Mac and Windows apps, the dashboard and the summaries.',
   },
   {
     q: 'Which meeting apps does it work with?',
-    a: 'All of them. Zoom, Google Meet, Microsoft Teams, Slack huddles, FaceTime, a phone call on speaker: if your Mac can hear it, BoringTalks can write it down.',
+    a: 'All of them. Zoom, Google Meet, Microsoft Teams, Slack huddles, FaceTime, a phone call on speaker: if your computer can hear it, BoringTalks can write it down.',
   },
   {
     q: 'Does a bot join my call?',
@@ -17,8 +17,8 @@ export const FAQ: readonly { q: string; a: string }[] = [
     a: 'It tells voices apart and picks names up from the conversation: introductions, “thanks, Maya”, “Leo, can you…”. If it guesses wrong, rename a speaker once and the whole meeting updates.',
   },
   {
-    q: 'I don’t have a Mac. Can I still use it?',
-    a: 'Yes. Record a meeting right in the browser, or upload a recording you already have, and you get the same summary, speakers and tasks.',
+    q: 'Is there a Windows app?',
+    a: 'Yes, for Windows 10 and 11, alongside the Mac app. On anything else, record a meeting right in the browser or upload a recording you already have, and you get the same summary, speakers and tasks.',
   },
   {
     q: 'Which languages does it understand?',

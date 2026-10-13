@@ -34,7 +34,7 @@ export const keys = {
   person: (uid: string | undefined, name: string) => ['person', uid, name.toLocaleLowerCase()] as const,
   allPersons: (uid: string | undefined) => ['person', uid] as const,
   devices: (uid: string | undefined) => ['devices', uid] as const,
-  latestDownload: ['latest-download'] as const,
+  downloads: ['downloads'] as const,
 };
 
 export function useMe() {
@@ -327,11 +327,11 @@ export function useAuthorizeDevice() {
   return useMutation({ mutationFn: api.authorizeDevice });
 }
 
-/** Public: the newest DMG, or null before the first build exists. */
-export function useLatestDownload() {
+/** Public: the newest Mac and Windows builds, each null until its first build exists. */
+export function useDownloads() {
   return useQuery({
-    queryKey: keys.latestDownload,
-    queryFn: ({ signal }) => publicApi.latestDownload(signal),
+    queryKey: keys.downloads,
+    queryFn: ({ signal }) => publicApi.downloads(signal),
     staleTime: 5 * 60_000,
   });
 }

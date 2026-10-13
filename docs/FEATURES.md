@@ -4,6 +4,7 @@ What BoringTalks does, by part. Architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 - [Web dashboard and landing page](#web-features-appsweb)
 - [Mac app](#boringtalks-for-mac--features)
+- [Windows app](#boringtalks-for-windows--features)
 - [Backend](#backend-features-appsapi)
 
 ## Web features (apps/web)
@@ -37,14 +38,33 @@ download and sign-up calls to action.
    summary, names, tasks, decisions, “notes you took ×0”, 58 minutes back) and four
    points: every task in one list, see where your week went, find anything later,
    no bot joins your call. No prices or technical details on the landing page.
-5. *Download* (`#download`): fed by `GET /downloads/latest`; version and build,
-   “macOS 26 or later”, “Apple silicon & Intel”, DMG size, release date, a button
-   linking straight to the DMG, and first-launch steps (drag to Applications,
-   Microphone, System Audio Recording, sign in). If the build is not notarized it
-   adds the right-click → Open step. A 404 shows “The Mac app is still in the
-   oven” with a link to the browser recorder.
-6. *FAQ* (`#faq`): price, which apps, no bot, how names are found, no Mac,
-   languages, privacy, telling people you record. Native `<details>`, and the same
+5. *Download* (`#download`): fed by `GET /downloads` and pointed at the visitor's
+   computer. The OS comes from the user agent (`lib/platform.ts`: “Windows NT” →
+   Windows; “Macintosh” → Mac unless it has touch points, which is an iPad; then
+   `navigator.userAgentData.platform`; phones, tablets and Linux get neither). The
+   visitor's own app comes first: “Put a notetaker on your Mac / PC”, version and
+   build, minimum OS (“macOS 26 or later”, “Windows 10 or later”), what it runs on
+   (“Apple silicon & Intel”, “64-bit PCs (x64)”), size (disk image / installer),
+   release date, a button linking straight to the DMG or Setup.exe, and that
+   platform's first-launch steps. Mac: drag to Applications, Microphone, System
+   Audio Recording, sign in, plus right-click → Open when the build is not
+   notarized. Windows: run Setup (per user, no admin), the browser's Keep and
+   SmartScreen's **More info → Run anyway** when the build is not signed, the tray
+   icon and sign-in, the microphone privacy switch, the one-time model download.
+   The other platform's build is offered on one line underneath (“Also for
+   Mac/Windows”). A visitor whose computer can't be told gets both cards side by
+   side. A PC visitor before the Windows app ships still gets the Mac card first.
+   With no build at all: “The desktop app is still in the oven” and a link to the
+   browser recorder. The hero's big button names the same app (“Download for Windows”,
+   “Download for Mac”, otherwise “Download the app”); it reads `unknown` on the
+   server so the first render matches, then updates. When the visitor's own app has
+   shipped, the button downloads it straight away and scrolls to the first-launch
+   steps; under it, “Also for Mac/Windows · all downloads” links the other installer
+   and the card. Otherwise (unknown computer, own app not out yet) it scrolls to the
+   card, so a PC never gets a disk image. The Windows steps name the downloaded file.
+   Settings › Desktop app gives the visitor's own app the main button.
+6. *FAQ* (`#faq`): price, which apps, no bot, how names are found, is there a
+   Windows app, languages, privacy, telling people you record. Native `<details>`, and the same
    entries go out as FAQPage structured data.
 7. Final call to action and footer (“This website could have been an email.”).
 
@@ -64,7 +84,7 @@ cards with a generated 1200×630 image (the four heads at the table and the
 tagline; `app/_og/social-image.tsx`, heads drawn by `pnpm icon` into
 `app/og-heads.svg`), `apple-icon`, `manifest.webmanifest`, `robots.txt` (signed-in
 pages disallowed), `sitemap.xml`, and JSON-LD (`Organization`, `WebSite`,
-`SoftwareApplication` with the stable DMG link, `FAQPage`) from `lib/landing/seo.ts`.
+`SoftwareApplication` for macOS 26 and Windows 10/11 with the stable DMG and Setup.exe links, `FAQPage`) from `lib/landing/seo.ts`.
 
 **Where.** `app/page.tsx`, `components/landing/*`, `components/avatar/*`,
 `lib/avatar/*` (port of AvatarView.swift / Emotion.swift / OverlayViews.swift /
@@ -88,6 +108,11 @@ on errors and cheers on success. Firebase error codes become plain sentences.
 sign-up forms. Google sign-in runs through the site's own domain (`/__/auth/*`, proxied to
 Firebase by `next.config.ts`; `ownAuthDomain` in `lib/firebase.ts`), so Google's account picker
 says “to continue to boringtalks.lol” instead of the Firebase project's address.
+The reset email's link opens our own page, `boringtalks.lol/auth/action` (the Firebase project's
+action URL), not Firebase's: it checks the link, shows which account it's for, takes the new
+password, then signs in and opens the meetings. A reset started on dev goes back to dev's
+`/signin` instead (`continueUrl`, our own sites only). A used or expired link says so and offers
+a new one; other Firebase actions (email verification) go on to Firebase's page through `/__/auth/`.
 
 **Where.** `app/(auth)/*`, `components/auth/AuthForm.tsx`, `components/auth/AuthMood.tsx`,
 `components/providers/AuthProvider.tsx`, `lib/firebase.ts`, `lib/auth-errors.ts`.
@@ -265,11 +290,11 @@ server transcribes them. Tab capture exists only in desktop Chromium-based
 browsers, and the visitor must tick “Share tab audio”. Permission errors are
 explained in plain words.
 
-### Connect the Mac app `/connect?challenge=…&device=…`
+### Connect a desktop app `/connect?challenge=…&device=…`
 
-**What.** The Mac app opens this page with a PKCE S256 challenge and the Mac’s
-name. Signed-out visitors sign in or sign up first and come back. The page asks
-“Connect <device> to your BoringTalks account?”; **Connect this Mac** calls
+**What.** The Mac or Windows app opens this page with a PKCE S256 challenge and the
+computer’s name (it defaults to “your computer”). Signed-out visitors sign in or sign up first and come back. The page asks
+“Connect <device> to your BoringTalks account?”; **Connect this computer** calls
 `POST /devices/authorize` and sends the browser to the returned
 `boringtalks://callback?code=…`, then shows “You can go back to the app.” with an
 **Open BoringTalks** link and the one-time code (large, selectable, Copy button)
@@ -288,8 +313,10 @@ characters. Only `boringtalks://callback` URLs are ever navigated to.
 **What.** Account email and sign-in method, **Sign out**; **Your name** (what
 meetings call you instead of “You”; saving it renames you in past meetings too); “Email me when a meeting
 is ready” switch (`PATCH /me/settings`); connected Macs with connected/last-seen
-dates and **Disconnect** (confirmation dialog, `DELETE /devices/:id`); Mac app
-version and download link.
+dates and **Disconnect** (confirmation dialog, `DELETE /devices/:id`), listed as
+“Connected computers”; a **Desktop app** card with a row per platform (the
+visitor's own first): version and minimum OS with a Download link, or “Not
+released yet” and a link to the landing page's download card.
 
 **Where.** `components/app/SettingsView.tsx`.
 
@@ -305,8 +332,8 @@ around (“This page left the meeting early.”).
 (the `apps/web` package version and the deployed commit; `dev` locally). The dashboard's footer goes on
 with the API's and the Mac app's versions on the same line, `v0.5.1 · abc1234 · API v0.5.2 · Mac v0.5.0`
 (from `GET /health` and `GET /downloads/latest`, asked once per page load; hovering shows the API's
-commit and the Mac build number; a part that doesn't answer is left out). The web app, the API and the Mac
-app share major.minor (0.4.x); `pnpm check:versions` enforces it in CI. Each deployment serves its
+commit and the Mac build number; a part that doesn't answer is left out). The web app, the API, the Mac app
+and the Windows app share major.minor (0.5.x); `pnpm check:versions` enforces it in CI. Each deployment serves its
 own build at `GET /version.json` (uncached). An open tab checks it every 5 minutes while visible, and
 when it comes back into view (at most once a minute). When a different deployment is live, a dialog
 says “A new version is out” with **Reload now** / **Later**; **Later** leaves a “New version: reload”
@@ -594,6 +621,154 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
 - **Limits:** without a Developer ID certificate the DMG is ad-hoc signed and not notarized;
   first launch then needs right-click → Open.
 
+## BoringTalks for Windows — features
+
+The Mac app's features on Windows 10 (2004+) and 11, in `apps/windows` (C#, .NET 10, WPF). The
+logic is the Mac's, ported to `BoringTalks.Core` with its tests; this section lists what each
+feature is on Windows and where it differs. Paths are relative to `apps/windows/src`. Details:
+[apps/windows/README.md](../apps/windows/README.md).
+
+### Tray app
+
+- **What:** an icon in the notification area (red dot while recording, blue while a call waits
+  for an answer); left click opens the menu above the tray, right click has Open, Start/Stop
+  meeting, Dashboard, Settings and Quit. The menu has the Mac's panels: sign-in, meeting title,
+  Start/Stop with the elapsed time, level bars for "You" and "Others", warnings, the stop
+  countdown with **Keep recording**, the call offer, the "stopped by itself" notice, model
+  progress, the live transcript toggle, upload status with Retry/Discard, the 5 recent meetings,
+  and Dashboard / Settings… / Quit. One BoringTalks per user, of either build (two would record
+  the same calls): launching it again opens the menu; launching the other build (BoringTalks /
+  BoringTalks Dev) asks to quit the running one first. The app the updater restarts waits for the
+  old one to exit, and quitting always ends the process within 10 s, even with an audio driver
+  stuck. Opens at sign-in by default (`--background`, quietly). Starting a meeting never waits
+  more than 10 s for a side: a microphone that doesn't answer is reported and the meeting records
+  the others (each step of the microphone's start is logged).
+- **Where:** `BoringTalks.App/Views/TrayIcon.cs`, `MenuWindow.xaml`, `ViewModels/MenuViewModel.cs`,
+  `ViewModels/AppModel.cs`, `Platform/SingleInstance.cs`, `Platform/Registration.cs`.
+
+### Sign in with the browser
+
+- **What:** the Mac's PKCE device link. `boringtalks://` is registered for the user on every
+  launch; Windows starts a second BoringTalks with the callback link, which hands it to the
+  running one over a named pipe. The device token goes to Windows Credential Manager. **Paste
+  code** and **Copy the sign-in link** work as on the Mac. The PC's name is its Windows device name.
+- **Where:** `BoringTalks.Core/Auth/`, `BoringTalks.App/Platform/CredentialStore.cs`, `SingleInstance.cs`.
+
+### Recording a meeting
+
+- **What:** "You" from the microphone call apps use (the Communications default), the other
+  people from Windows' process loopback (everything the PC plays except BoringTalks, on every
+  output device). Both start in parallel and run on one 16 kHz clock; a side that can't start
+  (microphone privacy off, no output device) leaves a warning and the other records. Device
+  changes restart a side after 400 ms. Bluetooth headsets keep their music profile: "You" then
+  comes from the PC's own microphone. Saved as AAC in `.m4a` (48 kHz, 96 kbps mono, ~43 MB/h).
+- **Where:** `BoringTalks.App/Audio/`, `Recording/MeetingRecorder.cs`, `RecordingChannel.cs`,
+  `RecordingWriter.cs`; `BoringTalks.Core/Audio/`.
+- **Limits:** process loopback needs Windows 10 build 19041; before that, only the default output
+  device is recorded. Windows "N" editions without the Media Feature Pack upload the transcript
+  without audio. Audio over 200 MB (~4.5 h) isn't uploaded.
+
+### Stop after silence; offer to record a call, stop when it ends
+
+- **What:** the Mac's rules (`SilenceWatch`, `CallSignals`, `CallEndWatch`) with Windows signals:
+  the apps holding a microphone come from Windows' microphone privacy records (the data behind
+  the taskbar's microphone icon), re-read on registry change notifications and every 2 s.
+  Records left "in use" by an app that crashed mid-call (or an old version) are ignored. The
+  offer is a toast with **Record / Not now / Never for <app>** and the same banner in the menu;
+  the silence warning is a toast with **Keep recording**.
+- **Where:** `BoringTalks.App/Platform/MicUsageMonitor.cs`, `Notifier.cs`;
+  `BoringTalks.Core/Calls/`, `SilenceWatch.cs`.
+- **Limits:** call apps are recognized by executable name (Zoom, Teams, Webex, Slack, Discord,
+  WhatsApp, Telegram, Skype, browsers) or Store package; others via `extraCallApps` in
+  `%APPDATA%\BoringTalks\settings.json`.
+
+### On-device transcription and telling the other people apart
+
+- **What:** Parakeet TDT 0.6B v3 (int8) and pyannote segmentation 3.0 through sherpa-onnx on the
+  CPU, with the Mac's phrase logic (previews, pauses, 15 s cap, pitch and voice cuts, turns).
+  Voices are TitaNet-small embeddings, recalibrated for that model (same < 0.55, new > 0.70;
+  0.9 % of phrases to the wrong speaker in simulated 2–4 person meetings on LibriSpeech).
+  Models (~717 MB) download at the first launch (and whenever files are missing or incomplete),
+  with resume and SHA-256 checks, into `%LOCALAPPDATA%\BoringTalks-Models`; the menu shows the
+  progress. **Upload only** (Settings › Transcription › Online, after the meeting) skips all of
+  this, like the Mac's online mode: no model is downloaded, the meeting is recorded as stereo AAC
+  (48 kHz, 128 kbps) with the microphone on the left and the PC's sound on the right, and uploaded
+  with `channels: "mic-system"` and no transcript; the server transcribes each side, keeping
+  “You” apart, and stores a mono mix for playback. In both modes each side's speech is levelled
+  before it's mixed (`SpeechLeveler`: up to 4× for a quiet microphone, down to ½ for a loud one,
+  holding still in pauses), so “You” is as loud as the call. A failed download says so in the menu with **Try again**, and retries by itself when
+  the network comes back and every 5 minutes. A meeting recorded before they're ready waits (up
+  to 20 min per side), else goes to the server's transcription with its audio.
+- **Where:** `BoringTalks.Speech/`, `BoringTalks.Core/Speech/`.
+- **Limits:** the language setting only labels the transcript (Parakeet in sherpa-onnx detects it);
+  without a setting, `LanguageGuess` (alphabet, common words) does.
+
+### Transcript assembly, live window, upload queue, recordings
+
+- **What:** as on the Mac: speakers labelled "You" / "Speaker N", echo dropped, the live transcript
+  window (two talking heads drawn like the website's, floating above other windows without taking
+  focus or a place in Alt+Tab), the persistent upload queue (`%APPDATA%\BoringTalks\uploads.json`,
+  `source: "windows"`, `User-Agent: BoringTalks-Windows/<version>`), recordings kept 0/1/7/30
+  days in `%APPDATA%\BoringTalks\Recordings`.
+- **Where:** `BoringTalks.Core/Transcript/`, `Uploads/`, `RecordingJanitor.cs`;
+  `BoringTalks.App/Views/LiveTranscriptWindow.xaml`, `AvatarView.cs`.
+
+### Games
+
+- **What:** **Record when a game starts** (Settings › Calls, off by default): a game that runs for
+  10 s starts a recording titled "<game> session" (voice chat included) with a notification and a
+  **Stop** button; when the game has been closed for 20 s, the recording stops and uploads, and
+  the menu says why. A game is anything Windows' Game Bar recognised
+  (`HKCU\System\GameConfigStore\Children`) or run from a game library folder (Steam, Epic,
+  Xbox, GOG, EA, Ubisoft, Riot, Battle.net, `\Games\`), minus launchers, crash reporters,
+  anti-cheat services and installers; it's named after its library folder ("Cyberpunk 2077").
+  Running programs are checked every 5 s, only while the setting is on. `--games` prints what
+  counts as a game right now.
+- **Where:** `BoringTalks.Core/Calls/Games.cs` (`GameDetector`, `GameWatch`),
+  `BoringTalks.App/Platform/GameMonitor.cs`, `ViewModels/AppModel.cs`.
+
+### Settings, environments, command line
+
+- **What:** the Mac's settings in the same four tabs (**Transcription**: **Transcribe on this
+  PC** or **Online, after the meeting (upload only)**, speech model and language; **Recording**: **Microphone** (System default, or any connected microphone; an unplugged pick falls back to the default), Bluetooth, upload audio, keep recordings, stop after silence;
+  **Calls**: offer to record, stop when the call ends, **Record when a game starts**, **Open BoringTalks when I sign in to
+  Windows**, apps never asked about; **Account**: sign-in, API and dashboard, updates, version and
+  Quit). The window is as tall as the open tab (a tab taller than the screen scrolls) and reopens
+  on the tab last used. Saved in `%APPDATA%\BoringTalks\settings.json`, which
+  also takes `apiUrl` / `webUrl` (or `--api-url` / `--web-url`). Two builds, as on the Mac:
+  **BoringTalks** connects to production; **BoringTalks Dev** (`release.ps1 dev`, download
+  `https://download.boringtalks.lol/dev/BoringTalks-Dev-Setup-latest.exe`) to the dev environment.
+  They install and run side by side, each with its own name, sign-in link (`boringtalks-dev://`,
+  asked for with `&app=dev`), data folder (`%APPDATA%\BoringTalksDev`) and Start menu entry; they
+  share the speech models. Command line: `--transcribe`,
+  `--listen-test [s] [--mic]`, `--mic-users`, `--games`, `--demo`, `--show-menu`, `--show-settings [tab]`; debug builds add `--debug-sign-in`,
+  `--debug-print-connect-url`, `--debug-sign-out`, `--debug-record <seconds>`.
+- **Where:** `BoringTalks.App/Views/SettingsWindow.xaml`, `BoringTalks.Core/Settings.cs`,
+  `BoringTalks.Core/AppFlavor.cs` (chosen at build time, `-p:BoringTalksFlavor=dev`),
+  `BoringTalks.App/CommandLineTools.cs`.
+
+### Distribution
+
+- **What:** a self-contained per-user installer (Velopack, no admin rights, ~97 MB) and
+  `latest-windows.json` on R2 next to the DMGs; the website's `GET /downloads` offers it.
+  Uninstalling removes the link handler, the sign-in entry, notifications and the models (kept
+  while the other build is still installed).
+- **Updates itself:** the installed app checks its feed
+  (`download.boringtalks.lol/[dev/]updates/windows/releases.win.json`) 30 s after launch and then
+  every 4 hours, and downloads a newer build in the background. The menu then says
+  “BoringTalks 0.5.1 is ready.” with **Restart to update**; Settings › Account shows where it
+  stands (up to date, downloading with a progress bar, ready, or why the check failed) with
+  **Check for updates**. It never restarts by itself and offers no restart while a meeting is
+  recording; a waiting build otherwise installs when the app quits (or Windows signs out), and
+  the restarted app comes back in the tray. Every release (prod or dev) moves the patch up
+  (`scripts/next-version.mjs`), so each build is newer than the one installed; the Mac's
+  `release.sh` does the same.
+- **Where:** `apps/windows/scripts/` (`release.ps1` runs `build.ps1` and `publish.ps1` on a
+  developer's PC; CI runs `test.ps1` and keeps each PR's installer as an artifact);
+  `BoringTalks.Core/Updates/AppUpdater.cs`, `BoringTalks.App/Platform/VelopackFeed.cs`.
+- **Limits:** not code-signed yet: browsers and SmartScreen warn on the first run
+  (**More info → Run anyway**), which the landing page explains.
+
 ## Backend features (apps/api)
 
 ### Meetings API
@@ -635,10 +810,13 @@ as rows for search. `POST /meetings` honours `Idempotency-Key`, so a client retr
 duplicate.
 
 ### Processing pipeline (worker)
-- **Two-channel Mac recordings** (`audioChannels = 'mic-system'`, from **Transcribe: Online**):
+- **Two-channel recordings** (`audioChannels = 'mic-system'`, from the Mac's **Transcribe: Online**
+  and the Windows app's **upload only**):
   ffmpeg splits the file into the microphone side and the system side (mono 24 kbps MP3 each) plus a
   mono AAC mix, which becomes the meeting's playback audio (`audio-playback.m4a`, `playback_key`) so
-  the user isn't in one ear only. The mix is made once both sides are transcribed, and the
+  the user isn't in one ear only. The mix levels each side first (`dynaudnorm`, up to +20 dB, so a
+  quiet headset microphone sounds as loud as the call) and adds them instead of averaging, with a
+  limiter (`playbackMix` in `processing/audio-prep.ts`). The mix is made once both sides are transcribed, and the
   dashboard is never handed the two-channel file: no player until the mix exists. Both sides go through the transcriber below in parallel; the
   system side gets its voices told apart, every microphone segment becomes “You”, and a microphone
   phrase that overlaps the others' and repeats ≥ 60% of their words is dropped as echo (the Mac's
@@ -687,7 +865,7 @@ duplicate.
   meetings reuse them; tags are trimmed, capped at four and spelled like an existing tag when they
   match case-insensitively. They power the topic filter (`meetings.topics`, GIN index).
 - **Email** (Resend): welcome, "your meeting is ready" (summary + action items, per-user toggle),
-  "new Mac connected". Idempotent, allow-listed in dev, logged instead of sent without a key.
+  "new computer connected". Idempotent, allow-listed in dev, logged instead of sent without a key.
 - Jobs retry 5 times with backoff, collapse duplicates, and a final failure marks the meeting
   `failed` with the reason; Reprocess starts over.
 
@@ -702,5 +880,6 @@ emailed there (without the log) through the `email` queue. Operators read them w
 `src/email/templates/problem-report.tsx`, migration `0006_problem_reports`.
 
 ### Operations
-`GET /health` (database + Redis, version, commit), `GET /downloads/latest` (current DMG),
+`GET /health` (database + Redis, version, commit), `GET /downloads` (current Mac and Windows
+builds; `GET /downloads/latest[/:platform]` for one),
 per-user rate limits in Redis, structured JSON logs, graceful shutdown.

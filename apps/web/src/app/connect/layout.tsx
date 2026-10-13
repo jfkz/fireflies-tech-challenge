@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { RequireAuth } from '@/components/app/RequireAuth';
 import { Logo } from '@/components/brand/Logo';
 
-export const metadata: Metadata = { title: 'Connect your Mac', robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: 'Connect your computer', robots: { index: false, follow: false } };
 
 export default function ConnectLayout({ children }: LayoutProps<'/connect'>) {
   return (

@@ -1,5 +1,7 @@
 'use client';
 
+import { useDownloads } from '@/hooks/queries';
+import { usePlatform } from '@/hooks/usePlatform';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import Link from 'next/link';
 import { AnimatePresence, m, useMotionValue, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
@@ -8,6 +10,8 @@ import { SpeechBubble } from '@/components/avatar/SpeechBubble';
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { TypeLine } from '@/components/avatar/TypeLine';
 import { MEN, WOMEN, type AvatarStyle } from '@/lib/avatar/styles';
+import { heroDownload } from '@/lib/landing/downloads';
+import { PLATFORM_NAME } from '@/lib/platform';
 import { CHATTER, clockMinutes, MEETING_BEATS, meetingBeatAt, type HeadMood, type MeetingBeat } from '@/lib/landing/story';
 import { Mug, OfficeWindow, Plant, WallClock, Whiteboard } from './RoomArt';
 
@@ -103,14 +107,12 @@ export function MeetingStory() {
                 Your meeting, minus the meeting.
               </h1>
               <p className="mt-4 max-w-[46ch] text-[1.05rem] leading-relaxed font-semibold text-white/90 sm:text-lg">
-                BoringTalks records the call on your Mac, writes it all down, and hands you a title, a summary and who promised what. You can keep
+                BoringTalks records the call on your computer, writes it all down, and hands you a title, a summary and who promised what. You can keep
                 nodding.
               </p>
               {/* One column, so nothing reaches across to the heads on the right. */}
               <div className="mt-6 flex flex-col items-start gap-2.5">
-                <a href="#download" className="btn btn-primary btn-lg">
-                  <DownloadGlyph /> Download for Mac
-                </a>
+                <HeroDownload />
                 <Link href="/signup" className="pl-1 text-base font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white">
                   or try it in the browser →
                 </Link>
@@ -249,6 +251,49 @@ function Table() {
           Meeting room 4B. HDMI cable missing since 2019.
         </div>
       </div>
+    </div>
+  );
+}
+
+/** "Download for Windows" / "for Mac": the app the visitor would get, which the card below offers first. */
+/**
+ * The big button gets the visitor's own app straight away (and shows the first-launch steps
+ * below); the other apps are small links under it.
+ */
+function HeroDownload() {
+  const platform = usePlatform();
+  const { data } = useDownloads();
+  const hero = heroDownload(platform, data);
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <a
+        href={hero.href}
+        // Narrower between lg and xl, where the text column sits right next to the first head.
+        className="btn btn-primary btn-lg lg:max-xl:px-5 lg:max-xl:py-3 lg:max-xl:text-base"
+        data-testid="hero-download"
+        {...(hero.direct
+          ? { download: true, onClick: () => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' }) }
+          : {})}
+      >
+        <DownloadGlyph /> {hero.label}
+      </a>
+      {hero.others.length > 0 && data && (
+        <p className="pl-1 text-sm font-bold text-white/80">
+          Also for{' '}
+          {hero.others.map((p, i) => (
+            <span key={p}>
+              {i > 0 && ', '}
+              <a href={data[p]!.url} download className="font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white">
+                {PLATFORM_NAME[p]}
+              </a>
+            </span>
+          ))}
+          {' · '}
+          <a href="#download" className="font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white">
+            all downloads
+          </a>
+        </p>
+      )}
     </div>
   );
 }
