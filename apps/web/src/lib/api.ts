@@ -108,7 +108,7 @@ export function createApiClient({ baseUrl, getToken, fetch: fetchImpl }: ApiClie
     listMeetings: (q: Partial<ListMeetingsQuery> = {}, signal?: AbortSignal) =>
       request('GET', '/meetings', {
         schema: MeetingPage,
-        query: { cursor: q.cursor, limit: q.limit, q: q.q, speaker: q.speaker, topic: q.topic, from: q.from, to: q.to },
+        query: { cursor: q.cursor, page: q.page, limit: q.limit, q: q.q, speaker: q.speaker, topic: q.topic, from: q.from, to: q.to },
         signal,
       }),
     meetingFacets: (signal?: AbortSignal) => request('GET', '/meetings/facets', { schema: MeetingFacets, signal }),

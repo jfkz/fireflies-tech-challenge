@@ -40,3 +40,26 @@ export function chainNeighbours(chain: MeetingChain, id: string): Neighbours | n
 export function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 }
+
+/** How many days either side of a meeting the "Link to…" picker offers before anything is searched. */
+export const LINK_WINDOW_DAYS = 45;
+
+/** [days before, days after) an instant, as ISO instants. */
+export function aroundRange(iso: string, days: number): { from: string; to: string } {
+  const at = Date.parse(iso);
+  const span = days * 86_400_000;
+  return { from: new Date(at - span).toISOString(), to: new Date(at + span).toISOString() };
+}
+
+/**
+ * The meetings a meeting may be linked to: not itself and not already in its chain. Without a search
+ * the nearest come first (the earlier one on a tie); a search keeps the API's best-match order.
+ */
+export function linkCandidates<T extends MeetingRef>(items: readonly T[], meeting: MeetingRef & { chain?: MeetingChain | null }, nearest: boolean): T[] {
+  const taken = new Set([meeting.id, ...(meeting.chain?.meetings.map((m) => m.id) ?? [])]);
+  const left = items.filter((m) => !taken.has(m.id));
+  if (!nearest) return left;
+  const at = Date.parse(meeting.startedAt);
+  const away = (m: T) => Math.abs(Date.parse(m.startedAt) - at);
+  return left.sort((a, b) => away(a) - away(b) || Date.parse(a.startedAt) - Date.parse(b.startedAt));
+}

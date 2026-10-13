@@ -1,6 +1,17 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BUILD, holdUpdates, isNewBuild, parseBuildInfo, setLiveBuild, updatesHeld, versionLabel, type BuildInfo } from '@/lib/version';
+import {
+  BUILD,
+  fetchServices,
+  holdUpdates,
+  isNewBuild,
+  parseBuildInfo,
+  servicesLabel,
+  setLiveBuild,
+  updatesHeld,
+  versionLabel,
+  type BuildInfo,
+} from '@/lib/version';
 import { UpdatePrompt, VersionTag } from './UpdatePrompt';
 
 const CURRENT: BuildInfo = { version: '0.2.0', commit: 'aaaaaaa' };
@@ -130,5 +141,45 @@ describe('UpdatePrompt', () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('dialog')).toHaveAttribute('open');
+  });
+});
+
+describe('the API and Mac versions', () => {
+  const API: BuildInfo = { version: '0.2.3', commit: 'ccccccccccccccc' };
+  const MAC: BuildInfo = { version: '0.2.0', commit: '4242' };
+
+  it('label only the parts that answered', () => {
+    expect(servicesLabel({ api: API, mac: MAC })).toBe('API v0.2.3 · Mac v0.2.0');
+    expect(servicesLabel({ api: API })).toBe('API v0.2.3');
+    expect(servicesLabel({})).toBe('');
+  });
+
+  it('come from /health and /downloads/latest', async () => {
+    const answers: Record<string, Response | Error> = {
+      'https://api.test/health': new Response(JSON.stringify({ status: 'error', version: '0.2.3', commit: API.commit }), { status: 503 }),
+      'https://api.test/downloads/latest': new Response(JSON.stringify({ version: '0.2.0', build: '4242', url: 'https://x' })),
+    };
+    const doFetch = vi.fn((url: string) => {
+      const answer = answers[url];
+      return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
+    }) as unknown as typeof fetch;
+    await expect(fetchServices('https://api.test', doFetch)).resolves.toEqual({ api: API, mac: MAC });
+
+    answers['https://api.test/health'] = new Error('offline');
+    answers['https://api.test/downloads/latest'] = new Response('{}', { status: 404 });
+    await expect(fetchServices('https://api.test', doFetch)).resolves.toEqual({ api: undefined, mac: undefined });
+  });
+
+  it('follow the web version in the dashboard footer', async () => {
+    render(<VersionTag current={CURRENT} services loadOthers={() => Promise.resolve({ api: API, mac: MAC })} />);
+    const label = await screen.findByText('API v0.2.3 · Mac v0.2.0');
+    expect(label).toHaveAttribute('title', 'API 0.2.3, commit ccccccc; Mac app 0.2.0 (build 4242)');
+    expect(screen.getByText('v0.2.0 · aaaaaaa')).toBeInTheDocument();
+  });
+
+  it('are not asked for elsewhere', () => {
+    const loadOthers = vi.fn(() => Promise.resolve({}));
+    render(<VersionTag current={CURRENT} loadOthers={loadOthers} />);
+    expect(loadOthers).not.toHaveBeenCalled();
   });
 });

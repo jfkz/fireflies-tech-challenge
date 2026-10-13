@@ -129,13 +129,15 @@ export async function mockApi(
       const from = url.searchParams.get('from');
       const to = url.searchParams.get('to');
       const limit = Number(url.searchParams.get('limit') ?? 20);
-      const start = Number(url.searchParams.get('cursor') ?? 0);
+      const page = url.searchParams.get('page');
+      const start = page ? (Number(page) - 1) * limit : Number(url.searchParams.get('cursor') ?? 0);
       const all = state.meetings
         .filter((m) => !q || [m.title, m.description ?? '', ...m.segments.map((s) => s.text)].join(' ').toLowerCase().includes(q))
         .filter((m) => (!speaker || m.speakers.includes(speaker)) && (!topic || m.topics.includes(topic)))
         .filter((m) => (!from || m.startedAt >= new Date(from).toISOString()) && (!to || m.startedAt < new Date(to).toISOString()))
         .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
       const items = all.slice(start, start + limit).map(toListItem);
+      if (page) return json(route, 200, { items, nextCursor: null, total: all.length });
       const next = start + limit < all.length ? String(start + limit) : null;
       return json(route, 200, { items, nextCursor: next });
     }
@@ -217,6 +219,18 @@ export async function mockApi(
         const ai = parsed.data.actionItem;
         if (ai && next.summary) {
           next = { ...next, summary: { ...next.summary, actionItems: next.summary.actionItems.map((a) => (a.id === ai.id ? { ...a, done: ai.done } : a)) } };
+        }
+        const link = parsed.data.chain;
+        if (link === null) next = { ...next, chain: null };
+        if (link) {
+          // Just enough of the real thing: a chain of the two, linked by hand (no reason).
+          const to = state.meetings.find((x) => x.id === link.with);
+          if (!to) return error(route, 404, 'Meeting not found');
+          if (to.id === next.id) return error(route, 400, 'A meeting cannot be chained to itself');
+          const meetings = [to, next].map(({ id: ref, title, startedAt }) => ({ id: ref, title, startedAt })).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+          const chain = { id: to.chain?.id ?? crypto.randomUUID(), meetings, reason: null };
+          state.meetings[state.meetings.indexOf(to)] = { ...to, chain };
+          next = { ...next, chain };
         }
         return json(route, 200, save(next));
       }

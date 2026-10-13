@@ -16,5 +16,6 @@ describe('JobsService', () => {
     expect(e.add.mock.calls.map((c) => c[2].jobId)).toEqual(['meeting-ready_m1_2', 'welcome_u', 'device-connected_d']);
     expect(meetingJobId('a', 'b', 3)).not.toContain(':');
     expect(emailJobId({ type: 'welcome', userId: 'x' })).toBe('welcome_x');
+    expect(emailJobId({ type: 'problem-report', userId: 'x', reportId: 'r' })).toBe('problem-report_r');
   });
 });

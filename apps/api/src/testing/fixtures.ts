@@ -46,6 +46,8 @@ export function meeting(overrides: Partial<MeetingRow> = {}): MeetingRow {
     audioKey: null,
     audioContentType: null,
     hasAudio: false,
+    audioChannels: null,
+    playbackKey: null,
     transcriptKey: null,
     speakers: [],
     speakerNames: {},

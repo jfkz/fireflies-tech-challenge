@@ -15,6 +15,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     var onDeclineCall: (() -> Void)?
     /// …Never ask for this app (its name).
     var onIgnoreCallApp: ((String) -> Void)?
+    /// "Stop" on the notice of a call recorded by itself.
+    var onStopRecording: (() -> Void)?
 
     private var center: UNUserNotificationCenter { .current() }
 
@@ -24,10 +26,12 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let record = UNNotificationAction(identifier: IDs.recordAction, title: "Record")
         let notNow = UNNotificationAction(identifier: IDs.notNowAction, title: "Not now")
         let never = UNNotificationAction(identifier: IDs.neverAction, title: "Never for this app")
+        let stop = UNNotificationAction(identifier: IDs.stopAction, title: "Stop", options: [.destructive])
         center.setNotificationCategories([
             UNNotificationCategory(identifier: IDs.silenceCategory, actions: [keep], intentIdentifiers: []),
             UNNotificationCategory(identifier: IDs.callCategory, actions: [record, notNow, never], intentIdentifiers: [],
                                    options: [.customDismissAction]),
+            UNNotificationCategory(identifier: IDs.autoStartCategory, actions: [stop], intentIdentifiers: []),
         ])
     }
 
@@ -36,6 +40,19 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             _ = await post(id: IDs.callOffer, category: IDs.callCategory, title: "\(app) is in a call. Record it?",
                            body: "BoringTalks can write this meeting down. Choose Record to start.", userInfo: ["app": app])
         }
+    }
+
+    /// A call app's call is being recorded without asking (Settings › Calls).
+    func recordingCallAutomatically(app: String) {
+        Task {
+            _ = await post(id: IDs.autoStarted, category: IDs.autoStartCategory, title: "Recording the \(app) call",
+                           body: "BoringTalks started recording by itself, as set in Settings. Stop it here or from the menu bar.",
+                           userInfo: ["app": app])
+        }
+    }
+
+    func clearAutoStartNotice() {
+        center.removeDeliveredNotifications(withIdentifiers: [IDs.autoStarted])
     }
 
     func withdrawOffer() {
@@ -109,6 +126,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             case IDs.recordAction: onRecordCall?()
             case UNNotificationDefaultActionIdentifier where isCallOffer: onRecordCall?()
             case IDs.notNowAction, UNNotificationDismissActionIdentifier where isCallOffer: onDeclineCall?()
+            case IDs.stopAction: onStopRecording?()
             case IDs.neverAction: if let app { onIgnoreCallApp?(app) }
             default: break
             }
@@ -126,4 +144,7 @@ private enum IDs {
     static let recordAction = "record-call"
     static let notNowAction = "not-now"
     static let neverAction = "never-for-app"
+    static let autoStartCategory = "call-recording"
+    static let autoStarted = "call-auto-started"
+    static let stopAction = "stop-recording"
 }

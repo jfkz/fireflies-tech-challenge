@@ -58,6 +58,8 @@ describe('requests', () => {
     expect(UploadUrlRequest.safeParse({ contentType: 'audio/mp4', sizeBytes: MAX_AUDIO_BYTES + 1 }).success).toBe(false);
     expect(UploadUrlRequest.safeParse({ contentType: 'video/mp4', sizeBytes: 10 }).success).toBe(false);
     expect(UploadUrlRequest.safeParse({ contentType: 'audio/webm', sizeBytes: 10 }).success).toBe(true);
+    expect(UploadUrlRequest.safeParse({ contentType: 'audio/mp4', sizeBytes: 10, channels: 'mic-system' }).success).toBe(true);
+    expect(UploadUrlRequest.safeParse({ contentType: 'audio/mp4', sizeBytes: 10, channels: 'quad' }).success).toBe(false);
   });
   it('requires something to update', () => {
     expect(UpdateMeetingRequest.safeParse({}).success).toBe(false);
@@ -68,6 +70,11 @@ describe('requests', () => {
     expect(ListMeetingsQuery.parse({ limit: '5' }).limit).toBe(5);
     expect(ListMeetingsQuery.parse({}).limit).toBe(20);
     expect(ListMeetingsQuery.safeParse({ limit: '500' }).success).toBe(false);
+  });
+  it('takes a numbered page or a cursor, not both', () => {
+    expect(ListMeetingsQuery.parse({ page: '3' }).page).toBe(3);
+    expect(ListMeetingsQuery.safeParse({ page: '0' }).success).toBe(false);
+    expect(ListMeetingsQuery.safeParse({ page: '2', cursor: 'c' }).success).toBe(false);
   });
   it('validates PKCE values', () => {
     const challenge = 'a'.repeat(43);

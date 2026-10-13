@@ -126,6 +126,104 @@ describe('Meeting navigation', () => {
     expect(nav.router.push).toHaveBeenCalledTimes(4);
   });
 
+  describe('Link to…', () => {
+    const item = (n: number, title: string, day: string) => ({ ...meeting({ id: id(n), title, startedAt: `2026-${day}T10:00:00.000Z` }), actionItemCount: 0 });
+    const KICKOFF = item(5, 'Pricing kickoff', '09-20');
+    const FOLLOW_UP = item(6, 'Pricing follow-up', '10-03');
+    const OLD = item(7, 'Pricing in spring', '04-01');
+    const CHAINED = item(4, 'Pricing 4', '09-24');
+
+    /** The day query gets nothing; the picker gets the meetings around this one, or OLD for a search. */
+    function linkApi(m: MeetingDetail, updateMeeting = vi.fn(async () => ({ ...m, chain: chain([2, 5]) }))) {
+      const listMeetings = vi.fn(async (q: { q?: string; from?: string; to?: string }) => {
+        if (q.q) return { items: q.q === 'spring' ? [OLD] : [], nextCursor: null };
+        const days = (Date.parse(q.to!) - Date.parse(q.from!)) / 86_400_000;
+        return { items: days > 2 ? [FOLLOW_UP, CHAINED, { ...m, actionItemCount: 0 }, KICKOFF] : [], nextCursor: null };
+      });
+      return setup(m, [], { listMeetings: listMeetings as never, updateMeeting: updateMeeting as never });
+    }
+
+    it('links a meeting that is in no chain to another one, nearest first or searched', async () => {
+      const m = meeting({ id: id(2), startedAt: '2026-10-01T10:00:00.000Z' });
+      const api = linkApi(m);
+      fireEvent.click(await screen.findByRole('button', { name: 'Link to…' }));
+      const dialog = screen.getByRole('dialog', { name: 'Link to another meeting' });
+      expect(dialog).not.toHaveTextContent('leaves its current chain');
+      const list = await within(dialog).findByRole('list', { name: 'Meetings to link to' });
+      // Nearest first, without the meeting itself.
+      expect(within(list).getAllByRole('button').map((b) => b.textContent)).toEqual([
+        expect.stringContaining('Pricing follow-up'),
+        expect.stringContaining('Pricing 4'),
+        expect.stringContaining('Pricing kickoff'),
+      ]);
+      expect(api.listMeetings).toHaveBeenCalledWith(
+        { from: '2026-08-17T10:00:00.000Z', to: '2026-11-15T10:00:00.000Z', limit: 100 },
+        expect.anything(),
+      );
+
+      const search = within(dialog).getByRole('searchbox', { name: 'Search meetings' });
+      fireEvent.change(search, { target: { value: 'nothing' } });
+      expect(await within(dialog).findByText('No other meetings match “nothing”.')).toBeInTheDocument();
+      fireEvent.change(search, { target: { value: ' spring ' } });
+      fireEvent.click(await within(dialog).findByRole('button', { name: /Pricing in spring/ }));
+      expect(api.listMeetings).toHaveBeenCalledWith({ q: 'spring', limit: 30 }, expect.anything());
+      await waitFor(() => expect(api.updateMeeting).toHaveBeenCalledWith(id(2), { chain: { with: id(7) } }));
+      // Linked: the picker closes and the chain shows.
+      expect(await screen.findByTestId('meeting-chain')).toHaveTextContent('Chain · 1 of 2');
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it("hides the chain's own meetings and says this one leaves it", async () => {
+      linkApi(meeting({ id: id(2), startedAt: '2026-10-01T10:00:00.000Z', chain: chain([2, 4]) }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Link to…' }));
+      const dialog = screen.getByRole('dialog', { name: 'Link to another meeting' });
+      expect(dialog).toHaveTextContent('This meeting leaves its current chain.');
+      const list = await within(dialog).findByRole('list', { name: 'Meetings to link to' });
+      expect(within(list).getAllByRole('button').map((b) => b.textContent)).toEqual([expect.stringContaining('Pricing follow-up'), expect.stringContaining('Pricing kickoff')]);
+    });
+
+    it('says when there is nothing nearby, and closes with Escape or Cancel', async () => {
+      setup(meeting({ id: id(2), startedAt: at('10:00') }), []);
+      fireEvent.click(await screen.findByRole('button', { name: 'Link to…' }));
+      let dialog = screen.getByRole('dialog', { name: 'Link to another meeting' });
+      expect(await within(dialog).findByText('No other meetings within 45 days. Search to find older ones.')).toBeInTheDocument();
+      fireEvent.keyDown(within(dialog).getByRole('searchbox'), { key: 'Escape' });
+      expect(screen.queryByRole('dialog')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Link to…' }));
+      dialog = screen.getByRole('dialog', { name: 'Link to another meeting' });
+      // The search starts empty again.
+      expect(within(dialog).getByRole('searchbox')).toHaveValue('');
+      fireEvent.keyDown(dialog, { key: 'Enter' });
+      fireEvent(dialog, new Event('cancel'));
+      expect(screen.queryByRole('dialog')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Link to…' }));
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Link to…' }));
+      // A click on the backdrop lands on the dialog itself.
+      fireEvent.click(screen.getByRole('dialog'));
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('shows a failed link in the picker', async () => {
+      const m = meeting({ id: id(2), startedAt: '2026-10-01T10:00:00.000Z' });
+      linkApi(m, vi.fn(async () => Promise.reject(new Error('Chain is busy'))));
+      fireEvent.click(await screen.findByRole('button', { name: 'Link to…' }));
+      const dialog = screen.getByRole('dialog');
+      fireEvent.click(await within(dialog).findByRole('button', { name: /Pricing kickoff/ }));
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Chain is busy');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('shows a list that would not load', async () => {
+      setup(meeting({ id: id(2), startedAt: at('10:00') }), [], { listMeetings: vi.fn(async () => Promise.reject(new Error('API asleep'))) });
+      fireEvent.click(await screen.findByRole('button', { name: 'Link to…' }));
+      expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent('API asleep');
+    });
+  });
+
   it('links named speakers to their person page; labels and you to the filtered list', async () => {
     setup(meeting({ id: id(2), startedAt: at('10:00'), speakers: ['Ann', 'Maya Chen', 'Speaker 2'] }), [], { me: vi.fn(async () => ME) });
     const chips = await screen.findByRole('list', { name: 'Speakers and topics' });

@@ -1,8 +1,15 @@
+import type { Segment } from '@boringtalks/shared';
 import { UnrecoverableError, type Job } from 'bullmq';
+import { splitChannels } from './audio-prep';
 import { meeting, seg, testConfig, user } from '../testing/fixtures';
 import { PipelineService } from './pipeline.service';
 import { isFinalFailure, SummarizeProcessor, TranscribeProcessor } from './processors';
 import type { SummaryResult } from './summarizer';
+
+vi.mock('./audio-prep', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./audio-prep')>()),
+  splitChannels: vi.fn(),
+}));
 
 const result: SummaryResult = {
   title: 'Specific title',
@@ -23,18 +30,19 @@ function setup() {
     findById: vi.fn(),
     transition: vi.fn(),
     getSegments: vi.fn(),
+    update: vi.fn(),
     saveSummary: vi.fn().mockImplementation(async (id: string) => meeting({ id, status: 'ready' })),
     topTopics: vi.fn().mockResolvedValue([]),
     chainCandidates: vi.fn().mockResolvedValue([]),
     joinChain: vi.fn(),
   };
   const transcripts = { store: vi.fn() };
-  const storage = { getBytes: vi.fn().mockResolvedValue(new Uint8Array(3)), putJson: vi.fn() };
+  const storage = { getBytes: vi.fn().mockResolvedValue(new Uint8Array(3)), putJson: vi.fn(), putBytes: vi.fn() };
   const users = { findById: vi.fn().mockResolvedValue(user()) };
   const jobs = { summarize: vi.fn(), email: vi.fn() };
   const transcriber = { transcribe: vi.fn() };
   const summarizer = { summarize: vi.fn().mockResolvedValue(result) };
-  const diarizer = { diarize: vi.fn(async ({ segments }: { segments: unknown[] }) => segments) };
+  const diarizer = { diarize: vi.fn(async ({ segments }: { audio: Uint8Array; segments: Segment[] }) => segments) };
   const chains = { link: vi.fn().mockResolvedValue(null) };
   const pipeline = new PipelineService(
     meetings as never,
@@ -102,6 +110,72 @@ describe('PipelineService.transcribe', () => {
     t.meetings.findById.mockResolvedValue(meeting({ status: 'transcribing', attempts: 1, audioKey: 'a' }));
     t.transcriber.transcribe.mockResolvedValue({ segments: [], language: null, durationSec: null });
     await expect(t.pipeline.transcribe({ meetingId: 'x', run: 1 })).rejects.toThrow('No speech');
+  });
+});
+
+describe('PipelineService.transcribe: microphone and system audio on their own channels', () => {
+  const mic = new Uint8Array([1]);
+  const system = new Uint8Array([2, 2]);
+  const mix = new Uint8Array([3, 3, 3]);
+
+  function split(t: ReturnType<typeof setup>) {
+    const m = meeting({ status: 'transcribing', attempts: 1, audioKey: 'audio.m4a', audioContentType: 'audio/mp4', audioChannels: 'mic-system' });
+    t.meetings.findById.mockResolvedValue(m);
+    t.meetings.transition.mockResolvedValue({ ...m, status: 'summarizing' });
+    vi.mocked(splitChannels).mockResolvedValue({ mic, system, mix });
+    return m;
+  }
+
+  it('transcribes each side, labels the microphone You, drops its echo and keeps a mono mix to play', async () => {
+    const t = setup();
+    const m = split(t);
+    t.transcriber.transcribe.mockImplementation(async ({ audio }: { audio: Uint8Array }) =>
+      audio === mic
+        ? { segments: [seg('Speaker 1', 0, 1000, 'Hello there'), seg('Speaker 1', 3000, 4000, 'we ship on Friday')], language: 'en', durationSec: 5, diarized: true }
+        : { segments: [seg('Speaker 1', 3000, 4000, 'We ship on Friday'), seg('Speaker 1', 4500, 5000, 'Great')], language: 'en', durationSec: 5 },
+    );
+    t.diarizer.diarize.mockImplementationOnce(async ({ segments }) => segments.map((s, i) => ({ ...s, speaker: `Speaker ${i + 1}` })));
+    await expect(t.pipeline.transcribe({ meetingId: m.id, run: 1 })).resolves.toBe('done');
+
+    expect(t.transcriber.transcribe).toHaveBeenCalledWith({ audio: mic, mediaType: 'audio/mpeg', language: null });
+    expect(t.transcriber.transcribe).toHaveBeenCalledWith({ audio: system, mediaType: 'audio/mpeg', language: null });
+    // Only the others' side is listened to again for voices.
+    expect(t.diarizer.diarize).toHaveBeenCalledTimes(1);
+    expect(t.diarizer.diarize.mock.calls[0][0].audio).toBe(system);
+    expect(t.transcripts.store.mock.calls[0][1].segments).toEqual([
+      seg('You', 0, 1000, 'Hello there'),
+      seg('Speaker 1', 3000, 4000, 'We ship on Friday'),
+      seg('Speaker 2', 4500, 5000, 'Great'),
+    ]);
+    const key = `users/${m.userId}/meetings/${m.id}/audio-playback.m4a`;
+    expect(t.storage.putBytes).toHaveBeenCalledWith(key, mix, 'audio/mp4');
+    expect(t.meetings.update).toHaveBeenCalledWith(m.id, { playbackKey: key });
+    expect(t.jobs.summarize).toHaveBeenCalledWith(m.id, 1);
+  });
+
+  it('is fine with one side silent, and gives up when both are', async () => {
+    const t = setup();
+    const m = split(t);
+    t.transcriber.transcribe.mockImplementation(async ({ audio }: { audio: Uint8Array }) => ({
+      segments: audio === mic ? [seg('Speaker 1', 0, 1000, 'Just me today')] : [],
+      language: 'en',
+      durationSec: 1,
+    }));
+    await t.pipeline.transcribe({ meetingId: m.id, run: 1 });
+    expect(t.transcripts.store.mock.calls[0][1].segments).toEqual([seg('You', 0, 1000, 'Just me today')]);
+    expect(t.diarizer.diarize).not.toHaveBeenCalled();
+
+    t.transcriber.transcribe.mockResolvedValue({ segments: [], language: null, durationSec: null });
+    await expect(t.pipeline.transcribe({ meetingId: m.id, run: 1 })).rejects.toThrow('No speech');
+  });
+
+  it('mixes only after both sides are transcribed', async () => {
+    const t = setup();
+    const m = split(t);
+    t.transcriber.transcribe.mockRejectedValue(new Error('gateway down'));
+    await expect(t.pipeline.transcribe({ meetingId: m.id, run: 1 })).rejects.toThrow('gateway down');
+    expect(t.storage.putBytes).not.toHaveBeenCalled();
+    expect(t.meetings.update).not.toHaveBeenCalled();
   });
 });
 

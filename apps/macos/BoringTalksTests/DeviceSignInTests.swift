@@ -47,8 +47,15 @@ final class DeviceLinkTests: XCTestCase {
         XCTAssertEqual(url.absoluteString, "https://dev.boringtalks.lol/connect?challenge=abc&device=Mac")
     }
 
+    func testConnectURLFromTheDevApp() {
+        let url = DeviceLink.connectURL(webURL: URL(literal: "https://dev.boringtalks.lol"), challenge: "abc", deviceName: "Mac", flavor: .dev)
+        XCTAssertEqual(url.absoluteString, "https://dev.boringtalks.lol/connect?challenge=abc&device=Mac&app=dev")
+    }
+
     func testCallbackCode() throws {
         XCTAssertEqual(try DeviceLink.code(fromCallback: URL(literal: "boringtalks://callback?code=abc123")), "abc123")
+        XCTAssertEqual(try DeviceLink.code(fromCallback: URL(literal: "boringtalks-dev://callback?code=dev1")), "dev1")
+        XCTAssertEqual(DeviceLink.code(fromPasted: " boringtalks-dev://callback?code=p2 "), "p2")
         XCTAssertEqual(try DeviceLink.code(fromCallback: URL(literal: "BoringTalks://Callback?state=x&code=c%2Fd")), "c/d")
     }
 
@@ -215,9 +222,40 @@ final class AppConfigTests: XCTestCase {
         XCTAssertEqual(fromArguments.webURL.absoluteString, "https://dev.boringtalks.lol")
     }
 
+    func testTheDevAppConnectsToDevUnlessToldOtherwise() throws {
+        let config = AppConfig.resolve(arguments: ["x"], defaults: try defaults(), flavor: .dev)
+        XCTAssertEqual(config.apiURL.absoluteString, "https://api.dev.boringtalks.lol")
+        XCTAssertEqual(config.webURL.absoluteString, "https://dev.boringtalks.lol")
+        XCTAssertFalse(config.isProduction)
+        let local = AppConfig.resolve(arguments: ["x", "--api-url", "http://localhost:3001"], defaults: try defaults(), flavor: .dev)
+        XCTAssertEqual(local.apiURL.absoluteString, "http://localhost:3001")
+    }
+
     func testInvalidURLsAreIgnored() throws {
         let config = AppConfig.resolve(arguments: ["x", "--api-url", "not a url", "--web-url", "ftp://x.y"],
                                        defaults: try defaults(["apiURL": "javascript:alert(1)"]))
         XCTAssertEqual(config, AppConfig())
+    }
+}
+
+final class AppFlavorTests: XCTestCase {
+    func testReadFromInfoPlist() {
+        XCTAssertEqual(AppFlavor.of(info: "dev"), .dev)
+        XCTAssertEqual(AppFlavor.of(info: "Dev"), .dev)
+        XCTAssertEqual(AppFlavor.of(info: "production"), .production)
+        XCTAssertEqual(AppFlavor.of(info: nil), .production)
+        XCTAssertEqual(AppFlavor.of(info: "staging"), .production)
+        // The test bundle has no BTFlavor.
+        XCTAssertEqual(AppFlavor.of(Bundle(for: AppFlavorTests.self)), .production)
+    }
+
+    func testTheTwoAppsKeepTheirThingsApart() {
+        XCTAssertEqual(AppFlavor.production.callbackScheme, "boringtalks")
+        XCTAssertEqual(AppFlavor.dev.callbackScheme, "boringtalks-dev")
+        XCTAssertNotEqual(AppFlavor.production.keychainService, AppFlavor.dev.keychainService)
+        XCTAssertEqual(AppFlavor.production.folders.root.lastPathComponent, "BoringTalks")
+        XCTAssertEqual(AppFlavor.dev.folders.root.lastPathComponent, "BoringTalks Dev")
+        XCTAssertEqual(AppFlavor.dev.displayName, "BoringTalks Dev")
+        XCTAssertEqual(KeychainStore().service, AppFlavor.production.keychainService)
     }
 }

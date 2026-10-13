@@ -31,3 +31,33 @@ export function meetingsHref(filters: MeetingFilters): string {
 export function hasFilters(filters: MeetingFilters): boolean {
   return KEYS.some((k) => !!filters[k]);
 }
+
+/** The list's page number from `?page=`: 1 when missing or not a positive whole number. */
+export function pageFromParams(params: Pick<URLSearchParams, 'get'>): number {
+  const n = Number(params.get('page'));
+  return Number.isSafeInteger(n) && n > 1 ? n : 1;
+}
+
+/** The list's URL for one page of the current filters; page 1 has no `page` parameter. */
+export function pageHref(pathname: string, filters: MeetingFilters, page: number): string {
+  const search = filtersToSearch(filters);
+  if (page <= 1) return `${pathname}${search}`;
+  return `${pathname}${search ? `${search}&` : '?'}page=${page}`;
+}
+
+/**
+ * The page numbers to show around `current`, with null for a gap: 1 … 4 5 6 … 12. The first and last
+ * pages and one on each side of the current one are always there; a gap of one page is shown as that page.
+ */
+export function pageRange(current: number, count: number): (number | null)[] {
+  const shown = new Set([1, count, current - 1, current, current + 1].filter((n) => n >= 1 && n <= count));
+  const out: (number | null)[] = [];
+  let prev = 0;
+  for (const n of [...shown].sort((a, b) => a - b)) {
+    if (n - prev === 2) out.push(n - 1);
+    else if (n - prev > 2) out.push(null);
+    out.push(n);
+    prev = n;
+  }
+  return out;
+}

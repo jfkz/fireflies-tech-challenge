@@ -23,6 +23,7 @@ enum CaptureError: LocalizedError {
 
 /// Captures everything the Mac plays through a Core Audio process tap (macOS 14.2+).
 /// Asks for "System Audio Recording" permission the first time it starts.
+/// Like `MicCapture`, start and stop run off the main thread.
 final class SystemAudioCapture: @unchecked Sendable {
     /// Called on the main queue when the default output device changes.
     var onDeviceChange: (() -> Void)?
@@ -153,7 +154,10 @@ final class SystemAudioCapture: @unchecked Sendable {
 /// created; when that is a Bluetooth headset, the headset drops to call quality
 /// even if another microphone is chosen afterwards. Binding a HAL unit to the
 /// chosen device directly never touches the headset.
-final class MicCapture {
+///
+/// `start` and `stop` can block for minutes inside Core Audio when a device goes away
+/// mid-call, so callers run them off the main thread (`MeetingRecorder.micQueue`).
+final class MicCapture: @unchecked Sendable {
     /// Called on the main queue when the default input device or its format changes.
     var onConfigurationChange: (() -> Void)?
 
@@ -265,6 +269,17 @@ enum AudioInputs {
     static func defaultInput() -> MicChoice.Device? {
         var id = AudioDeviceID(kAudioObjectUnknown)
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                                                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id) == noErr,
+              id != kAudioObjectUnknown else { return nil }
+        return device(id)
+    }
+
+    /// The device the Mac plays through (for problem reports).
+    static func defaultOutput() -> MicChoice.Device? {
+        var id = AudioDeviceID(kAudioObjectUnknown)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id) == noErr,

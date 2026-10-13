@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Packs an app into a compressed DMG with an Applications shortcut.
+# Packs an app into a compressed DMG with an Applications shortcut; the volume is named after the app.
 #
 #   scripts/make-dmg.sh build/Universal/Build/Products/Release/BoringTalks.app build/BoringTalks.dmg
 #
@@ -12,12 +12,13 @@ OUT="${2:?usage: make-dmg.sh <BoringTalks.app> <out.dmg>}"
 
 STAGING="$(mktemp -d)"
 trap 'rm -rf "$STAGING"' EXIT
-ditto "$APP" "$STAGING/BoringTalks.app"
+NAME="$(basename "$APP" .app)"
+ditto "$APP" "$STAGING/$NAME.app"
 ln -s /Applications "$STAGING/Applications"
 
 mkdir -p "$(dirname "$OUT")"
 rm -f "$OUT"
-hdiutil create -volname "BoringTalks" -srcfolder "$STAGING" -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$OUT" >/dev/null
+hdiutil create -volname "$NAME" -srcfolder "$STAGING" -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$OUT" >/dev/null
 
 if [[ "${SIGN_IDENTITY:-}" == "Developer ID Application"* ]]; then
   codesign --sign "$SIGN_IDENTITY" --timestamp ${KEYCHAIN:+--keychain "$KEYCHAIN"} "$OUT"

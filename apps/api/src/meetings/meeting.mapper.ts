@@ -1,4 +1,4 @@
-import { applySpeakerNames, type MeetingChain, type MeetingDetail, type MeetingListItem, type SearchMatch, type Segment } from '@boringtalks/shared';
+import { applySpeakerNames, splitLongSegments, type MeetingChain, type MeetingDetail, type MeetingListItem, type SearchMatch, type Segment } from '@boringtalks/shared';
 import type { MeetingRow } from '../db/schema';
 import { displayNames } from '../processing/speaker-names';
 import type { SummaryWithItems } from './meetings.repository';
@@ -40,8 +40,9 @@ export function toDetail(
           model: summary.model,
         }
       : null,
-    // Segments are stored with their raw labels; clients see the display names.
-    segments: applySpeakerNames(segments, displayNames(row.speakerNames)),
+    // Segments are stored with their raw labels; clients see the display names. Lines stored before
+    // the length cap (one transcriber phrase of several minutes) are cut to fit the contract.
+    segments: applySpeakerNames(splitLongSegments(segments), displayNames(row.speakerNames)),
     audioUrl,
     chain,
   };

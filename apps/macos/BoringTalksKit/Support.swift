@@ -29,10 +29,13 @@ public struct AppFolders: Sendable {
     }
 
     /// `~/Library/Application Support/BoringTalks`.
-    public static var standard: AppFolders {
+    public static var standard: AppFolders { standard(named: "BoringTalks") }
+
+    /// `~/Library/Application Support/<name>`.
+    public static func standard(named name: String) -> AppFolders {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        return AppFolders(root: base.appendingPathComponent("BoringTalks", isDirectory: true))
+        return AppFolders(root: base.appendingPathComponent(name, isDirectory: true))
     }
 
     public var recordings: URL { root.appendingPathComponent("Recordings", isDirectory: true) }

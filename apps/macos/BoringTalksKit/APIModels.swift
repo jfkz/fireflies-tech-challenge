@@ -86,13 +86,24 @@ public struct CreatedMeeting: Codable, Equatable, Sendable {
     public var id: String
 }
 
+/// How a recording's channels are laid out (shared `AudioChannels`).
+public enum AudioChannels: String, Codable, Sendable {
+    /// Everyone in one mono mix.
+    case mixed
+    /// The microphone (the user) on the left channel, system audio (everyone else) on the right,
+    /// so the server can transcribe each side on its own.
+    case micSystem = "mic-system"
+}
+
 public struct UploadUrlRequest: Codable, Equatable, Sendable {
     public var contentType: String
     public var sizeBytes: Int
+    public var channels: AudioChannels?
 
-    public init(contentType: String = "audio/mp4", sizeBytes: Int) {
+    public init(contentType: String = "audio/mp4", sizeBytes: Int, channels: AudioChannels? = nil) {
         self.contentType = contentType
         self.sizeBytes = sizeBytes
+        self.channels = channels
     }
 }
 

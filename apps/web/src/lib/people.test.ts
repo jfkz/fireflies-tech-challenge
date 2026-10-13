@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chainNeighbours, dayNeighbours, isTyping, localDayRange } from './meeting-nav';
+import { aroundRange, chainNeighbours, dayNeighbours, isTyping, linkCandidates, localDayRange } from './meeting-nav';
 import { isPersonName, lastMetLabel, nameFromParam, peopleHref, periodFromParam, personHref, talkShare } from './people';
 
 describe('people helpers', () => {
@@ -61,6 +61,17 @@ describe('meeting navigation helpers', () => {
     const chain = { id: '00000000-0000-4000-8000-0000000000c1', reason: null, meetings: [ref(1, '2026-10-01T09:00:00.000Z'), ref(2, '2026-10-03T09:00:00.000Z'), ref(3, '2026-10-05T09:00:00.000Z')] };
     expect(chainNeighbours(chain, chain.meetings[2].id)).toEqual({ prev: chain.meetings[1], next: null, index: 2, total: 3 });
     expect(chainNeighbours(chain, 'elsewhere')).toBeNull();
+  });
+
+  it('offers meetings to link to: not itself or its chain, nearest first unless searched', () => {
+    expect(aroundRange('2026-10-06T12:00:00.000Z', 2)).toEqual({ from: '2026-10-04T12:00:00.000Z', to: '2026-10-08T12:00:00.000Z' });
+    const self = ref(5, '2026-10-05T09:00:00.000Z');
+    const [a, b, c, d] = [ref(1, '2026-10-01T09:00:00.000Z'), ref(3, '2026-10-03T09:00:00.000Z'), ref(7, '2026-10-07T09:00:00.000Z'), ref(9, '2026-10-20T09:00:00.000Z')];
+    // Newest first from the API; b and c are two days away either side, so the earlier one leads.
+    expect(linkCandidates([d, c, self, b, a], self, true)).toEqual([b, c, a, d]);
+    expect(linkCandidates([d, c, self, b, a], self, false)).toEqual([d, c, b, a]);
+    const chained = { ...self, chain: { id: '00000000-0000-4000-8000-0000000000c1', reason: null, meetings: [a, self] } };
+    expect(linkCandidates([d, c, self, b, a], chained, true)).toEqual([b, c, d]);
   });
 
   it('knows when someone is typing', () => {

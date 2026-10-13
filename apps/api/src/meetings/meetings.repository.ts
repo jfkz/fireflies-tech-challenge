@@ -21,8 +21,14 @@ export function summaryDocument(v: Pick<SummaryValues, 'summary' | 'keyTopics' |
 
 export type MeetingHit = MeetingWithCount & { match: SearchMatch | null };
 
+/** What narrows the meeting list: a full-text query, a speaker, a topic and a start-time range. */
+export type MeetingListFilters = { q?: string; speaker?: string; topic?: string; from?: Date; to?: Date };
+
 /** A meeting the chain linker may connect another one to. */
 export type ChainCandidateRow = Pick<MeetingRow, 'id' | 'title' | 'description' | 'startedAt' | 'speakers' | 'topics' | 'chainId'>;
+
+/** A meeting of a chain, with why it was linked (null for the one it started from, or linked by hand). */
+export type ChainMemberRow = MeetingRef & { reason: string | null };
 
 /** How far apart (days) two meetings of one chain may be, for the summarizer to link them. */
 export const CHAIN_WINDOW_DAYS = 45;
@@ -85,21 +91,53 @@ export class MeetingsRepository {
    * One page, newest first, with an optional full-text query over titles, descriptions and
    * transcripts, and optional filters by speaker, topic and start time.
    */
-  async list(
-    userId: string,
-    opts: { cursor: MeetingCursor | null; limit: number; q?: string; speaker?: string; topic?: string; from?: Date; to?: Date },
-  ): Promise<MeetingHit[]> {
-    const where: SQL[] = [eq(meetings.userId, userId)];
+  async list(userId: string, opts: MeetingListFilters & { cursor: MeetingCursor | null; limit: number; offset?: number }): Promise<MeetingHit[]> {
+    const filtered = this.listWhere(userId, opts);
+    // A search with nothing searchable in it ("!!!") finds nothing rather than everything.
+    if (!filtered) return [];
+    const { where, tsq } = filtered;
     if (opts.cursor) {
       where.push(
         sql`(${meetings.startedAt}, ${meetings.id}) < (${opts.cursor.startedAt.toISOString()}::timestamptz, ${opts.cursor.id}::uuid)`,
       );
     }
+    const rows = await this.db
+      .select({
+        ...getTableColumns(meetings),
+        // Spelled out: inside a subquery Drizzle leaves column names unqualified, and "id" exists in both tables.
+        actionItemCount: sql<number>`(select count(*) from action_items ai where ai.meeting_id = "meetings"."id")::int`,
+      })
+      .from(meetings)
+      .where(and(...where))
+      .orderBy(desc(meetings.startedAt), desc(meetings.id))
+      .limit(opts.limit)
+      .offset(opts.offset ?? 0);
+    if (!tsq) return rows.map((r) => ({ ...r, match: null }));
+    const matches = await this.searchMatches(
+      rows.map((r) => r.id),
+      tsq,
+    );
+    return rows.map((r) => ({ ...r, match: matches.get(r.id) ?? null }));
+  }
+
+  /** How many meetings `list` would return with these filters, across all pages. */
+  async count(userId: string, opts: MeetingListFilters): Promise<number> {
+    const filtered = this.listWhere(userId, opts);
+    if (!filtered) return 0;
+    const [row] = await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(meetings)
+      .where(and(...filtered.where));
+    return row?.n ?? 0;
+  }
+
+  /** The conditions shared by `list` and `count`; null when the search can match nothing. */
+  private listWhere(userId: string, opts: MeetingListFilters): { where: SQL[]; tsq: string | null } | null {
+    const where: SQL[] = [eq(meetings.userId, userId)];
     const tsq = opts.q ? toTsQuery(opts.q) : null;
-    // A search with nothing searchable in it ("!!!") finds nothing rather than everything.
-    if (opts.q && !tsq) return [];
-    const query = sql`to_tsquery('simple', ${tsq})`;
+    if (opts.q && !tsq) return null;
     if (tsq) {
+      const query = sql`to_tsquery('simple', ${tsq})`;
       where.push(sql`(
         ${meetings.search} @@ ${query}
         or to_tsvector('simple', array_to_string(${meetings.speakers} || ${meetings.topics}, ' ')) @@ ${query}
@@ -111,22 +149,7 @@ export class MeetingsRepository {
     if (opts.topic) where.push(sql`${meetings.topics} @> array[${opts.topic}]::text[]`);
     if (opts.from) where.push(sql`${meetings.startedAt} >= ${opts.from.toISOString()}::timestamptz`);
     if (opts.to) where.push(sql`${meetings.startedAt} < ${opts.to.toISOString()}::timestamptz`);
-    const rows = await this.db
-      .select({
-        ...getTableColumns(meetings),
-        // Spelled out: inside a subquery Drizzle leaves column names unqualified, and "id" exists in both tables.
-        actionItemCount: sql<number>`(select count(*) from action_items ai where ai.meeting_id = "meetings"."id")::int`,
-      })
-      .from(meetings)
-      .where(and(...where))
-      .orderBy(desc(meetings.startedAt), desc(meetings.id))
-      .limit(opts.limit);
-    if (!tsq) return rows.map((r) => ({ ...r, match: null }));
-    const matches = await this.searchMatches(
-      rows.map((r) => r.id),
-      tsq,
-    );
-    return rows.map((r) => ({ ...r, match: matches.get(r.id) ?? null }));
+    return { where, tsq };
   }
 
   /**
@@ -353,10 +376,10 @@ export class MeetingsRepository {
       .limit(limit);
   }
 
-  /** The meetings of a chain, oldest first. */
-  async chainMeetings(userId: string, chainId: string): Promise<MeetingRef[]> {
+  /** The meetings of a chain, oldest first, each with its own reason. */
+  async chainMeetings(userId: string, chainId: string): Promise<ChainMemberRow[]> {
     const rows = await this.db
-      .select({ id: meetings.id, title: meetings.title, startedAt: meetings.startedAt })
+      .select({ id: meetings.id, title: meetings.title, startedAt: meetings.startedAt, reason: meetings.chainReason })
       .from(meetings)
       .where(and(eq(meetings.userId, userId), eq(meetings.chainId, chainId)))
       .orderBy(asc(meetings.startedAt), asc(meetings.id));
