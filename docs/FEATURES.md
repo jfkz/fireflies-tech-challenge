@@ -320,6 +320,19 @@ released yet” and a link to the landing page's download card.
 
 **Where.** `components/app/SettingsView.tsx`.
 
+### Problem reports `/admin/reports` (admins)
+
+**What.** For the accounts in the API's `ADMIN_EMAILS`, the nav gains **Reports**: every user's
+problem reports, newest first (**Report a Problem…** from the desktop apps and the hangs they noticed),
+50 at a time with **Load more**, narrowed to **Hangs** or **Sent by users** and to one user by email
+or id. Each row shows the kind, who sent it, app version and flavor, the system and the first line of
+the message. Opening one (`/admin/reports/[id]`) shows when and from which user and computer it came,
+the app build and system, the message, every diagnostic and the app's log, with **Copy log**.
+Everyone else sees no link, “Only admins can see problem reports.” on the page, and `403` from the API.
+
+**Where.** `components/app/ReportsView.tsx`, `app/(app)/admin/reports/`; `useReports` / `useReport` in
+`hooks/queries.ts`.
+
 ### Errors and 404
 
 Every dashboard route has `loading.tsx` and `error.tsx` (with a retry), plus
@@ -874,9 +887,11 @@ duplicate.
 the user's message, app version and flavor, macOS and Mac model, up to 100 short diagnostics and the
 app's own recent log (≤ 1,000,000 characters), with the user and the Mac that sent it, in
 `problem_reports`. 10 reports an hour per user. When `REPORTS_NOTIFY_EMAIL` is set, each one is
-emailed there (without the log) through the `email` queue. Operators read them with
-`node dist/reports.js` (latest 20, `--user <id|email>`, or `<id>` for one in full).
-**Where.** `src/reports/` (controller, service, repository), `src/reports.ts` (CLI),
+emailed there (without the log) through the `email` queue. Admins (`ADMIN_EMAILS`, a dashboard
+sign-in) read them on the dashboard's **Reports** page through `GET /admin/reports` and
+`GET /admin/reports/:id`; operators can also use `node dist/reports.js` (latest 20,
+`--user <id|email>`, or `<id>` for one in full).
+**Where.** `src/reports/` (controller, service, repository), `@AdminOnly()` in `src/auth/`, `src/reports.ts` (CLI),
 `src/email/templates/problem-report.tsx`, migration `0006_problem_reports`.
 
 ### Operations

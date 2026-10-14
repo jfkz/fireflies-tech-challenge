@@ -41,3 +41,42 @@ export const ProblemReportResponse = z.object({
   receivedAt: z.string().datetime(),
 });
 export type ProblemReportResponse = z.infer<typeof ProblemReportResponse>;
+
+// ---- reading reports (admins only)
+
+export const ListProblemReportsQuery = z.object({
+  /** One user's: their id or email address (any case). */
+  user: z.string().trim().min(1).max(320).optional(),
+  kind: ProblemReportKind.optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type ListProblemReportsQuery = z.infer<typeof ListProblemReportsQuery>;
+
+/** A report in the list: everything but its diagnostics and log. */
+export const ProblemReportSummary = z.object({
+  id: z.string().uuid(),
+  kind: ProblemReportKind,
+  message: z.string(),
+  user: z.object({ id: z.string().uuid(), email: z.string().nullable() }),
+  /** The desktop app that sent it; null when sent from a dashboard session or the device was removed. */
+  deviceId: z.string().uuid().nullable(),
+  app: z.object({ version: z.string(), build: z.string(), flavor: DeviceApp }),
+  system: z.object({ os: z.string(), model: z.string() }),
+  logBytes: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+});
+export type ProblemReportSummary = z.infer<typeof ProblemReportSummary>;
+
+export const ProblemReportPage = z.object({
+  items: z.array(ProblemReportSummary),
+  nextCursor: z.string().nullable(),
+});
+export type ProblemReportPage = z.infer<typeof ProblemReportPage>;
+
+/** One report in full. */
+export const ProblemReportDetail = ProblemReportSummary.extend({
+  diagnostics: z.record(z.string(), z.string()),
+  log: z.string(),
+});
+export type ProblemReportDetail = z.infer<typeof ProblemReportDetail>;

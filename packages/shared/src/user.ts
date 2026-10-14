@@ -6,6 +6,8 @@ export const Me = z.object({
   name: z.string().nullable(),
   emailOnReady: z.boolean(),
   createdAt: z.string().datetime(),
+  /** Listed in the API's ADMIN_EMAILS: may read every user's problem reports. */
+  isAdmin: z.boolean().optional(),
 });
 export type Me = z.infer<typeof Me>;
 

@@ -518,6 +518,13 @@ deploy, and against production after a merge.
    **Expected:** an email "Problem report: BoringTalks <version> from <you>" arrives there, without the log.
 3. `curl -X POST <api>/reports` without a token.
    **Expected:** `401`.
+4. With your email in `ADMIN_EMAILS`, open the dashboard.
+   **Expected:** the nav shows **Reports**; `/admin/reports` lists the report from step 1 first (kind, your
+   email, app version, system, first line of the message). **Hangs** / **Sent by users** and the user filter
+   narrow the list; opening the report shows the message, diagnostics and the log, and **Copy log** copies it.
+5. Sign in as an account not in `ADMIN_EMAILS`.
+   **Expected:** no **Reports** link; `/admin/reports` says “Only admins can see problem reports.”;
+   `curl <api>/admin/reports` with that account's token (or a device token) is `403`.
 
 ### 10. Versions
 1. Compare `GET /health` `version`, the web footer, the Mac app's About/menu version and the Windows

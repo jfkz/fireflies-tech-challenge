@@ -12,6 +12,10 @@ export class AppConfig {
   get firebaseEmulator(): boolean {
     return emulatorEnabled(this.env);
   }
+
+  isAdmin(email: string | null): boolean {
+    return !!email && this.env.ADMIN_EMAILS.includes(email.toLowerCase());
+  }
 }
 
 @Global()

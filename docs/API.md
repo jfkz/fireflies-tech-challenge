@@ -102,8 +102,9 @@ or `windows`. `404` until that build has been published, and for any other platf
 
 ### `GET /me` → `Me`
 ```json
-{ "id": "3cf2…", "email": "ann@example.com", "name": "Ann", "emailOnReady": true, "createdAt": "2026-10-06T11:05:10.373Z" }
+{ "id": "3cf2…", "email": "ann@example.com", "name": "Ann", "emailOnReady": true, "createdAt": "2026-10-06T11:05:10.373Z", "isAdmin": false }
 ```
+`isAdmin` is true when the account's email is in `ADMIN_EMAILS` (any case): it may use `/admin/*`.
 
 ### `PATCH /me/settings` (`UpdateSettingsRequest`) → `Me`
 At least one of:
@@ -399,8 +400,37 @@ Sent by the Mac app's **Report a Problem…** (device token), or after it notice
 `kind` defaults to `user`, `message` to empty. `flavor` is `release` or `dev`. Limits: message 4,000
 characters, at most 100 `diagnostics` (key ≤ 80, value ≤ 2,000 characters), `log` 1,000,000 characters
 (`PROBLEM_REPORT_LOG_LIMIT`; the app keeps the newest part). Reports are stored in `problem_reports`, read
-with `node dist/reports.js` ([DEPLOYMENT](DEPLOYMENT.md#problem-reports)), and emailed (without the log)
-to `REPORTS_NOTIFY_EMAIL` when it is set.
+by admins with the two endpoints below (or `node dist/reports.js`, [DEPLOYMENT](DEPLOYMENT.md#problem-reports)),
+and emailed (without the log) to `REPORTS_NOTIFY_EMAIL` when it is set.
+
+### `GET /admin/reports?user=&kind=&cursor=&limit=` → `ProblemReportPage`
+Admins only: a Firebase (dashboard) sign-in whose email is in `ADMIN_EMAILS`. Anyone else gets `403`,
+device tokens included. Every user's reports, newest first, without diagnostics and log. `user` is a
+user id or an email (any case), `kind` is `user` or `hang`, `limit` 1–200 (default 50); follow
+`nextCursor` for more (`400` for a cursor this API didn't make).
+```json
+{
+  "items": [
+    {
+      "id": "5b0e…",
+      "kind": "hang",
+      "message": "",
+      "user": { "id": "3cf2…", "email": "ann@example.com" },
+      "deviceId": "8d1a…",
+      "app": { "version": "0.4.0", "build": "1", "flavor": "release" },
+      "system": { "os": "macOS 26.2 (25C56)", "model": "Mac15,3" },
+      "logBytes": 21000,
+      "createdAt": "2026-10-08T18:19:07.000Z"
+    }
+  ],
+  "nextCursor": null
+}
+```
+`deviceId` is null for a report sent from a dashboard session, or once that computer was disconnected.
+
+### `GET /admin/reports/:id` → `ProblemReportDetail`
+Admins only. One report as above plus `diagnostics` and `log`. `404` if there is no such report,
+`400` for an id that is not a UUID.
 
 ---
 

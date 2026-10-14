@@ -1,6 +1,6 @@
 import { MeController } from './me.controller';
 import { toMe, UsersService } from './users.service';
-import { user } from '../testing/fixtures';
+import { testConfig, user } from '../testing/fixtures';
 
 function setup() {
   const repo = {
@@ -13,7 +13,8 @@ function setup() {
   const demo = { seed: vi.fn() };
   const jobs = { email: vi.fn() };
   const meetings = { renameOwner: vi.fn() };
-  return { repo, demo, jobs, meetings, service: new UsersService(repo as never, demo as never, jobs as never, meetings as never) };
+  const config = testConfig({ ADMIN_EMAILS: 'boss@example.com' });
+  return { repo, demo, jobs, meetings, service: new UsersService(config, repo as never, demo as never, jobs as never, meetings as never) };
 }
 
 describe('UsersService.ensureUser', () => {
@@ -61,6 +62,8 @@ describe('MeController', () => {
     const controller = new MeController(service);
     expect(controller.me(user())).toEqual(toMe(user()));
     expect(toMe(user()).createdAt).toBe('2026-10-01T10:00:00.000Z');
+    expect(controller.me(user()).isAdmin).toBe(false);
+    expect(controller.me(user({ email: 'Boss@Example.com' })).isAdmin).toBe(true);
     await expect(controller.updateSettings(user(), { emailOnReady: false })).resolves.toMatchObject({ emailOnReady: false });
     await expect(service.findById(user().id)).resolves.toEqual(user());
   });
