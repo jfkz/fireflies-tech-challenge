@@ -410,6 +410,7 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 | Settings › Stop after silence **1 minute**, start a meeting, stay silent | After 30 s a toast "Still in a meeting?" with **Keep recording** and a countdown in the menu; **Keep recording** resets it; otherwise it stops and a toast says "Nobody spoke for 1 minute, so BoringTalks stopped recording…" |
 | Join a Zoom/Teams call, or a Google Meet in Chrome/Edge, without recording | After ~5 s (browsers ~15 s) a toast "<app> is in a call. Record it?" with **Record / Not now / Never for <app>**, the same banner in the menu, and a blue dot on the tray icon |
 | **Record** | Recording starts; **Not now**: no new offer during this call; **Never for <app>**: listed in Settings › Calls with **Ask again** |
+| **Record** from the toast, five calls in a row (leave each call, wait for the stop) | Each time: red **Stop** with a moving timer, the menu keeps answering, the recording stops when the call ends and the meeting uploads with audio; the log has "recording <id>" and no "UI thread has not answered" |
 | Leave the call while recording | ~30 s after the others go quiet the recording stops by itself ("The Teams call ended…") |
 | `BoringTalks.exe --mic-users 60` while joining and leaving calls | One line per change: each app holding a microphone and the call app it counts as |
 

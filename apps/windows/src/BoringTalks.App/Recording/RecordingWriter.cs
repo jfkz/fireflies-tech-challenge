@@ -13,6 +13,9 @@ namespace BoringTalks.App.Recording;
 /// both channels mixed on the meeting clock, then encoded by Windows' Media Foundation on a
 /// thread of its own so the audio threads never wait for the encoder. Windows' AAC encoder only
 /// takes 44.1 or 48 kHz and 96 kbps and up, so the 16 kHz mix is resampled on the way in.
+/// Every Media Foundation object is created on the encoder's own thread (multithreaded apartment):
+/// one made on the UI thread would route the encoder's calls through the UI thread's messages, and
+/// the two deadlock (the app froze on "Yes, record" with an empty file).
 /// </summary>
 public sealed class RecordingWriter : IDisposable
 {
@@ -25,10 +28,10 @@ public sealed class RecordingWriter : IDisposable
     private readonly AudioMixer mixer;
     private readonly Resampler[] upsamplers;
     private readonly FeedProvider feed;
-    private readonly Thread? encoder;
+    private readonly Thread encoder;
     private readonly Action<string>? log;
     private long framesWritten;
-    private Exception? encoderError;
+    private volatile Exception? encoderError;
 
     public RecordingWriter(string path, Action<string>? log = null, bool stereo = false)
     {
@@ -41,30 +44,31 @@ public sealed class RecordingWriter : IDisposable
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
         worker = new Thread(() => { foreach (var job in work.GetConsumingEnumerable()) job(); }) { IsBackground = true, Name = "BoringTalks writer" };
         worker.Start();
+        var bitRate = stereo ? StereoBitRate : BitRate;
+        encoder = new Thread(() => Encode(path, bitRate)) { IsBackground = true, Name = "BoringTalks encoder" };
+        encoder.SetApartmentState(ApartmentState.MTA);
+        encoder.Start();
+    }
+
+    /// <summary>On the encoder thread: everything Media Foundation is made and used here, and only here.</summary>
+    private void Encode(string path, int bitRate)
+    {
         try
         {
             MediaFoundationApi.Startup();
-            var mediaType = MediaFoundationEncoder.SelectMediaType(AudioSubtypes.MFAudioFormat_AAC, feed.WaveFormat, stereo ? StereoBitRate : BitRate)
+            var mediaType = MediaFoundationEncoder.SelectMediaType(AudioSubtypes.MFAudioFormat_AAC, feed.WaveFormat, bitRate)
                 ?? throw new NotSupportedException("This Windows has no AAC encoder (an N edition without the Media Feature Pack?).");
-            encoder = new Thread(() =>
-            {
-                try
-                {
-                    using var mf = new MediaFoundationEncoder(mediaType);
-                    mf.Encode(path, feed);
-                }
-                catch (Exception error)
-                {
-                    encoderError = error;
-                    log?.Invoke($"couldn't encode the recording: {error.Message}");
-                }
-            }) { IsBackground = true, Name = "BoringTalks encoder" };
-            encoder.Start();
+            using var mf = new MediaFoundationEncoder(mediaType);
+            mf.Encode(path, feed);
         }
-        catch (Exception error) when (error is NotSupportedException or System.Runtime.InteropServices.COMException or DllNotFoundException)
+        catch (Exception error)
         {
             encoderError = error;
-            log?.Invoke($"recording without an audio file: {error.Message}");
+            // Nobody reads the feed any more: stop queueing audio for it.
+            feed.Complete();
+            log?.Invoke(error is NotSupportedException or System.Runtime.InteropServices.COMException or DllNotFoundException
+                ? $"recording without an audio file: {error.Message}"
+                : $"couldn't encode the recording: {error.Message}");
         }
     }
 
@@ -98,7 +102,7 @@ public sealed class RecordingWriter : IDisposable
         await done.Task;
         work.CompleteAdding();
         feed.Complete();
-        await Task.Run(() => encoder?.Join(TimeSpan.FromSeconds(30)));
+        await Task.Run(() => encoder.Join(TimeSpan.FromSeconds(30)));
         return framesWritten / 16000.0;
     }
 
@@ -156,7 +160,14 @@ public sealed class RecordingWriter : IDisposable
 
         public void Add(byte[] bytes)
         {
-            if (!chunks.IsAddingCompleted) chunks.Add(bytes);
+            try
+            {
+                chunks.Add(bytes);
+            }
+            catch (InvalidOperationException)
+            {
+                // Completed: the encoder stopped (or the recording ended) while this was on its way.
+            }
         }
 
         public void Complete() => chunks.CompleteAdding();

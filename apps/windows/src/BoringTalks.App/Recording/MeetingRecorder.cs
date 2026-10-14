@@ -192,7 +192,7 @@ public sealed partial class MeetingRecorder : ObservableObject
         Phase = RecorderPhase.Finishing;
         ticker?.Stop();
         foreach (var timer in restarts.Values) timer.Stop();
-        foreach (var capture in captures.Values) capture.Dispose();
+        await ReleaseCapturesAsync([.. captures.Values]);
         captures.Clear();
         var elapsed = ClockNow;
         // A model that has just arrived may be attaching right now.
@@ -309,7 +309,8 @@ public sealed partial class MeetingRecorder : ObservableObject
             ((DispatcherTimer)sender!).Stop();
             if (Phase != RecorderPhase.Recording) return;
             log($"audio device changed; restarting {kind}");
-            if (captures.Remove(kind, out var old)) old.Dispose();
+            if (captures.Remove(kind, out var old)) await ReleaseCapturesAsync([old]);
+            if (Phase != RecorderPhase.Recording) return;
             await StartCaptureAsync(kind);
         }, ui);
         restarts[kind] = timer;
@@ -471,7 +472,8 @@ public sealed partial class MeetingRecorder : ObservableObject
 
     private async Task AbandonAsync()
     {
-        foreach (var capture in captures.Values) capture.Dispose();
+        await ReleaseCapturesAsync([.. captures.Values]);
+        captures.Clear();
         if (writer is not null)
         {
             await writer.FinishAsync();
@@ -480,13 +482,38 @@ public sealed partial class MeetingRecorder : ObservableObject
         Reset();
     }
 
+    /// <summary>
+    /// Stops and lets go of captures on the thread pool, where they were opened (Core Audio objects
+    /// stay in their apartment), never on the UI thread: a driver that doesn't answer is given up
+    /// on after <see cref="StartTimeout"/> instead of freezing the menu.
+    /// </summary>
+    private async Task ReleaseCapturesAsync(IReadOnlyList<IAudioCapture> all)
+    {
+        if (all.Count == 0) return;
+        var released = Task.Run(() =>
+        {
+            foreach (var capture in all)
+            {
+                try
+                {
+                    capture.Dispose();
+                }
+                catch (Exception error)
+                {
+                    Platform.Log.Error("recorder", "a capture failed to stop", error);
+                }
+            }
+        });
+        if (await Task.WhenAny(released, Task.Delay(StartTimeout)) != released) log($"a capture didn't stop in {StartTimeout.TotalSeconds:0} s; going on without it");
+    }
+
     private void Reset()
     {
         ticker?.Stop();
         ticker = null;
         foreach (var timer in restarts.Values) timer.Stop();
         restarts.Clear();
-        foreach (var capture in captures.Values) capture.Dispose();
+        _ = ReleaseCapturesAsync([.. captures.Values]);
         captures.Clear();
         channels.Clear();
         writer?.Dispose();

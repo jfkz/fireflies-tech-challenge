@@ -37,6 +37,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        new UiWatchdog(Dispatcher, Log.For("watchdog")).Start();
         var folders = AppFolders.Standard;
         var store = new JsonSettingsStore(folders.Settings);
         var stored = store.Load();

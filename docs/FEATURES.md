@@ -675,8 +675,14 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   (microphone privacy off, no output device) leaves a warning and the other records. Device
   changes restart a side after 400 ms. Bluetooth headsets keep their music profile: "You" then
   comes from the PC's own microphone. Saved as AAC in `.m4a` (48 kHz, 96 kbps mono, ~43 MB/h).
+  Media Foundation's encoder is set up and run on a thread of its own, never touching the UI
+  thread (one made there deadlocked with it: "Yes, record" froze the app with an empty file), and
+  captures are stopped on the thread pool with a timeout, so a driver can't freeze the menu.
+- **Freeze log:** a watchdog thread pings the UI thread every second; when it hasn't answered for
+  10 s the log says "the UI thread has not answered for 10 s", and "was stuck for N s" when it
+  comes back (`%APPDATA%\BoringTalks\logs`). The PC sleeping doesn't count.
 - **Where:** `BoringTalks.App/Audio/`, `Recording/MeetingRecorder.cs`, `RecordingChannel.cs`,
-  `RecordingWriter.cs`; `BoringTalks.Core/Audio/`.
+  `RecordingWriter.cs`, `Platform/UiWatchdog.cs`; `BoringTalks.Core/Audio/`, `HangDetector.cs`.
 - **Limits:** process loopback needs Windows 10 build 19041; before that, only the default output
   device is recorded. Windows "N" editions without the Media Feature Pack upload the transcript
   without audio. Audio over 200 MB (~4.5 h) isn't uploaded.
