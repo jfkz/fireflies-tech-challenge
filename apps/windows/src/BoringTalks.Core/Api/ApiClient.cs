@@ -69,11 +69,17 @@ public interface IMeetingsApi
     Task<MeetingPage> ListMeetingsAsync(int limit, CancellationToken cancellation = default);
 }
 
+/// <summary>Report a Problem….</summary>
+public interface IReportsApi
+{
+    Task<ProblemReportResponse> SendProblemReportAsync(ProblemReportRequest report, CancellationToken cancellation = default);
+}
+
 /// <summary>
 /// The BoringTalks API over HttpClient. Every call carries the device token as a
 /// bearer token, except the presigned upload, which carries its own signature.
 /// </summary>
-public sealed class ApiClient : IMeetingsApi, IDeviceAuthApi
+public sealed class ApiClient : IMeetingsApi, IDeviceAuthApi, IReportsApi
 {
     private readonly Uri baseUrl;
     private readonly HttpClient http;
@@ -110,6 +116,9 @@ public sealed class ApiClient : IMeetingsApi, IDeviceAuthApi
 
     public Task<MeetingPage> ListMeetingsAsync(int limit, CancellationToken cancellation = default) =>
         SendAsync<MeetingPage>(HttpMethod.Get, $"meetings?limit={limit}", body: null, cancellation: cancellation);
+
+    public Task<ProblemReportResponse> SendProblemReportAsync(ProblemReportRequest report, CancellationToken cancellation = default) =>
+        SendAsync<ProblemReportResponse>(HttpMethod.Post, "reports", report, cancellation: cancellation);
 
     public async Task UploadAudioAsync(string file, UploadUrlResponse target, CancellationToken cancellation = default)
     {

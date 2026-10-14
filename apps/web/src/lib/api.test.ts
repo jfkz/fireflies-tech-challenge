@@ -114,6 +114,31 @@ describe('api client', () => {
     });
   });
 
+  describe('problem reports', () => {
+    const summary = {
+      id: '33333333-3333-4333-8333-333333333333',
+      kind: 'hang',
+      message: '',
+      user: { id: '11111111-1111-4111-8111-111111111111', email: null },
+      deviceId: null,
+      app: { version: '0.5.0', build: '', flavor: 'release' },
+      system: { os: 'Windows 11', model: '' },
+      logBytes: 0,
+      createdAt: '2026-10-08T18:00:00.000Z',
+    };
+
+    it('lists them with filters and gets one by id', async () => {
+      const { api, fetch } = setup(() => Promise.resolve(json({ items: [summary], nextCursor: null })));
+      await expect(api.listReports({ kind: 'hang', user: 'ann@example.com', cursor: 'c', limit: 50 })).resolves.toMatchObject({ items: [{ kind: 'hang' }] });
+      expect(fetch.mock.calls[0][0]).toBe('https://api.test/admin/reports?user=ann%40example.com&kind=hang&cursor=c&limit=50');
+      await api.listReports();
+      expect(fetch.mock.calls[1][0]).toBe('https://api.test/admin/reports');
+      fetch.mockImplementation(() => Promise.resolve(json({ ...summary, diagnostics: {}, log: 'x' })));
+      await expect(api.getReport(summary.id)).resolves.toMatchObject({ log: 'x' });
+      expect(fetch.mock.calls[2][0]).toBe(`https://api.test/admin/reports/${summary.id}`);
+    });
+  });
+
   describe('downloads', () => {
     const mac = { platform: 'macos', version: '1.0', build: '3', url: 'https://d.test/a.dmg', sizeBytes: 10, minimumOs: '26.0', notarized: true, publishedAt: '2026-10-01T10:00:00.000Z' };
 

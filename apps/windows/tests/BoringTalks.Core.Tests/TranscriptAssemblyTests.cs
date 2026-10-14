@@ -186,6 +186,23 @@ public sealed class AudioMixerTests
     }
 
     [Fact]
+    public void A_channel_that_stops_delivering_counts_as_silent_instead_of_piling_up_the_other()
+    {
+        var mixer = new AudioMixer(maxLagSamples: 4);
+        Assert.Equal(AudioMixer.DefaultMaxLag, new AudioMixer().MaxLagSamples);
+        mixer.Append([0.1f, 0.1f, 0.1f, 0.1f], AudioChannel.Microphone);
+        Assert.Empty(mixer.Drain());
+        mixer.Append([0.1f], AudioChannel.Microphone);
+        // Five samples ahead of a channel that sent nothing: written with silence for the other.
+        Assert.Equal(5, mixer.Drain().Length);
+        Assert.Equal(5, mixer.PaddedSamples);
+        mixer.Append([0.2f], AudioChannel.System);
+        mixer.Append([0.1f], AudioChannel.Microphone);
+        Assert.Single(mixer.Drain());
+        Assert.Equal(5, mixer.PaddedSamples);
+    }
+
+    [Fact]
     public void Loud_overlap_is_limited()
     {
         var mixer = Mixer();

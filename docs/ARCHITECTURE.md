@@ -113,9 +113,10 @@ exchanges code + verifier at `POST /devices/token` for a long-lived, revocable `
 the Keychain (Mac) or Credential Manager (Windows). The desktop apps never see a Firebase credential
 and need no Firebase SDK.
 
-**Problem reports:** the Mac app's "Report a Problem…" (or a hang it noticed) posts its version, macOS,
+**Problem reports:** the Mac and Windows apps' "Report a Problem…" (or a hang they noticed) posts the version, OS,
 diagnostics and its own recent log to `POST /reports`; the row lands in `problem_reports`, an optional
-email goes to `REPORTS_NOTIFY_EMAIL` through the `email` queue, and `node dist/reports.js` reads them.
+email goes to `REPORTS_NOTIFY_EMAIL` through the `email` queue, and admins (`ADMIN_EMAILS`) read them on the
+dashboard's `/admin/reports` (`GET /admin/reports`, `@AdminOnly()` in the auth guard) or with `node dist/reports.js`.
 
 ## Built for a crowded site
 

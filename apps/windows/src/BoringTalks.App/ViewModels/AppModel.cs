@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using NAudio.CoreAudioApi;
 using BoringTalks.App.Audio;
 using BoringTalks.App.Platform;
 using BoringTalks.App.Recording;
@@ -11,6 +13,7 @@ using BoringTalks.Core;
 using BoringTalks.Core.Api;
 using BoringTalks.Core.Auth;
 using BoringTalks.Core.Calls;
+using BoringTalks.Core.Reports;
 using BoringTalks.Core.Updates;
 using BoringTalks.Core.Uploads;
 using BoringTalks.Speech;
@@ -79,6 +82,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         authenticator = new DeviceAuthenticator(api, new CredentialStore(), $"device-token.{config.ApiUrl.Host}");
         Queue = new UploadQueue(api, new FileUploadStore(folders.UploadQueue), folders.Recordings, Settings.KeepAudioDays, log: Log.For("uploads"));
         Queue.Changed += snapshot => ui.BeginInvoke(() => Receive(snapshot));
+        Reporter = new ProblemReporter(api, folders) { CollectDiagnostics = DiagnosticsAsync };
         Updater = new AppUpdater(new VelopackFeed(AppFlavor.Current.UpdateFeed), log: Log.For("updates"));
         UpdateState = Updater.State;
         Updater.Changed += state => ui.BeginInvoke(() => UpdateState = state);
@@ -109,6 +113,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     public MeetingRecorder Recorder { get; }
     public UploadQueue Queue { get; }
     public AppUpdater Updater { get; }
+    public ProblemReporter Reporter { get; }
     public Notifier Notifier { get; } = new();
 
     [ObservableProperty] public partial Settings Settings { get; private set; }
@@ -134,6 +139,10 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
 
     public string ModelSummary => Models.Summary;
 
+    public bool IsSignedIn => Auth == AuthState.SignedIn;
+
+    partial void OnAuthChanged(AuthState value) => OnPropertyChanged(nameof(IsSignedIn));
+
     /// <summary>The menu should open (a notification was clicked, the app was launched again).</summary>
     public event Action? ShowMenuRequested;
 
@@ -157,6 +166,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
             Log.Error("app", "couldn't create the app folders", error);
         }
         Queue.Load();
+        Reporter.Start();
         if (authenticator.Credential() is { } credential)
         {
             SetSignedIn(credential.Email);
@@ -577,6 +587,66 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     public void RetryModels()
     {
         if (Settings.TranscribeOnPc && Models.State is ModelState.Failed) _ = Models.PrepareAsync();
+    }
+
+    // ---- Report a Problem
+
+    /// <summary>Opens Report a Problem…, about <paramref name="hang"/> if given.</summary>
+    public void ReportProblem(Hang? hang = null) => Reporter.Begin(hang);
+
+    /// <summary>
+    /// Short facts for a report: the recorder, the microphone, the models, the uploads, the settings,
+    /// memory. Never meeting titles, transcripts or audio.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, string>> DiagnosticsAsync()
+    {
+        static string YesNo(bool value) => value ? "yes" : "no";
+        using var process = Process.GetCurrentProcess();
+        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["app.flavor"] = AppFlavor.Current.Id,
+            ["app.api"] = Config.ApiUrl.ToString(),
+            ["app.uptime"] = ProblemReport.Describe((DateTime.Now - process.StartTime).TotalSeconds),
+            ["app.memoryMB"] = (process.PrivateMemorySize64 / (1024 * 1024)).ToString(CultureInfo.InvariantCulture),
+            ["app.managedMB"] = (GC.GetTotalMemory(forceFullCollection: false) / (1024 * 1024)).ToString(CultureInfo.InvariantCulture),
+            ["app.update"] = UpdateState.ToString() ?? "-",
+            ["account.signedIn"] = YesNo(IsSignedIn),
+            ["recorder.phase"] = Recorder.Phase.ToString(),
+            ["recorder.microphone"] = Recorder.MicrophoneName ?? "-",
+            ["recorder.waitingForModel"] = YesNo(Recorder.WaitingForModel),
+            ["models"] = Models.Summary,
+            ["uploads.waiting"] = Uploads.Waiting.ToString(CultureInfo.InvariantCulture),
+            ["uploads.failed"] = Uploads.Failed.ToString(CultureInfo.InvariantCulture),
+            ["uploads.online"] = YesNo(Uploads.IsOnline),
+            ["calls.offer"] = CallOffer ?? "-",
+            ["calls.microphoneUsers"] = string.Join(", ", micMonitor.Users.Select(Path.GetFileName)) is { Length: > 0 } users ? users : "-",
+            ["settings.transcribeOnPc"] = YesNo(Settings.TranscribeOnPc),
+            ["settings.language"] = Settings.LanguageCode ?? "auto",
+            ["settings.uploadAudio"] = YesNo(Settings.UploadAudio),
+            ["settings.avoidBluetoothMic"] = YesNo(Settings.AvoidBluetoothMic),
+            ["settings.microphone"] = string.IsNullOrEmpty(Settings.MicrophoneId) ? "system default" : "picked",
+            ["settings.silenceStopMinutes"] = Settings.SilenceStopMinutes.ToString(CultureInfo.InvariantCulture),
+            ["settings.offerToRecordCalls"] = YesNo(Settings.OfferToRecordCalls),
+            ["settings.stopWhenCallEnds"] = YesNo(Settings.StopWhenCallEnds),
+            ["settings.recordGames"] = YesNo(Settings.RecordGames),
+        };
+        for (var i = 0; i < Recorder.Warnings.Count; i++) values[$"recorder.warning.{i + 1}"] = Recorder.Warnings[i];
+        if (Uploads.Items.Select(u => u.LastError).LastOrDefault(e => e is not null) is { } uploadError) values["uploads.lastError"] = uploadError;
+        // Core Audio may be what is stuck (and is slow with many virtual devices): ask it on the thread
+        // pool with its own enumerator, and keep what it answered within 5 s.
+        var audio = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+        var query = Task.Run(() =>
+        {
+            using var devices = new MMDeviceEnumerator();
+            string Default(DataFlow flow, Role role) => devices.HasDefaultAudioEndpoint(flow, role) ? devices.GetDefaultAudioEndpoint(flow, role).FriendlyName : "-";
+            audio["audio.defaultInput"] = Default(DataFlow.Capture, Role.Communications);
+            audio["audio.defaultOutput"] = Default(DataFlow.Render, Role.Multimedia);
+            audio["audio.inputs"] = string.Join(", ", devices.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active).Select(d => d.FriendlyName));
+        });
+        if (await Task.WhenAny(query, Task.Delay(TimeSpan.FromSeconds(5))) != query) values["audio"] = "Core Audio didn't answer within 5 s";
+        else if (query.Exception?.InnerException is { } error) values["audio"] = $"Core Audio failed: {error.Message}";
+        foreach (var (key, value) in audio) values[key] = value;
+        return values;
     }
 
     // ---- Updates

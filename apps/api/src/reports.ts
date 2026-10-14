@@ -5,7 +5,7 @@ import * as schema from './db/schema';
 import { ReportsRepository, type ReportListItem, type ReportWithUser } from './reports/reports.repository';
 
 /**
- * Reads problem reports sent from the Mac app.
+ * Reads problem reports sent from the desktop apps.
  *   node dist/reports.js                          # the latest 20
  *   node dist/reports.js --user <uuid|email>      # one user's
  *   node dist/reports.js <report id>              # one report in full, with its log
@@ -43,7 +43,7 @@ export function formatReport({ report: r, email }: ReportWithUser): string {
     `From     ${email ?? '(no email)'} (user ${r.userId}${r.deviceId ? `, device ${r.deviceId}` : ''})`,
     `Kind     ${r.kind}`,
     `App      BoringTalks ${app(r)}${r.appBuild ? ` (${r.appBuild})` : ''}`,
-    `Mac      ${[r.os, r.model].filter(Boolean).join(', ')}`,
+    `System   ${[r.os, r.model].filter(Boolean).join(', ')}`,
     '',
     r.message || '(no message)',
     '',

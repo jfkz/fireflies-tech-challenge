@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Downloads, LatestDownload } from './user';
+import { Downloads, LatestDownload, Me } from './user';
 
 const mac = {
   version: '0.3.0',
@@ -26,5 +26,13 @@ describe('Downloads', () => {
     const parsed = Downloads.parse({ macos: mac, windows: null });
     expect(parsed.macos?.platform).toBe('macos');
     expect(parsed.windows).toBeNull();
+  });
+});
+
+describe('Me', () => {
+  const me = { id: '11111111-1111-4111-8111-111111111111', email: null, name: null, emailOnReady: true, createdAt: '2026-10-01T10:00:00.000Z' };
+  it('says whether the user is an admin, and reads an API from before it did', () => {
+    expect(Me.parse({ ...me, isAdmin: true }).isAdmin).toBe(true);
+    expect(Me.parse(me).isAdmin).toBeUndefined();
   });
 });

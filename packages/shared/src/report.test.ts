@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { PROBLEM_REPORT_LOG_LIMIT, ProblemReportRequest, ProblemReportResponse } from './report';
+import {
+  ListProblemReportsQuery,
+  PROBLEM_REPORT_LOG_LIMIT,
+  ProblemReportDetail,
+  ProblemReportPage,
+  ProblemReportRequest,
+  ProblemReportResponse,
+} from './report';
 
 const minimal = { app: { version: '0.4.0', flavor: 'release' }, system: { os: 'macOS 26.2' } };
 
@@ -52,5 +59,32 @@ describe('ProblemReportResponse', () => {
   it('is an id and a time', () => {
     expect(ProblemReportResponse.safeParse({ id: '33333333-3333-4333-8333-333333333333', receivedAt: '2026-10-08T18:00:00.000Z' }).success).toBe(true);
     expect(ProblemReportResponse.safeParse({ id: 'x', receivedAt: 'now' }).success).toBe(false);
+  });
+});
+
+describe('reading reports', () => {
+  const summary = {
+    id: '33333333-3333-4333-8333-333333333333',
+    kind: 'hang',
+    message: '',
+    user: { id: '11111111-1111-4111-8111-111111111111', email: null },
+    deviceId: null,
+    app: { version: '0.4.0', build: '7', flavor: 'dev' },
+    system: { os: 'macOS 26.2', model: 'Mac15,3' },
+    logBytes: 0,
+    createdAt: '2026-10-08T18:00:00.000Z',
+  };
+
+  it('pages summaries and shows one in full', () => {
+    expect(ProblemReportPage.parse({ items: [summary], nextCursor: null }).items[0].kind).toBe('hang');
+    expect(ProblemReportDetail.parse({ ...summary, diagnostics: { 'mic.device': 'AirPods' }, log: 'x' }).log).toBe('x');
+    expect(ProblemReportDetail.safeParse(summary).success).toBe(false);
+  });
+
+  it('reads the list query', () => {
+    expect(ListProblemReportsQuery.parse({})).toEqual({ limit: 50 });
+    expect(ListProblemReportsQuery.parse({ user: ' ann@example.com ', kind: 'hang', limit: '5' })).toEqual({ user: 'ann@example.com', kind: 'hang', limit: 5 });
+    expect(ListProblemReportsQuery.safeParse({ kind: 'crash' }).success).toBe(false);
+    expect(ListProblemReportsQuery.safeParse({ limit: '500' }).success).toBe(false);
   });
 });

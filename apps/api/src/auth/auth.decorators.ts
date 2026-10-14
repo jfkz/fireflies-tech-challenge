@@ -3,11 +3,14 @@ import type { UserRow } from '../db/schema';
 
 export const IS_PUBLIC = 'auth:public';
 export const FIREBASE_ONLY = 'auth:firebase-only';
+export const ADMIN_ONLY = 'auth:admin-only';
 
 /** No credentials required. */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
 /** Only a Firebase session (the dashboard) may call this, not a device token. */
 export const FirebaseOnly = () => SetMetadata(FIREBASE_ONLY, true);
+/** Only a dashboard sign-in whose email is in ADMIN_EMAILS; everyone else gets 403. */
+export const AdminOnly = () => SetMetadata(ADMIN_ONLY, true);
 
 export interface AuthContext {
   user: UserRow;

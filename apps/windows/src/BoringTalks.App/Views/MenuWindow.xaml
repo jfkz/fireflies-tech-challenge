@@ -201,13 +201,25 @@
         </ItemsControl>
       </StackPanel>
 
+      <!-- It froze (now or in the last run) -->
+      <Border Style="{StaticResource Notice}" Background="#26E07A1F" Margin="0,10,0,0" Visibility="{Binding HangBanner, Converter={StaticResource VisibleWhen}}">
+        <StackPanel>
+          <TextBlock Text="{Binding HangBanner}" FontSize="12" TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+            <Button Style="{StaticResource Primary}" Content="Report…" Padding="10,3" FontSize="12" Click="ReportHang_Click" />
+            <Button Style="{StaticResource Link}" Content="Dismiss" FontSize="12" Margin="10,0,0,0" Click="DismissHang_Click" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
       <!-- Footer -->
       <Separator Margin="0,12" />
       <DockPanel>
         <Button DockPanel.Dock="Right" Style="{StaticResource Link}" Content="Quit" Click="Quit_Click" />
         <StackPanel Orientation="Horizontal">
           <Button Style="{StaticResource Link}" Content="Dashboard" Click="Dashboard_Click" Margin="0,0,12,0" />
-          <Button Style="{StaticResource Link}" Content="Settings…" Click="Settings_Click" />
+          <Button Style="{StaticResource Link}" Content="Settings…" Click="Settings_Click" Margin="0,0,12,0" />
+          <Button Style="{StaticResource Link}" Content="Report a Problem…" Click="Report_Click" />
         </StackPanel>
       </DockPanel>
     </StackPanel>

@@ -1,6 +1,17 @@
 'use client';
 
-import type { ListTasksQuery, MeetingDetail, MeetingPage, MeetingStatsQuery, PersonDetail, TaskItem, TaskPage, UpdateMeetingRequest } from '@boringtalks/shared';
+import type {
+  ListTasksQuery,
+  MeetingDetail,
+  MeetingPage,
+  MeetingStatsQuery,
+  PersonDetail,
+  ProblemReportKind,
+  ProblemReportPage,
+  TaskItem,
+  TaskPage,
+  UpdateMeetingRequest,
+} from '@boringtalks/shared';
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { publicApi, useAuth } from '@/components/providers/AuthProvider';
 import { aroundRange, LINK_WINDOW_DAYS, localDayRange } from '@/lib/meeting-nav';
@@ -34,6 +45,8 @@ export const keys = {
   person: (uid: string | undefined, name: string) => ['person', uid, name.toLocaleLowerCase()] as const,
   allPersons: (uid: string | undefined) => ['person', uid] as const,
   devices: (uid: string | undefined) => ['devices', uid] as const,
+  reports: (uid: string | undefined, filters: ReportFilters) => ['reports', uid, 'list', filters] as const,
+  report: (uid: string | undefined, id: string) => ['reports', uid, 'one', id] as const,
   downloads: ['downloads'] as const,
 };
 
@@ -334,4 +347,29 @@ export function useDownloads() {
     queryFn: ({ signal }) => publicApi.downloads(signal),
     staleTime: 5 * 60_000,
   });
+}
+
+/** What the admin's report list is narrowed to. */
+export interface ReportFilters {
+  user?: string;
+  kind?: ProblemReportKind;
+}
+
+/** Every user's problem reports, newest first (admins only). */
+export function useReports(filters: ReportFilters, enabled = true) {
+  const { api, user } = useAuth();
+  const clean = Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) as ReportFilters;
+  return useInfiniteQuery({
+    queryKey: keys.reports(user?.uid, clean),
+    queryFn: ({ pageParam, signal }) => api.listReports({ ...clean, cursor: pageParam, limit: 50 }, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: ProblemReportPage) => last.nextCursor ?? undefined,
+    enabled: !!user && enabled,
+  });
+}
+
+/** One report with its diagnostics and log (admins only). */
+export function useReport(id: string, enabled = true) {
+  const { api, user } = useAuth();
+  return useQuery({ queryKey: keys.report(user?.uid, id), queryFn: ({ signal }) => api.getReport(id, signal), enabled: !!user && enabled });
 }

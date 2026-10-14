@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Me, UpdateSettingsRequest } from '@boringtalks/shared';
 import type { FirebaseIdentity } from '../auth/firebase-verifier';
+import { AppConfig } from '../config/config.module';
 import type { UserRow } from '../db/schema';
 import { DemoService } from '../meetings/demo.service';
 import { MeetingsRepository } from '../meetings/meetings.repository';
@@ -13,6 +14,7 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
 
   constructor(
+    private readonly config: AppConfig,
     private readonly repo: UsersRepository,
     private readonly demo: DemoService,
     private readonly jobs: JobsService,
@@ -59,16 +61,21 @@ export class UsersService {
     const before = firstName(user.name);
     const after = firstName(updated.name);
     if (after && after !== before) await this.meetings.renameOwner(user.id, after);
-    return toMe(updated);
+    return this.me(updated);
+  }
+
+  me(user: UserRow): Me {
+    return toMe(user, this.config.isAdmin(user.email));
   }
 }
 
-export function toMe(user: UserRow): Me {
+export function toMe(user: UserRow, isAdmin = false): Me {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     emailOnReady: user.emailOnReady,
     createdAt: user.createdAt.toISOString(),
+    isAdmin,
   };
 }

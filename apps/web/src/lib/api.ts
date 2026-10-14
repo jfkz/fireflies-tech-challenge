@@ -10,12 +10,15 @@ import {
   MeetingStats,
   PeopleList,
   PersonDetail,
+  ProblemReportDetail,
+  ProblemReportPage,
   TaskPage,
   UploadUrlResponse,
   type AuthorizeDeviceRequest,
   type CompleteMeetingRequest,
   type CreateMeetingRequest,
   type ListMeetingsQuery,
+  type ListProblemReportsQuery,
   type ListTasksQuery,
   type MeetingStatsQuery,
   type RenamePersonRequest,
@@ -137,6 +140,11 @@ export function createApiClient({ baseUrl, getToken, fetch: fetchImpl }: ApiClie
     authorizeDevice: (body: AuthorizeDeviceRequest) => request('POST', '/devices/authorize', { schema: AuthorizeDeviceResponse, body }),
     listDevices: () => request('GET', '/devices', { schema: DeviceList }),
     revokeDevice: (id: string) => request<void>('DELETE', `/devices/${encodeURIComponent(id)}`),
+
+    /** Admins only (403 for everyone else): every user's problem reports, newest first. */
+    listReports: (q: Partial<ListProblemReportsQuery> = {}, signal?: AbortSignal) =>
+      request('GET', '/admin/reports', { schema: ProblemReportPage, query: { user: q.user, kind: q.kind, cursor: q.cursor, limit: q.limit }, signal }),
+    getReport: (id: string, signal?: AbortSignal) => request('GET', `/admin/reports/${encodeURIComponent(id)}`, { schema: ProblemReportDetail, signal }),
 
     /** The newest build for each desktop app; null for one that hasn't shipped yet. */
     downloads: (signal?: AbortSignal) => request('GET', '/downloads', { schema: Downloads, auth: false, signal }),

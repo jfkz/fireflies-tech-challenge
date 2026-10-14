@@ -130,6 +130,8 @@ $bt = "$env:LOCALAPPDATA\BoringTalks\current\BoringTalks.exe"   # or build\publi
 & $bt --mic-users 30                                    # which apps use a microphone (call detection's view)
 & $bt --demo                                            # live transcript window with sample lines
 & $bt --show-menu                                       # the tray menu as a normal window (QA, screenshots)
+& $bt --report                                          # opens Report a Problem in the running app
+& $bt --write-report C:\Temp\report.txt                 # what a report would send, written instead of sent
 $env:BT_TRACE = 1; & $bt --transcribe meeting.wav --speakers   # how voices were told apart (stderr)
 ```
 

@@ -1,0 +1,64 @@
+<Window x:Class="BoringTalks.App.Views.ReportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:BoringTalks.App.ViewModels"
+        Title="Report a Problem" Width="460" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" FontFamily="{StaticResource UiFont}" FontSize="13"
+        Foreground="{StaticResource Ink}" Background="#FAFAFE" Icon="/Assets/BoringTalks.ico">
+  <!-- Report a Problem…, as on the Mac: a message, what else is sent, Send or Save to File. DataContext: the AppModel. -->
+  <Grid Margin="18,16">
+    <!-- Sent or saved -->
+    <StackPanel Visibility="{Binding Reporter.IsDone, Converter={StaticResource VisibleWhen}}">
+      <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="#1F9D55">
+        <TextBlock.Style>
+          <Style TargetType="TextBlock">
+            <Setter Property="Text" Value="✓ Sent. Thank you!" />
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding Reporter.State}" Value="Saved">
+                <Setter Property="Text" Value="✓ Saved to Downloads." />
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </TextBlock.Style>
+      </TextBlock>
+      <TextBox Text="{Binding Reporter.Result, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+               Foreground="{StaticResource InkSoft}" TextWrapping="Wrap" Margin="0,8,0,0" />
+      <Button Style="{StaticResource Primary}" Content="Close" HorizontalAlignment="Right" Padding="16,6" Margin="0,12,0,0"
+              IsDefault="True" Click="Close_Click" />
+    </StackPanel>
+
+    <!-- The form -->
+    <StackPanel Visibility="{Binding Reporter.IsDone, Converter={StaticResource HiddenWhen}}">
+      <Border Style="{StaticResource Notice}" Background="#26E07A1F" Margin="0,0,0,10"
+              Visibility="{Binding Reporter.HangText, Converter={StaticResource VisibleWhen}}">
+        <TextBlock Text="{Binding Reporter.HangText}" FontSize="12" TextWrapping="Wrap" />
+      </Border>
+      <TextBlock Text="What happened?" Style="{StaticResource SectionTitle}" />
+      <TextBox x:Name="MessageBox" Text="{Binding Reporter.Message, UpdateSourceTrigger=PropertyChanged}" Height="110" Margin="0,6,0,0"
+               AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MaxLength="4000" Padding="4" />
+      <CheckBox IsChecked="{Binding Reporter.IncludeLog}" Margin="0,10,0,0"
+                Content="{x:Static vm:ProblemReporter.IncludeLogText}" />
+      <Expander Header="What else is sent" Margin="0,8,0,0">
+        <TextBox Text="{Binding Reporter.DiagnosticsText, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="11"
+                 Height="130" Margin="0,6,0,0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
+      </Expander>
+      <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,8,0,0"
+                 Text="Goes to the BoringTalks team with your account. No audio, transcripts or meeting titles." />
+      <TextBlock Text="{Binding Reporter.Error}" Foreground="{StaticResource Danger}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                 Visibility="{Binding Reporter.Error, Converter={StaticResource VisibleWhen}}" />
+      <TextBlock Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,8,0,0"
+                 Text="Sign in to send it, or save it to a file and send that."
+                 Visibility="{Binding IsSignedIn, Converter={StaticResource HiddenWhen}}" />
+      <DockPanel Margin="0,14,0,0" IsEnabled="{Binding Reporter.IsBusy, Converter={StaticResource Equals}, ConverterParameter=False}">
+        <Button DockPanel.Dock="Left" Content="Save to File…" Padding="10,5" Click="Save_Click" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <ProgressBar IsIndeterminate="True" Width="60" Height="4" Margin="0,0,10,0" VerticalAlignment="Center"
+                       Visibility="{Binding Reporter.IsBusy, Converter={StaticResource VisibleWhen}}" />
+          <Button Content="Cancel" Padding="12,5" IsCancel="True" Click="Close_Click" />
+          <Button Style="{StaticResource Primary}" Content="Send" Padding="16,5" Margin="8,0,0,0" IsDefault="False"
+                  IsEnabled="{Binding IsSignedIn}" Click="Send_Click" />
+        </StackPanel>
+      </DockPanel>
+    </StackPanel>
+  </Grid>
+</Window>

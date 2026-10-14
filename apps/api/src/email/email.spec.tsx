@@ -67,7 +67,7 @@ describe('EmailComposer', () => {
     reports.findById.mockResolvedValue({ report, email: 'ann@example.com' });
     const hang = await composer.compose({ type: 'problem-report', userId: 'u', reportId: 'r-1' }, user());
     expect(hang?.subject).toBe('Hang: BoringTalks 0.4.0 (Dev) from ann@example.com');
-    expect(hang?.text).toContain('The Mac app was stuck');
+    expect(hang?.text).toContain('The app was stuck');
     expect(hang?.text).toContain('BoringTalks Dev 0.4.0 (3)');
     expect(hang?.text).toContain('macOS 26.2, Mac15,3');
     expect(hang?.text).toContain('(no message)');

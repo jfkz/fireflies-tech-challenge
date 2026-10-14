@@ -17,11 +17,15 @@ const LINKS = [
   { href: '/settings', label: 'Settings' },
 ] as const;
 
+/** Only for the accounts in the API's ADMIN_EMAILS. */
+const ADMIN_LINKS = [{ href: '/admin/reports', label: 'Reports' }] as const;
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user } = useAuth();
   // The first GET /me creates the account (and its demo meeting) on the server.
-  useMe();
+  const me = useMe();
+  const links = me.data?.isAdmin ? [...LINKS, ...ADMIN_LINKS] : LINKS;
 
   return (
     <div className="min-h-svh bg-paper">
@@ -29,7 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-[1200px] items-center gap-3 px-4 py-2.5 sm:px-6">
           <Logo href="/meetings" />
           <nav aria-label="App" className="ml-2 hidden items-center gap-1 sm:flex">
-            {LINKS.map((l) => (
+            {links.map((l) => (
               <NavLink key={l.href} {...l} active={pathname.startsWith(l.href)} />
             ))}
           </nav>
@@ -43,7 +47,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav aria-label="App" className="flex justify-around overflow-x-auto border-t-2 border-ink/10 px-1 py-1 sm:hidden">
-          {LINKS.map((l) => (
+          {links.map((l) => (
             <NavLink key={l.href} {...l} active={pathname.startsWith(l.href)} compact />
           ))}
         </nav>

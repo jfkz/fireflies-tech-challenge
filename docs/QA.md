@@ -410,6 +410,7 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 | Settings › Stop after silence **1 minute**, start a meeting, stay silent | After 30 s a toast "Still in a meeting?" with **Keep recording** and a countdown in the menu; **Keep recording** resets it; otherwise it stops and a toast says "Nobody spoke for 1 minute, so BoringTalks stopped recording…" |
 | Join a Zoom/Teams call, or a Google Meet in Chrome/Edge, without recording | After ~5 s (browsers ~15 s) a toast "<app> is in a call. Record it?" with **Record / Not now / Never for <app>**, the same banner in the menu, and a blue dot on the tray icon |
 | **Record** | Recording starts; **Not now**: no new offer during this call; **Never for <app>**: listed in Settings › Calls with **Ask again** |
+| **Record** from the toast, five calls in a row (leave each call, wait for the stop) | Each time: red **Stop** with a moving timer, the menu keeps answering, the recording stops when the call ends and the meeting uploads with audio; the log has "recording <id>" and no "UI thread has not answered" |
 | Leave the call while recording | ~30 s after the others go quiet the recording stops by itself ("The Teams call ended…") |
 | `BoringTalks.exe --mic-users 60` while joining and leaving calls | One line per change: each app holding a microphone and the call app it counts as |
 
@@ -422,6 +423,18 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 | Dashboard › Settings › **Disconnect** this PC | Next upload or refresh: "This PC was signed out…"; waiting uploads continue after signing in again |
 | Settings › **Show recordings in Explorer** | `%APPDATA%\BoringTalks\Recordings\<id>.m4a`, ~43 MB per hour, playable with both sides |
 | Keep recordings "Delete after upload" | The file disappears once the upload finishes |
+
+### 5b. Report a Problem, freezes and memory
+
+| Step | Expected |
+|---|---|
+| Menu footer › **Report a Problem…** (also in the tray's right-click menu) | A window: "What happened?", **Include BoringTalks's log (today and yesterday)** on, **What else is sent** lists app, Windows, microphones, recorder, uploads and settings; no meeting titles |
+| Type a message, **Send** | "Sent. Thank you!" with a reference; it is first on the dashboard's `/admin/reports` (as an admin) with your email, the version and "Windows 11 …"; opening it shows the diagnostics and the log |
+| Signed out | **Send** is greyed out with "Sign in to send it…"; **Save to File…** writes `BoringTalks report <time>.txt` to Downloads and shows it in Explorer |
+| `BoringTalks.exe --write-report C:\Temp\r.txt` while it runs | The file has the report (no message) with diagnostics and the log; nothing is sent |
+| Freeze the app for 15 s (Debug build: attach a debugger and pause it), then let it go | The log has "the UI thread has not answered for 10 s" and "was stuck for 15 s"; the menu shows "BoringTalks stopped responding for 15 s at …" with **Report…** / **Dismiss**; **Report…** opens the window with that line, and the sent report has kind `hang` and `hang.seconds` |
+| Freeze it again and kill it from Task Manager while frozen, then start it | The menu says it "stopped responding at … and was closed while stuck"; **Dismiss** removes it for good |
+| Record a 30-minute call with only your voice (nothing playing), Task Manager open | BoringTalks' memory stays roughly flat (no steady climb); the `.m4a` keeps growing during the meeting |
 
 ### 6. Settings and updates
 
@@ -518,6 +531,13 @@ deploy, and against production after a merge.
    **Expected:** an email "Problem report: BoringTalks <version> from <you>" arrives there, without the log.
 3. `curl -X POST <api>/reports` without a token.
    **Expected:** `401`.
+4. With your email in `ADMIN_EMAILS`, open the dashboard.
+   **Expected:** the nav shows **Reports**; `/admin/reports` lists the report from step 1 first (kind, your
+   email, app version, system, first line of the message). **Hangs** / **Sent by users** and the user filter
+   narrow the list; opening the report shows the message, diagnostics and the log, and **Copy log** copies it.
+5. Sign in as an account not in `ADMIN_EMAILS`.
+   **Expected:** no **Reports** link; `/admin/reports` says “Only admins can see problem reports.”;
+   `curl <api>/admin/reports` with that account's token (or a device token) is `403`.
 
 ### 10. Versions
 1. Compare `GET /health` `version`, the web footer, the Mac app's About/menu version and the Windows

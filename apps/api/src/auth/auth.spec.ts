@@ -2,7 +2,7 @@ import { ForbiddenException, UnauthorizedException, type ExecutionContext } from
 import { Reflector } from '@nestjs/core';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWK } from 'jose';
 import { user, testConfig } from '../testing/fixtures';
-import { FirebaseOnly, Public, CurrentUser, type AuthedRequest } from './auth.decorators';
+import { AdminOnly, FirebaseOnly, Public, CurrentUser, type AuthedRequest } from './auth.decorators';
 import { AuthGuard } from './auth.guard';
 import { FirebaseVerifier, firebaseJwksProvider, InvalidTokenError } from './firebase-verifier';
 import { UserThrottlerGuard } from './throttler.guard';
@@ -98,11 +98,12 @@ describe('AuthGuard', () => {
   const firebase = { verify: vi.fn() };
   const users = { ensureUser: vi.fn() };
   const deviceTokens = { authenticate: vi.fn() };
-  const guard = new AuthGuard(reflector, firebase as never, users as never, deviceTokens as never);
+  const guard = new AuthGuard(reflector, firebase as never, users as never, deviceTokens as never, testConfig({ ADMIN_EMAILS: 'Boss@Example.com' }));
 
   class Routes {
     @Public() open() {}
     @FirebaseOnly() dashboardOnly() {}
+    @AdminOnly() adminOnly() {}
     normal() {}
   }
 
@@ -156,6 +157,18 @@ describe('AuthGuard', () => {
 
   it('keeps device tokens away from Firebase-only routes', async () => {
     await expect(guard.canActivate(ctx('dashboardOnly', 'Bearer btd_abc').context)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(deviceTokens.authenticate).not.toHaveBeenCalled();
+  });
+
+  it('lets only the admins in ADMIN_EMAILS onto admin routes, and never with a device token', async () => {
+    firebase.verify.mockResolvedValue({ uid: 'fb-1', email: 'a@b.c', name: null });
+    users.ensureUser.mockResolvedValue(user({ email: 'boss@example.com' }));
+    await expect(guard.canActivate(ctx('adminOnly', 'Bearer eyJ.token').context)).resolves.toBe(true);
+    users.ensureUser.mockResolvedValue(user());
+    await expect(guard.canActivate(ctx('adminOnly', 'Bearer eyJ.token').context)).rejects.toBeInstanceOf(ForbiddenException);
+    users.ensureUser.mockResolvedValue(user({ email: null }));
+    await expect(guard.canActivate(ctx('adminOnly', 'Bearer eyJ.token').context)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(guard.canActivate(ctx('adminOnly', 'Bearer btd_abc').context)).rejects.toBeInstanceOf(ForbiddenException);
     expect(deviceTokens.authenticate).not.toHaveBeenCalled();
   });
 });

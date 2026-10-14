@@ -9,6 +9,16 @@ describe('env', () => {
     expect(env.SUMMARY_MODEL).toBe('anthropic/claude-haiku-4.5');
     expect(env.SUMMARIZE_CONCURRENCY).toBe(4);
     expect(env.AI_FAKE).toBe(false);
+    expect(env.ADMIN_EMAILS).toEqual([]);
+  });
+
+  it('knows admins by email in any case', () => {
+    const config = testConfig({ ADMIN_EMAILS: 'Boss@Example.com, ops@example.com' });
+    expect(config.env.ADMIN_EMAILS).toEqual(['boss@example.com', 'ops@example.com']);
+    expect(config.isAdmin('BOSS@example.com')).toBe(true);
+    expect(config.isAdmin('ann@example.com')).toBe(false);
+    expect(config.isAdmin(null)).toBe(false);
+    expect(testConfig().isAdmin('boss@example.com')).toBe(false);
   });
 
   it('lists every problem at once', () => {
