@@ -5,11 +5,11 @@ import { DeviceApp } from './device';
 export const ProblemReportKind = z.enum(['user', 'hang']);
 export type ProblemReportKind = z.infer<typeof ProblemReportKind>;
 
-/** The Mac app's log is cut to its newest part above this many characters. */
+/** The desktop apps' logs are cut to their newest part above this many characters. */
 export const PROBLEM_REPORT_LOG_LIMIT = 1_000_000;
 
 /**
- * Sent by the Mac app's "Report a Problem…": what the user wrote, plus what the app knows about
+ * Sent by the Mac and Windows apps' "Report a Problem…": what the user wrote, plus what the app knows about
  * itself (version, macOS, audio devices, recorder state) and its own recent log.
  */
 export const ProblemReportRequest = z.object({
@@ -21,7 +21,7 @@ export const ProblemReportRequest = z.object({
     build: z.string().max(40).default(''),
     flavor: DeviceApp,
   }),
-  /** e.g. "macOS 26.2 (25C56)" and "Mac15,3". */
+  /** e.g. "macOS 26.2 (25C56)" and "Mac15,3", or "Windows 11 Pro 23H2 (10.0.22631)" and "LENOVO 21HM". */
   system: z.object({
     os: z.string().max(120),
     model: z.string().max(120).default(''),

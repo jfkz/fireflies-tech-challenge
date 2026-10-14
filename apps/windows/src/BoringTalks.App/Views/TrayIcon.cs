@@ -45,6 +45,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(recordItem);
         menu.Items.Add(Item("Dashboard", app.OpenDashboard));
         menu.Items.Add(Item("Settings…", openSettings));
+        menu.Items.Add(Item("Report a Problem…", () => app.ReportProblem()));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item($"Quit {AppFlavor.Current.Name}", quit));
 

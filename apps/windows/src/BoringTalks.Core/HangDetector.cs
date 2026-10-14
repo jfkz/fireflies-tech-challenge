@@ -2,7 +2,7 @@ namespace BoringTalks.Core;
 
 public abstract record HangEvent
 {
-    /// <summary>The ping sent at <c>Since</c> has been waiting <c>Seconds</c>: the UI thread is stuck.</summary>
+    /// <summary>The ping sent at <c>Since</c> has been waiting <c>Seconds</c>: the UI thread is stuck (on every tick while it lasts).</summary>
     public sealed record Stalled(double Since, double Seconds) : HangEvent;
     /// <summary>The UI thread answered after <c>Seconds</c>.</summary>
     public sealed record Recovered(double Seconds) : HangEvent;
@@ -20,14 +20,13 @@ public sealed class HangDetector(double threshold)
     /// <summary>When the ping still waiting for an answer was sent.</summary>
     private double? outstanding;
     private double? lastTick;
-    private bool reported;
 
     public const double MaxTickGap = 5;
 
     public double Threshold { get; } = threshold;
 
     /// <summary>
-    /// Sends a ping when none is waiting; otherwise says, once per hang, that the waiting one is late.
+    /// Sends a ping when none is waiting; otherwise says whether the waiting one is late.
     /// </summary>
     public (bool Ping, HangEvent? Event) Tick(double now)
     {
@@ -38,13 +37,10 @@ public sealed class HangDetector(double threshold)
             if (outstanding is not { } sent)
             {
                 outstanding = now;
-                reported = false;
                 return (true, null);
             }
             var waited = now - sent;
-            if (waited < Threshold || reported) return (false, null);
-            reported = true;
-            return (false, new HangEvent.Stalled(sent, waited));
+            return (false, waited >= Threshold ? new HangEvent.Stalled(sent, waited) : null);
         }
     }
 

@@ -678,11 +678,13 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   Media Foundation's encoder is set up and run on a thread of its own, never touching the UI
   thread (one made there deadlocked with it: "Yes, record" froze the app with an empty file), and
   captures are stopped on the thread pool with a timeout, so a driver can't freeze the menu.
-- **Freeze log:** a watchdog thread pings the UI thread every second; when it hasn't answered for
-  10 s the log says "the UI thread has not answered for 10 s", and "was stuck for N s" when it
-  comes back (`%APPDATA%\BoringTalks\logs`). The PC sleeping doesn't count.
+- **Memory stays flat:** each side fills its own silence twice a second from a timer of its own
+  (not the UI thread), so a side that plays nothing never holds the other's audio back; a side
+  more than a minute behind is mixed as silence; and audio waiting for the encoder is capped at
+  30 s (anything beyond is dropped, and the log says so once), so a stuck encoder or side can't
+  grow the app by hundreds of MB an hour.
 - **Where:** `BoringTalks.App/Audio/`, `Recording/MeetingRecorder.cs`, `RecordingChannel.cs`,
-  `RecordingWriter.cs`, `Platform/UiWatchdog.cs`; `BoringTalks.Core/Audio/`, `HangDetector.cs`.
+  `RecordingWriter.cs`; `BoringTalks.Core/Audio/` (`AudioMixer.MaxLagSamples`).
 - **Limits:** process loopback needs Windows 10 build 19041; before that, only the default output
   device is recorded. Windows "N" editions without the Media Feature Pack upload the transcript
   without audio. Audio over 200 MB (~4.5 h) isn't uploaded.
@@ -745,6 +747,31 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
   counts as a game right now.
 - **Where:** `BoringTalks.Core/Calls/Games.cs` (`GameDetector`, `GameWatch`),
   `BoringTalks.App/Platform/GameMonitor.cs`, `ViewModels/AppModel.cs`.
+
+### Report a Problem and the freeze watchdog
+
+- **What:** the Mac's, on Windows. **Report a Problem…** in the menu footer and the tray's
+  right-click menu opens a window: "What happened?", **Include BoringTalks's log (today and
+  yesterday)** (on), and **What else is sent** listing the diagnostics. **Send** posts it to
+  `POST /reports` (needs sign-in; signed out it says to sign in or save it); **Save to File…**
+  writes the same as text to Downloads and shows it in Explorer; afterwards "Sent. Thank you!" with
+  a reference. Sent: the message, version and build, flavor, Windows edition, release and build, the
+  PC's maker and model, short diagnostics (recorder phase, warnings and microphone, default input and
+  output and every input, apps holding a microphone, models, uploads, settings, uptime, memory) and the
+  log files of today and yesterday (newest 1 MB), so a report after a restart still has what led up to
+  a freeze. Never audio, transcripts or meeting titles. Admins read reports at `/admin/reports`.
+- **Freeze watchdog:** a thread pings the UI thread every second; 10 s without an answer is a
+  freeze. It is logged ("the UI thread has not answered for 10 s", then "was stuck for N s") and
+  kept in `%APPDATA%\BoringTalks\last-hang.json` while it lasts, so a freeze that ends with the app
+  being killed is still known on the next launch. The menu then shows "BoringTalks stopped
+  responding for 7 min at 11:31." with **Report…** (sent as kind `hang` with its start and length)
+  and **Dismiss**. The PC sleeping doesn't count.
+- **Command line:** `--report` opens Report a Problem (in the running app); `--write-report <file>`
+  writes what a report would send to that file without sending it.
+- **Where:** `BoringTalks.App/ViewModels/ProblemReporter.cs`, `Views/ReportWindow.xaml`,
+  `AppModel.DiagnosticsAsync()`, `Platform/UiWatchdog.cs`, `Platform/SystemInfo.cs`;
+  `BoringTalks.Core/Reports/` (`ProblemReport`, `HangWatch`, `HangStore`, `LogTail`), `HangDetector.cs`,
+  `Api/ApiClient.cs` (`SendProblemReportAsync`).
 
 ### Settings, environments, command line
 
@@ -889,9 +916,10 @@ duplicate.
   `failed` with the reason; Reprocess starts over.
 
 ### Problem reports
-`POST /reports` keeps what the Mac app sends from **Report a Problem…** (or after it noticed a hang):
-the user's message, app version and flavor, macOS and Mac model, up to 100 short diagnostics and the
-app's own recent log (≤ 1,000,000 characters), with the user and the Mac that sent it, in
+`POST /reports` keeps what the Mac and Windows apps send from **Report a Problem…** (or after they
+noticed a hang): the user's message, app version and flavor, the OS and the computer's model, up to 100
+short diagnostics and the app's own recent log (≤ 1,000,000 characters), with the user and the computer
+that sent it, in
 `problem_reports`. 10 reports an hour per user. When `REPORTS_NOTIFY_EMAIL` is set, each one is
 emailed there (without the log) through the `email` queue. Admins (`ADMIN_EMAILS`, a dashboard
 sign-in) read them on the dashboard's **Reports** page through `GET /admin/reports` and

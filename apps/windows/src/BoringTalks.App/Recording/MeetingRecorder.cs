@@ -149,13 +149,9 @@ public sealed partial class MeetingRecorder : ObservableObject
             StartedAt = DateTimeOffset.Now;
             foreach (var kind in Enum.GetValues<AudioChannel>()) channels[kind] = new RecordingChannel(kind, clockStart, writer, keepBacklog: transcribe);
 
-            // Keep both sides on the clock from the first moment: a side that is slow to start
-            // (or never does), or plays nothing, is filled with silence instead of stalling the mix.
-            ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) =>
-            {
-                foreach (var channel in channels.Values) channel.CatchUp();
-                CheckAutoStop();
-            }, ui);
+            // Each side keeps itself on the clock from the first moment (a side that is slow to start,
+            // or plays nothing, is filled with silence by its channel); this watches for the meeting's end.
+            ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) => CheckAutoStop(), ui);
             ticker.Start();
 
             // Both sides at once: the first words of a call must not wait for the other side's device.
@@ -292,7 +288,7 @@ public sealed partial class MeetingRecorder : ObservableObject
         if (Phase == RecorderPhase.Starting)
         {
             writer?.Remove(kind);
-            channels.Remove(kind);
+            if (channels.Remove(kind, out var channel)) channel.Dispose();
         }
         log($"{kind}: {message}");
     }
@@ -515,6 +511,7 @@ public sealed partial class MeetingRecorder : ObservableObject
         restarts.Clear();
         _ = ReleaseCapturesAsync([.. captures.Values]);
         captures.Clear();
+        foreach (var channel in channels.Values) channel.Dispose();
         channels.Clear();
         writer?.Dispose();
         writer = null;

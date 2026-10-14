@@ -14,13 +14,16 @@ public sealed class HangDetectorTests
     }
 
     [Fact]
-    public void Says_once_that_the_UI_thread_is_stuck_then_how_long_it_was()
+    public void Says_the_UI_thread_is_stuck_while_it_is_then_how_long_it_was()
     {
         // The watchdog ticks every second; nothing answers from 100 on.
         var events = Enumerable.Range(100, 151).Select(t => detector.Tick(t)).ToList();
         Assert.True(events[0].Ping);
         Assert.All(events.Skip(1), e => Assert.False(e.Ping));
-        Assert.Equal([new HangEvent.Stalled(100, 10)], events.Select(e => e.Event).OfType<HangEvent>());
+        var stalled = events.Select(e => e.Event).OfType<HangEvent.Stalled>().ToList();
+        Assert.Equal(new HangEvent.Stalled(100, 10), stalled[0]);
+        Assert.Equal(new HangEvent.Stalled(100, 150), stalled[^1]);
+        Assert.Equal(141, stalled.Count);
         Assert.Equal(new HangEvent.Recovered(150), detector.Answered(250));
         // The next hang is reported again.
         detector.Tick(251);

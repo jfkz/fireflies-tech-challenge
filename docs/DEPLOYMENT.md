@@ -144,7 +144,7 @@ even if one of them didn't change. Patch numbers may differ (a Mac-only fix ship
 
 ## Problem reports
 
-The Mac app's "Report a Problem…" posts to `POST /reports`; reports live in the `problem_reports` table.
+The Mac and Windows apps' "Report a Problem…" posts to `POST /reports`; reports live in the `problem_reports` table.
 Admins read them on the dashboard at `/admin/reports`: set `ADMIN_EMAILS` on the `api` service to a
 comma-separated list of the dashboard accounts that may (they then see **Reports** in the nav). Without
 the dashboard, use the API image's CLI (Railway shell on the `api` service, or locally with `DATABASE_URL`):

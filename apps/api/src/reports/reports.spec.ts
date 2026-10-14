@@ -216,7 +216,7 @@ describe('reports CLI', () => {
     });
     expect(out).toContain('From     (no email) (user 11111111-1111-4111-8111-111111111111, device d-1)');
     expect(out).toContain('App      BoringTalks 0.4.0 dev (7)');
-    expect(out).toContain('Mac      macOS 26.2, Mac15,3');
+    expect(out).toContain('System   macOS 26.2, Mac15,3');
     expect(out).toContain('It froze');
     expect(out).toContain('mic.device: AirPods');
     expect(out).toMatch(/── Log\nlast line\n$/);

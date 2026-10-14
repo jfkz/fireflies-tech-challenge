@@ -35,6 +35,10 @@ public sealed partial class MenuViewModel : ObservableObject
         App = app;
         app.PropertyChanged += (_, e) => Changed(e.PropertyName);
         app.Recorder.PropertyChanged += (_, e) => Changed(e.PropertyName);
+        app.Reporter.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ProblemReporter.PendingHang)) OnPropertyChanged(nameof(HangBanner));
+        };
         // Level bars and clocks.
         ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(66), DispatcherPriority.Render, (_, _) => Tick(), ui);
     }
@@ -65,6 +69,8 @@ public sealed partial class MenuViewModel : ObservableObject
             : $"{AppName} {ready.Version} is ready. It installs after this meeting, when you restart or quit."
         : null;
     public bool CanRestartToUpdate => App.CanRestartToUpdate;
+    /// <summary>The watchdog saw the app freeze: offer to report it.</summary>
+    public string? HangBanner => App.Reporter.PendingHang is { } hang ? ProblemReporter.Describe(hang) : null;
     public string HeaderCaption => App.Auth == AuthState.SignedIn ? App.Email ?? "Signed in" : "Meetings, written down for you";
     public string? DevHost => App.Config.IsProduction ? null : App.Config.ApiUrl.Host;
 

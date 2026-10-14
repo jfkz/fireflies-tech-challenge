@@ -1,7 +1,7 @@
 import { Text } from '@react-email/components';
 import { Layout, styles } from './layout';
 
-/** To the operator: someone sent a report from the Mac app. The log stays in the database. */
+/** To the operator: someone sent a report from a desktop app. The log stays in the database. */
 export function ProblemReportEmail(props: {
   reportId: string;
   kind: 'user' | 'hang';
@@ -11,7 +11,7 @@ export function ProblemReportEmail(props: {
   message: string;
   logBytes: number;
 }) {
-  const heading = props.kind === 'hang' ? 'The Mac app was stuck' : 'New problem report';
+  const heading = props.kind === 'hang' ? 'The app was stuck' : 'New problem report';
   return (
     <Layout preview={`${props.from} · ${props.app}`}>
       <Text style={styles.h1}>{heading}</Text>
@@ -20,7 +20,7 @@ export function ProblemReportEmail(props: {
         <br />
         <strong>App:</strong> {props.app}
         <br />
-        <strong>Mac:</strong> {props.system || 'unknown'}
+        <strong>System:</strong> {props.system || 'unknown'}
       </Text>
       <Text style={{ ...styles.p, whiteSpace: 'pre-wrap' }}>{props.message || '(no message)'}</Text>
       <Text style={styles.muted}>

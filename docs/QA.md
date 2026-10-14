@@ -424,6 +424,18 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 | Settings › **Show recordings in Explorer** | `%APPDATA%\BoringTalks\Recordings\<id>.m4a`, ~43 MB per hour, playable with both sides |
 | Keep recordings "Delete after upload" | The file disappears once the upload finishes |
 
+### 5b. Report a Problem, freezes and memory
+
+| Step | Expected |
+|---|---|
+| Menu footer › **Report a Problem…** (also in the tray's right-click menu) | A window: "What happened?", **Include BoringTalks's log (today and yesterday)** on, **What else is sent** lists app, Windows, microphones, recorder, uploads and settings; no meeting titles |
+| Type a message, **Send** | "Sent. Thank you!" with a reference; it is first on the dashboard's `/admin/reports` (as an admin) with your email, the version and "Windows 11 …"; opening it shows the diagnostics and the log |
+| Signed out | **Send** is greyed out with "Sign in to send it…"; **Save to File…** writes `BoringTalks report <time>.txt` to Downloads and shows it in Explorer |
+| `BoringTalks.exe --write-report C:\Temp\r.txt` while it runs | The file has the report (no message) with diagnostics and the log; nothing is sent |
+| Freeze the app for 15 s (Debug build: attach a debugger and pause it), then let it go | The log has "the UI thread has not answered for 10 s" and "was stuck for 15 s"; the menu shows "BoringTalks stopped responding for 15 s at …" with **Report…** / **Dismiss**; **Report…** opens the window with that line, and the sent report has kind `hang` and `hang.seconds` |
+| Freeze it again and kill it from Task Manager while frozen, then start it | The menu says it "stopped responding at … and was closed while stuck"; **Dismiss** removes it for good |
+| Record a 30-minute call with only your voice (nothing playing), Task Manager open | BoringTalks' memory stays roughly flat (no steady climb); the `.m4a` keeps growing during the meeting |
+
 ### 6. Settings and updates
 
 | Step | Expected |

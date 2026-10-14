@@ -382,8 +382,10 @@ Revokes the device; its token stops working immediately. `404` if unknown or alr
 ## Problem reports
 
 ### `POST /reports` (`ProblemReportRequest`) → `201 ProblemReportResponse`
-Sent by the Mac app's **Report a Problem…** (device token), or after it noticed it had been stuck
-(`kind: "hang"`). Any signed-in client may send one; a device token also records which Mac it came from.
+Sent by the Mac and Windows apps' **Report a Problem…** (device token), or after they noticed they had
+been stuck (`kind: "hang"`). Any signed-in client may send one; a device token also records which
+computer it came from. Windows sends e.g. `"system": { "os": "Windows 11 Pro 23H2 (10.0.22631)", "model": "LENOVO 21HM" }`
+(fixture: `packages/shared/fixtures/problem-report-request.json`).
 ```json
 {
   "kind": "user",

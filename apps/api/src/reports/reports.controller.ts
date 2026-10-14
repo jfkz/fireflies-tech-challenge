@@ -16,7 +16,7 @@ import { ReportsService } from './reports.service';
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
-  /** "Report a Problem…" from the Mac app (a device token), or any signed-in client. */
+  /** "Report a Problem…" from the Mac or Windows app (a device token), or any signed-in client. */
   @Post()
   @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
   create(

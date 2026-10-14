@@ -1,16 +1,21 @@
 using System.Diagnostics;
 using System.Windows.Threading;
-using BoringTalks.Core;
+using BoringTalks.Core.Reports;
 
 namespace BoringTalks.App.Platform;
 
 /// <summary>
-/// Posts a ping to the UI thread every second from a thread of its own and logs when the UI thread
-/// stops running them (the menu, Stop and call detection are frozen then) and when it comes back.
+/// Posts a ping to the UI thread every second from a thread of its own. When the UI thread stops
+/// running them (the menu, Stop and call detection are frozen then) the hang is logged and kept in
+/// <c>last-hang.json</c> while it lasts (see <see cref="HangWatch"/>), and <see cref="Recovered"/> is
+/// raised on the UI thread when it answers again.
 /// </summary>
-public sealed class UiWatchdog(Dispatcher ui, Action<string> log, double thresholdSeconds = 10)
+public sealed class UiWatchdog(Dispatcher ui, HangStore store, Action<string> log, double thresholdSeconds = 10)
 {
-    private readonly HangDetector detector = new(thresholdSeconds);
+    private readonly HangWatch watch = new(store, thresholdSeconds, log);
+
+    /// <summary>On the UI thread, when a hang has ended.</summary>
+    public event Action<Hang>? Recovered;
 
     public void Start()
     {
@@ -19,13 +24,11 @@ public sealed class UiWatchdog(Dispatcher ui, Action<string> log, double thresho
         {
             while (true)
             {
-                var (ping, hang) = detector.Tick(clock.Elapsed.TotalSeconds);
-                if (hang is HangEvent.Stalled stalled) log($"the UI thread has not answered for {stalled.Seconds:0} s");
-                if (ping)
+                if (watch.Tick(clock.Elapsed.TotalSeconds, DateTimeOffset.Now))
                 {
                     ui.BeginInvoke(DispatcherPriority.Normal, () =>
                     {
-                        if (detector.Answered(clock.Elapsed.TotalSeconds) is HangEvent.Recovered recovered) log($"the UI thread was stuck for {recovered.Seconds:0} s");
+                        if (watch.Answered(clock.Elapsed.TotalSeconds, DateTimeOffset.Now) is { } hang) Recovered?.Invoke(hang);
                     });
                 }
                 Thread.Sleep(1000);
