@@ -64,7 +64,7 @@ export const EnvSchema = z
     EMAIL_ALLOWLIST: csv,
     /** Where problem reports from the Mac app are announced; empty sends nothing (they are still kept). */
     REPORTS_NOTIFY_EMAIL: z.string().email().optional().or(z.literal('').transform(() => undefined)),
-    /** Who may read every user's problem reports in the dashboard (any case). */
+    /** Owners: always admins of the dashboard (any case); more admins are added there. */
     ADMIN_EMAILS: csv.transform((emails) => emails.map((e) => e.toLowerCase())),
 
     THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),

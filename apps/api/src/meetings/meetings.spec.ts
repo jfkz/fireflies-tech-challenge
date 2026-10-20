@@ -398,7 +398,7 @@ describe('MeetingsService', () => {
       repo.startRun.mockResolvedValue(meeting({ status: 'summarizing', attempts: 1 }));
       const d = await service.complete(user(), meeting().id, { durationSec: 42 });
       expect(d.status).toBe('summarizing');
-      expect(repo.startRun).toHaveBeenCalledWith(meeting().id, 'recording', 'summarizing', { hasAudio: true, durationSec: 42 });
+      expect(repo.startRun).toHaveBeenCalledWith(meeting().id, 'recording', 'summarizing', { hasAudio: true, audioBytes: 10, durationSec: 42 });
       expect(jobs.summarize).toHaveBeenCalledWith(meeting().id, 1);
     });
 
@@ -409,7 +409,7 @@ describe('MeetingsService', () => {
       storage.head.mockResolvedValue({ size: 10, contentType: 'audio/webm' });
       repo.startRun.mockResolvedValue(meeting({ status: 'transcribing', attempts: 1 }));
       await service.complete(user(), meeting().id, {});
-      expect(repo.startRun).toHaveBeenCalledWith(meeting().id, 'recording', 'transcribing', { hasAudio: true });
+      expect(repo.startRun).toHaveBeenCalledWith(meeting().id, 'recording', 'transcribing', { hasAudio: true, audioBytes: 10 });
       expect(jobs.transcribe).toHaveBeenCalledWith(meeting().id, 1);
     });
 

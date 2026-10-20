@@ -7,6 +7,20 @@ const pkceString = z.string().regex(/^[A-Za-z0-9\-._~]{43,128}$/, 'Not a PKCE va
 export const DeviceApp = z.enum(['release', 'dev']);
 export type DeviceApp = z.infer<typeof DeviceApp>;
 
+/** Which desktop app a device token belongs to. */
+export const DevicePlatform = z.enum(['macos', 'windows']);
+export type DevicePlatform = z.infer<typeof DevicePlatform>;
+
+/**
+ * The platform and version from a desktop app's User-Agent ("BoringTalks-Windows/0.6.0",
+ * "BoringTalks-macOS/0.5.0"); null for anything else.
+ */
+export function parseDeviceUserAgent(userAgent: string | undefined | null): { platform: DevicePlatform; version: string } | null {
+  const match = /BoringTalks-(macOS|Windows)\/([0-9][\w.+-]{0,39})/i.exec(userAgent ?? '');
+  if (!match) return null;
+  return { platform: match[1].toLowerCase() === 'windows' ? 'windows' : 'macos', version: match[2] };
+}
+
 /** Sent by the dashboard (signed in with Firebase) to approve a computer running the desktop app. */
 export const AuthorizeDeviceRequest = z.object({
   codeChallenge: pkceString,
@@ -42,6 +56,9 @@ export const Device = z.object({
   name: z.string(),
   createdAt: z.string().datetime(),
   lastSeenAt: z.string().datetime().nullable(),
+  /** Seen in the app's User-Agent; null until it has called the API (or from before this was kept). */
+  platform: DevicePlatform.nullable().optional(),
+  appVersion: z.string().nullable().optional(),
 });
 export type Device = z.infer<typeof Device>;
 

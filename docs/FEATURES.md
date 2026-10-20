@@ -281,8 +281,12 @@ one meeting would count it twice), so the summary names the top person instead.
   `AUDIO_CONTENT_TYPES` (M4A, MP4, MP3, WAV, WebM, OGG; type inferred from the
   extension when the browser gives none) up to `MAX_AUDIO_BYTES` (200 MB);
   same create → upload → complete flow with `source: upload`.
+- *Recording limit*: the account's limit from `GET /me` (`recordingLimitSec`; 2 hours unless an admin
+  changed it) is shown before starting. In its last 5 minutes (half the limit when that's shorter) a
+  banner counts down; at the limit the recording stops and is saved and summarized by itself, since
+  nobody may be there to press Save. Uploaded files have no limit.
 
-**Where.** `components/app/RecordView.tsx`, `hooks/useRecorder.ts`, `lib/recorder.ts`
+**Where.** `components/app/RecordView.tsx`, `hooks/useRecorder.ts`, `lib/recorder.ts` (`limitVerdict`)
 (pure state machine), `lib/upload.ts`.
 
 **Limits.** Browser recordings have no speaker separation on the device; the
@@ -320,15 +324,40 @@ released yet” and a link to the landing page's download card.
 
 **Where.** `components/app/SettingsView.tsx`.
 
+### Admin dashboard `/admin` (admins)
+
+**What.** Admins (the owners in the API's `ADMIN_EMAILS`, plus anyone an admin made one) get an
+**Admin** link in the nav, with four tabs; everyone else gets no link, “Only admins can see this.”
+on these pages, and `403` from `/admin/*`.
+- *Overview*: users (total, new in the period, active today / this week / in 30 days), meetings and
+  hours recorded in the period, the share that failed, estimated AI spend (summary tokens and server
+  transcription at docs/COSTS.md list prices) and audio stored. A column chart per day of meetings,
+  hours or sign-ups (hover or focus a day for its value; **Show as a table** has every number), and
+  breakdowns of where meetings come from, where they are now, and which desktop app versions are
+  connected. **7 / 30 / 90 days**. Demo meetings are never counted.
+- *Users*: every account, newest first, searchable by email, name or id, 50 at a time: meetings and
+  minutes, when they joined and were last active, the desktop apps they use (platform and version, from
+  the apps' User-Agent), owner/admin badges and their own recording limit. A user's page adds the last 30
+  days, their computers (connected and disconnected), their latest meetings as **metadata only** (date,
+  source, status, length, audio size; never titles, transcripts or summaries) and their problem reports.
+  There, **Make admin / Remove admin rights** (confirmed; owners can't be demoted and nobody removes
+  their own rights) and their **Recording limit**: the default, their own number of minutes, or none.
+- *Reports*: below.
+- *Settings*: the global **Recording limit** (120 minutes unless changed; 0 = none), who changed it
+  last, and the admin list with **Add an admin** by email. Only accounts that already exist can be made
+  admins (they sign in once first), so nobody can claim an admin's address by signing up with it.
+
+**Where.** `components/app/admin/` (`AdminFrame`, `AdminOverviewView`, `AdminUsersView`, `AdminUserView`,
+`AdminSettingsView`), `app/(app)/admin/`, `lib/admin.ts`; the `useAdmin*` hooks in `hooks/queries.ts`.
+
 ### Problem reports `/admin/reports` (admins)
 
-**What.** For the accounts in the API's `ADMIN_EMAILS`, the nav gains **Reports**: every user's
+**What.** The admin area's **Reports** tab: every user's
 problem reports, newest first (**Report a Problem…** from the desktop apps and the hangs they noticed),
 50 at a time with **Load more**, narrowed to **Hangs** or **Sent by users** and to one user by email
 or id. Each row shows the kind, who sent it, app version and flavor, the system and the first line of
 the message. Opening one (`/admin/reports/[id]`) shows when and from which user and computer it came,
 the app build and system, the message, every diagnostic and the app's log, with **Copy log**.
-Everyone else sees no link, “Only admins can see problem reports.” on the page, and `403` from the API.
 
 **Where.** `components/app/ReportsView.tsx`, `app/(app)/admin/reports/`; `useReports` / `useReport` in
 `hooks/queries.ts`.
@@ -921,12 +950,27 @@ noticed a hang): the user's message, app version and flavor, the OS and the comp
 short diagnostics and the app's own recent log (≤ 1,000,000 characters), with the user and the computer
 that sent it, in
 `problem_reports`. 10 reports an hour per user. When `REPORTS_NOTIFY_EMAIL` is set, each one is
-emailed there (without the log) through the `email` queue. Admins (`ADMIN_EMAILS`, a dashboard
-sign-in) read them on the dashboard's **Reports** page through `GET /admin/reports` and
+emailed there (without the log) through the `email` queue. Admins (a dashboard sign-in) read them
+on the dashboard's **Reports** tab through `GET /admin/reports` and
 `GET /admin/reports/:id`; operators can also use `node dist/reports.js` (latest 20,
 `--user <id|email>`, or `<id>` for one in full).
 **Where.** `src/reports/` (controller, service, repository), `@AdminOnly()` in `src/auth/`, `src/reports.ts` (CLI),
 `src/email/templates/problem-report.tsx`, migration `0006_problem_reports`.
+
+### Admins, usage and the recording limit
+- **Admins** are the owners in `ADMIN_EMAILS` (any case; always admins, not removable from the
+  dashboard) and accounts with `users.is_admin`, set from the dashboard by an admin (who did it is kept
+  in `admin_granted_by` and logged). `@AdminOnly()` routes take a dashboard sign-in only; device
+  tokens get `403`. `GET /me` says `isAdmin` and `isOwner`.
+- **Usage:** `users.last_active_at` (any request, kept to the minute), `devices.platform` /
+  `app_version` (from the desktop apps' User-Agent, kept at once when it changes) and
+  `meetings.audio_bytes` (when processing starts) feed `GET /admin/overview` and `/admin/users`.
+- **Recording limit:** `app_settings` key `recording.limitMinutes` (120 by default, 0 = none; read
+  through a 60 s cache) and `users.recording_limit_minutes` (null = the global one). `GET /me` gives
+  the effective one as `recordingLimitSec`; the recorders enforce it, the server accepts longer
+  meetings (older apps, uploaded files).
+- **Where.** `src/admin/` (controller, service, repository), `src/app-settings/`, `AppConfig.isOwner` /
+  `isAdmin`, `UsersService.me` / `touch`, migration `0008_admin_and_limits`.
 
 ### Operations
 `GET /health` (database + Redis, version, commit), `GET /downloads` (current Mac and Windows

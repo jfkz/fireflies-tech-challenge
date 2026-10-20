@@ -139,6 +139,40 @@ describe('api client', () => {
     });
   });
 
+  describe('admin', () => {
+    it('calls every admin endpoint with the right method, path and body', async () => {
+      const settings = { recordingLimitMinutes: 120, updatedAt: null, updatedBy: null };
+      const list = { admins: [] };
+      const page = { items: [], nextCursor: null };
+      const routes: Record<string, unknown> = {
+        'GET /admin/users': page,
+        'GET /admin/admins': list,
+        'POST /admin/admins': list,
+        'GET /admin/settings': settings,
+        'PATCH /admin/settings': settings,
+      };
+      const { api, fetch } = setup(() => Promise.resolve(json({})));
+      fetch.mockImplementation((url: string, init: RequestInit) => {
+        const key = `${init.method} ${new URL(url).pathname}`;
+        return Promise.resolve(json(routes[key] ?? { statusCode: 404, message: key }, routes[key] ? 200 : 404));
+      });
+      await api.adminUsers({ q: 'ann', limit: 10 });
+      expect(fetch.mock.calls[0][0]).toBe('https://api.test/admin/users?q=ann&limit=10');
+      await expect(api.adminList()).resolves.toEqual(list);
+      await api.grantAdmin('a@b.co');
+      expect(fetch.mock.calls[2][1]).toMatchObject({ method: 'POST', body: '{"email":"a@b.co"}' });
+      await expect(api.adminSettings()).resolves.toEqual(settings);
+      await api.updateAdminSettings({ recordingLimitMinutes: 90 });
+      expect(fetch.mock.calls[4][1]).toMatchObject({ method: 'PATCH', body: '{"recordingLimitMinutes":90}' });
+      await expect(api.adminOverview({ days: 7, tz: 'UTC' })).rejects.toMatchObject({ status: 404 });
+      expect(fetch.mock.calls[5][0]).toBe('https://api.test/admin/overview?days=7&tz=UTC');
+      await expect(api.adminUser('a/b')).rejects.toMatchObject({ status: 404 });
+      expect(fetch.mock.calls[6][0]).toBe('https://api.test/admin/users/a%2Fb');
+      await expect(api.updateAdminUser('u1', { isAdmin: true })).rejects.toMatchObject({ status: 404 });
+      expect(fetch.mock.calls[7][1]).toMatchObject({ method: 'PATCH', body: '{"isAdmin":true}' });
+    });
+  });
+
   describe('downloads', () => {
     const mac = { platform: 'macos', version: '1.0', build: '3', url: 'https://d.test/a.dmg', sizeBytes: 10, minimumOs: '26.0', notarized: true, publishedAt: '2026-10-01T10:00:00.000Z' };
 

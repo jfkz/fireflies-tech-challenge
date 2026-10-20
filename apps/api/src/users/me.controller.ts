@@ -10,7 +10,7 @@ export class MeController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  me(@CurrentUser() user: UserRow): Me {
+  me(@CurrentUser() user: UserRow): Promise<Me> {
     return this.users.me(user);
   }
 

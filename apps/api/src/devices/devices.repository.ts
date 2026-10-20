@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, gt, isNull, lt, or, sql } from 'drizzle-orm';
+import type { DevicePlatform } from '@boringtalks/shared';
+import { and, desc, eq, gt, isNull, lt, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { InjectDb, type Database } from '../db/db.module';
 import { deviceCodes, devices, users, type DeviceRow, type UserRow } from '../db/schema';
 
@@ -35,12 +36,14 @@ export class DevicesRepository {
     return row ?? null;
   }
 
-  /** Bumps last_seen_at, but at most once a minute per device. */
-  async touch(id: string): Promise<void> {
+  /** Bumps last_seen_at, but at most once a minute per device; a new app version is kept at once. */
+  async touch(id: string, app?: { platform: DevicePlatform; version: string }): Promise<void> {
+    const stale = or(isNull(devices.lastSeenAt), lt(devices.lastSeenAt, sql`now() - interval '1 minute'`));
+    const moved = app ? or(isDistinctFrom(devices.platform, app.platform), isDistinctFrom(devices.appVersion, app.version)) : undefined;
     await this.db
       .update(devices)
-      .set({ lastSeenAt: new Date() })
-      .where(and(eq(devices.id, id), or(isNull(devices.lastSeenAt), lt(devices.lastSeenAt, sql`now() - interval '1 minute'`))));
+      .set({ lastSeenAt: new Date(), ...(app ? { platform: app.platform, appVersion: app.version } : {}) })
+      .where(and(eq(devices.id, id), moved ? or(stale, moved) : stale));
   }
 
   listActive(userId: string): Promise<DeviceRow[]> {
@@ -65,3 +68,5 @@ export class DevicesRepository {
     return rows.length > 0;
   }
 }
+
+const isDistinctFrom = (column: SQLWrapper, value: string): SQL => sql`${column} is distinct from ${value}`;

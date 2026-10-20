@@ -72,5 +72,7 @@ export function toDevice(row: DeviceRow): Device {
     name: row.name,
     createdAt: row.createdAt.toISOString(),
     lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+    platform: row.platform ?? null,
+    appVersion: row.appVersion ?? null,
   };
 }

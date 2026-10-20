@@ -32,6 +32,14 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     renamePerson: notMocked('renamePerson'),
     listReports: notMocked('listReports'),
     getReport: notMocked('getReport'),
+    adminOverview: notMocked('adminOverview'),
+    adminUsers: notMocked('adminUsers'),
+    adminUser: notMocked('adminUser'),
+    updateAdminUser: notMocked('updateAdminUser'),
+    adminList: notMocked('adminList'),
+    grantAdmin: notMocked('grantAdmin'),
+    adminSettings: notMocked('adminSettings'),
+    updateAdminSettings: notMocked('updateAdminSettings'),
     ...overrides,
   } as ApiClient;
 }

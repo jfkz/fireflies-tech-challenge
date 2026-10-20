@@ -5,6 +5,7 @@ import type { ApiClient } from '@/lib/api';
 import {
   INITIAL_RECORDER,
   levelFromSamples,
+  limitVerdict,
   mediaErrorMessage,
   pickRecorderMimeType,
   recorderReducer,
@@ -36,13 +37,19 @@ interface Live {
 
 /**
  * Records the microphone (and optionally a shared tab's audio, mixed through
- * Web Audio) with MediaRecorder, then uploads it as a meeting.
+ * Web Audio) with MediaRecorder, then uploads it as a meeting. `limitSec` (from /me)
+ * stops it at the account's recording limit.
  */
-export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put']) {
+export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put'], limitSec?: number | null) {
   const [state, dispatch] = useReducer(recorderReducer, INITIAL_RECORDER);
   const [level, setLevel] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [stoppedByLimit, setStoppedByLimit] = useState(false);
   const live = useRef<Live | null>(null);
+  const limit = useRef(limitSec);
+  useEffect(() => {
+    limit.current = limitSec;
+  }, [limitSec]);
   // A playable URL for the finished take, created when recording stops.
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const preview = useRef<string | null>(null);
@@ -72,7 +79,16 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put']) {
 
   useEffect(() => {
     if (state.kind !== 'recording') return;
-    const tick = () => setElapsed((Date.now() - state.startedAt) / 1000);
+    const tick = () => {
+      const seconds = (Date.now() - state.startedAt) / 1000;
+      setElapsed(seconds);
+      const l = live.current;
+      if (limitVerdict(seconds, limit.current).kind === 'stop' && l?.recorder.state === 'recording') {
+        setStoppedByLimit(true);
+        dispatch({ type: 'stop' });
+        l.recorder.stop();
+      }
+    };
     tick();
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
@@ -82,6 +98,7 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put']) {
     async (withTab = false, micId?: string) => {
       dispatch({ type: 'request', withTab });
       setElapsed(0);
+      setStoppedByLimit(false);
       const streams: MediaStream[] = [];
       try {
         if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
@@ -189,6 +206,7 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put']) {
     setPreview(null);
     dispatch({ type: 'discard' });
     setElapsed(0);
+    setStoppedByLimit(false);
   }, [teardown, setPreview]);
 
   const submit = useCallback(
@@ -221,5 +239,9 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put']) {
 
   const retry = useCallback(() => dispatch({ type: 'retry' }), []);
 
-  return { state: state as RecorderState, level, elapsed, previewUrl, start, stop, discard, submit, retry };
+  const verdict = state.kind === 'recording' ? limitVerdict(elapsed, limitSec) : null;
+  /** Seconds until the recording limit stops it, in the last minutes; null otherwise. */
+  const limitLeft = verdict?.kind === 'warning' ? verdict.secondsLeft : null;
+
+  return { state: state as RecorderState, level, elapsed, previewUrl, start, stop, discard, submit, retry, limitLeft, stoppedByLimit };
 }

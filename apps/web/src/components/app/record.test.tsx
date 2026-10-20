@@ -95,3 +95,47 @@ describe('RecordView: recorder', () => {
     expect(await screen.findByText(/blocked the microphone/)).toBeInTheDocument();
   });
 });
+
+describe('RecordView: recording limit', () => {
+  class FakeRecorder {
+    static isTypeSupported = () => true;
+    state = 'inactive';
+    mimeType = 'audio/webm';
+    ondataavailable: ((e: { data: Blob }) => void) | null = null;
+    onstop: (() => void) | null = null;
+    start() {
+      this.state = 'recording';
+    }
+    stop() {
+      this.state = 'inactive';
+      this.ondataavailable?.({ data: new Blob(['abc'], { type: 'audio/webm' }) });
+      this.onstop?.();
+    }
+  }
+
+  it('says the limit, stops there by itself and saves the take', async () => {
+    const track = { kind: 'audio', stop: vi.fn(), addEventListener: vi.fn() };
+    const stream = { getTracks: () => [track], getAudioTracks: () => [track], getVideoTracks: () => [] };
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn(async () => stream), enumerateDevices: vi.fn(async () => []) } });
+    vi.stubGlobal('MediaRecorder', FakeRecorder);
+    vi.stubGlobal('AudioContext', undefined);
+    URL.createObjectURL = vi.fn(() => 'blob:preview');
+    URL.revokeObjectURL = vi.fn();
+    const me = { id: '00000000-0000-4000-8000-000000000009', email: 'me@example.com', name: null, emailOnReady: true, createdAt: '2026-10-01T10:00:00.000Z', recordingLimitSec: 1 };
+    const createMeeting = vi.fn(async () => ({ id: 'm-limit' }) as never);
+    renderWithProviders(<RecordView />, {
+      auth: authValue({
+        api: fakeApi({
+          me: vi.fn(async () => me),
+          createMeeting,
+          uploadUrl: vi.fn(async () => ({ url: 'https://r2.test/x', key: 'k', headers: {}, expiresInSec: 60 })),
+          completeMeeting: vi.fn(async () => ({}) as never),
+        }),
+      }),
+    });
+    expect(await screen.findByText(/Recordings stop at 0 min/)).toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start recording' })));
+    await waitFor(() => expect(nav.router.push).toHaveBeenCalledWith('/meetings/m-limit'), { timeout: 5000 });
+    expect(createMeeting).toHaveBeenCalledWith(expect.objectContaining({ source: 'browser' }));
+  });
+});

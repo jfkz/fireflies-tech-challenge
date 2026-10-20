@@ -102,7 +102,7 @@ the public domain can only ever reach the `downloads/` folder, never meeting aud
 `REDIS_URL` (references to the Postgres/Redis services), `NODE_ENV`, `WEB_URL`, `WEB_ORIGINS`,
 `FIREBASE_PROJECT_ID`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_KEY_PREFIX` (`prod/` / `dev/`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
 `DOWNLOADS_BASE_URL`, `AI_GATEWAY_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, optional `EMAIL_REPLY_TO`, `EMAIL_ALLOWLIST` (dev),
-`SUMMARIZE_CONCURRENCY`, optional `REPORTS_NOTIFY_EMAIL` (where Mac problem reports are announced; unset today), `ADMIN_EMAILS` (dashboard accounts that can read every problem report). CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
+`SUMMARIZE_CONCURRENCY`, optional `REPORTS_NOTIFY_EMAIL` (where Mac problem reports are announced; unset today), `ADMIN_EMAILS` (owners: dashboard accounts that are always admins; more admins are added on the dashboard). CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
 [apps/api/README.md](../apps/api/README.md#environment).
 
 **Vercel**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL` (per environment), `NEXT_PUBLIC_FIREBASE_*`.
@@ -145,8 +145,8 @@ even if one of them didn't change. Patch numbers may differ (a Mac-only fix ship
 ## Problem reports
 
 The Mac and Windows apps' "Report a Problem…" posts to `POST /reports`; reports live in the `problem_reports` table.
-Admins read them on the dashboard at `/admin/reports`: set `ADMIN_EMAILS` on the `api` service to a
-comma-separated list of the dashboard accounts that may (they then see **Reports** in the nav). Without
+Admins read them on the dashboard at `/admin/reports`. `ADMIN_EMAILS` on the `api` service lists the
+owners (comma-separated; they see **Admin** in the nav and can make other accounts admins there). Without
 the dashboard, use the API image's CLI (Railway shell on the `api` service, or locally with `DATABASE_URL`):
 
 ```sh

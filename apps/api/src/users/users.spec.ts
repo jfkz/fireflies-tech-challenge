@@ -9,12 +9,21 @@ function setup() {
     updateProfile: vi.fn(),
     updateSettings: vi.fn(),
     findById: vi.fn(),
+    touchActive: vi.fn(),
   };
   const demo = { seed: vi.fn() };
   const jobs = { email: vi.fn() };
   const meetings = { renameOwner: vi.fn() };
   const config = testConfig({ ADMIN_EMAILS: 'boss@example.com' });
-  return { repo, demo, jobs, meetings, service: new UsersService(config, repo as never, demo as never, jobs as never, meetings as never) };
+  const settings = { recordingLimitMinutes: vi.fn().mockResolvedValue(120) };
+  return {
+    repo,
+    demo,
+    jobs,
+    meetings,
+    settings,
+    service: new UsersService(config, repo as never, demo as never, jobs as never, meetings as never, settings as never),
+  };
 }
 
 describe('UsersService.ensureUser', () => {
@@ -60,12 +69,30 @@ describe('MeController', () => {
     repo.updateSettings.mockResolvedValue(user({ emailOnReady: false }));
     repo.findById.mockResolvedValue(user());
     const controller = new MeController(service);
-    expect(controller.me(user())).toEqual(toMe(user()));
+    await expect(controller.me(user())).resolves.toEqual({ ...toMe(user()), isOwner: false, recordingLimitSec: 7200 });
     expect(toMe(user()).createdAt).toBe('2026-10-01T10:00:00.000Z');
-    expect(controller.me(user()).isAdmin).toBe(false);
-    expect(controller.me(user({ email: 'Boss@Example.com' })).isAdmin).toBe(true);
+    await expect(controller.me(user())).resolves.toMatchObject({ isAdmin: false, isOwner: false });
+    await expect(controller.me(user({ email: 'Boss@Example.com' }))).resolves.toMatchObject({ isAdmin: true, isOwner: true });
+    await expect(controller.me(user({ isAdmin: true }))).resolves.toMatchObject({ isAdmin: true, isOwner: false });
     await expect(controller.updateSettings(user(), { emailOnReady: false })).resolves.toMatchObject({ emailOnReady: false });
     await expect(service.findById(user().id)).resolves.toEqual(user());
+  });
+
+  it('says the recording limit in force: theirs, else the global one, none for 0', async () => {
+    const { service, settings } = setup();
+    await expect(service.me(user({ recordingLimitMinutes: 30 }))).resolves.toMatchObject({ recordingLimitSec: 1800 });
+    await expect(service.me(user({ recordingLimitMinutes: 0 }))).resolves.toMatchObject({ recordingLimitSec: null });
+    settings.recordingLimitMinutes.mockResolvedValue(0);
+    await expect(service.me(user())).resolves.toMatchObject({ recordingLimitSec: null });
+  });
+
+  it('keeps when the user was last active, at most once a minute', async () => {
+    const { repo, service } = setup();
+    await service.touch(user({ lastActiveAt: new Date() }));
+    expect(repo.touchActive).not.toHaveBeenCalled();
+    await service.touch(user({ lastActiveAt: new Date(Date.now() - 120_000) }));
+    await service.touch(user());
+    expect(repo.touchActive).toHaveBeenCalledTimes(2);
   });
 
   it('saves a typed name, locks it, and renames "You" in past meetings', async () => {

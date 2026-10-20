@@ -380,6 +380,47 @@ describe('device link', () => {
   });
 });
 
+describe('admin dashboard', () => {
+  it('lets an owner see usage, make another account an admin and set recording limits', async () => {
+    const owner = emulatorToken('admin', 'Admin@Example.com');
+    const zoe = emulatorToken('zoe-admin-e2e', 'zoe.admin.e2e@example.com', 'Zoe');
+    const me = await h.http.get('/me').set(bearer(owner)).expect(200);
+    expect(me.body).toMatchObject({ isAdmin: true, isOwner: true, recordingLimitSec: 7200 });
+    const zoeMe = await h.http.get('/me').set(bearer(zoe)).expect(200);
+    expect(zoeMe.body).toMatchObject({ isAdmin: false, isOwner: false, recordingLimitSec: 7200 });
+    await h.http.get('/admin/overview').set(bearer(zoe)).expect(403);
+
+    const overview = await h.http.get('/admin/overview').query({ days: 7, tz: 'Europe/Berlin' }).set(bearer(owner)).expect(200);
+    expect(overview.body).toMatchObject({ days: 7, tz: 'Europe/Berlin', users: { total: expect.any(Number) } });
+    expect(overview.body.daily).toHaveLength(7);
+    await h.http.get('/admin/overview').query({ tz: 'Mars/Olympus' }).set(bearer(owner)).expect(400);
+
+    const found = await h.http.get('/admin/users').query({ q: 'zoe.admin.e2e' }).set(bearer(owner)).expect(200);
+    expect(found.body.items).toEqual([expect.objectContaining({ id: zoeMe.body.id, isAdmin: false, lastActiveAt: expect.any(String) })]);
+    await h.http.get('/admin/users/nope').set(bearer(owner)).expect(400);
+
+    // Only accounts that exist can become admins.
+    await h.http.post('/admin/admins').send({ email: 'nobody.e2e@example.com' }).set(bearer(owner)).expect(404);
+    const admins = await h.http.post('/admin/admins').send({ email: 'Zoe.Admin.E2E@example.com' }).set(bearer(owner)).expect(201);
+    expect(admins.body.admins).toEqual(expect.arrayContaining([expect.objectContaining({ id: zoeMe.body.id, isOwner: false })]));
+    expect((await h.http.get('/me').set(bearer(zoe)).expect(200)).body.isAdmin).toBe(true);
+    // The new admin can't remove the owner.
+    await h.http.patch(`/admin/users/${me.body.id}`).send({ isAdmin: false }).set(bearer(zoe)).expect(409);
+
+    await h.http.patch(`/admin/users/${zoeMe.body.id}`).send({ recordingLimitMinutes: 30 }).set(bearer(owner)).expect(200);
+    expect((await h.http.get('/me').set(bearer(zoe)).expect(200)).body.recordingLimitSec).toBe(1800);
+    await h.http.patch(`/admin/users/${zoeMe.body.id}`).send({ recordingLimitMinutes: 0, isAdmin: false }).set(bearer(owner)).expect(200);
+    expect((await h.http.get('/me').set(bearer(zoe)).expect(200)).body).toMatchObject({ isAdmin: false, recordingLimitSec: null });
+    await h.http.patch(`/admin/users/${zoeMe.body.id}`).send({}).set(bearer(owner)).expect(400);
+
+    const settings = await h.http.patch('/admin/settings').send({ recordingLimitMinutes: 90 }).set(bearer(owner)).expect(200);
+    expect(settings.body).toMatchObject({ recordingLimitMinutes: 90, updatedBy: 'Admin@Example.com' });
+    expect((await h.http.get('/me').set(bearer(owner)).expect(200)).body.recordingLimitSec).toBe(5400);
+    await h.http.patch('/admin/settings').send({ recordingLimitMinutes: 120 }).set(bearer(owner)).expect(200);
+    await h.http.patch('/admin/settings').send({ recordingLimitMinutes: -1 }).set(bearer(owner)).expect(400);
+  });
+});
+
 describe('isolation and validation', () => {
   it("hides another user's meeting behind a 404", async () => {
     const owner = emulatorToken('owner');

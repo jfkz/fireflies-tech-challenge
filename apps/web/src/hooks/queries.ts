@@ -8,6 +8,9 @@ import type {
   PersonDetail,
   ProblemReportKind,
   ProblemReportPage,
+  AdminUserPage,
+  UpdateAdminSettingsRequest,
+  UpdateAdminUserRequest,
   TaskItem,
   TaskPage,
   UpdateMeetingRequest,
@@ -47,6 +50,13 @@ export const keys = {
   devices: (uid: string | undefined) => ['devices', uid] as const,
   reports: (uid: string | undefined, filters: ReportFilters) => ['reports', uid, 'list', filters] as const,
   report: (uid: string | undefined, id: string) => ['reports', uid, 'one', id] as const,
+  /** Everything on the admin dashboard, refreshed together after an admin changes something. */
+  admin: (uid: string | undefined) => ['admin', uid] as const,
+  adminOverview: (uid: string | undefined, days: number, tz: string) => ['admin', uid, 'overview', days, tz] as const,
+  adminUsers: (uid: string | undefined, q: string) => ['admin', uid, 'users', q] as const,
+  adminUser: (uid: string | undefined, id: string) => ['admin', uid, 'user', id] as const,
+  adminList: (uid: string | undefined) => ['admin', uid, 'admins'] as const,
+  adminSettings: (uid: string | undefined) => ['admin', uid, 'settings'] as const,
   downloads: ['downloads'] as const,
 };
 
@@ -372,4 +382,92 @@ export function useReports(filters: ReportFilters, enabled = true) {
 export function useReport(id: string, enabled = true) {
   const { api, user } = useAuth();
   return useQuery({ queryKey: keys.report(user?.uid, id), queryFn: ({ signal }) => api.getReport(id, signal), enabled: !!user && enabled });
+}
+
+// ---- admin dashboard (admins only; the caller passes whether the user is one)
+
+export function useAdminOverview(days: number, enabled: boolean) {
+  const { api, user } = useAuth();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return useQuery({
+    queryKey: keys.adminOverview(user?.uid, days, tz),
+    queryFn: ({ signal }) => api.adminOverview({ days, tz }, signal),
+    enabled: !!user && enabled,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useAdminUsers(q: string, enabled: boolean) {
+  const { api, user } = useAuth();
+  return useInfiniteQuery({
+    queryKey: keys.adminUsers(user?.uid, q),
+    queryFn: ({ pageParam, signal }) => api.adminUsers({ q: q || undefined, cursor: pageParam, limit: 50 }, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last: AdminUserPage) => last.nextCursor ?? undefined,
+    enabled: !!user && enabled,
+  });
+}
+
+export function useAdminUser(id: string, enabled: boolean) {
+  const { api, user } = useAuth();
+  return useQuery({ queryKey: keys.adminUser(user?.uid, id), queryFn: ({ signal }) => api.adminUser(id, signal), enabled: !!user && enabled });
+}
+
+export function useAdminList(enabled: boolean) {
+  const { api, user } = useAuth();
+  return useQuery({ queryKey: keys.adminList(user?.uid), queryFn: ({ signal }) => api.adminList(signal), enabled: !!user && enabled });
+}
+
+export function useAdminSettings(enabled: boolean) {
+  const { api, user } = useAuth();
+  return useQuery({ queryKey: keys.adminSettings(user?.uid), queryFn: ({ signal }) => api.adminSettings(signal), enabled: !!user && enabled });
+}
+
+/** Any admin change: refresh the dashboard, and /me (your own rights or limit may have changed). */
+function useAdminRefresh() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: keys.admin(user?.uid) });
+    void qc.invalidateQueries({ queryKey: keys.me(user?.uid) });
+  };
+}
+
+export function useUpdateAdminUser(id: string) {
+  const { api, user } = useAuth();
+  const qc = useQueryClient();
+  const refresh = useAdminRefresh();
+  return useMutation({
+    mutationFn: (body: UpdateAdminUserRequest) => api.updateAdminUser(id, body),
+    onSuccess: (detail) => {
+      qc.setQueryData(keys.adminUser(user?.uid, id), detail);
+      refresh();
+    },
+  });
+}
+
+export function useGrantAdmin() {
+  const { api, user } = useAuth();
+  const qc = useQueryClient();
+  const refresh = useAdminRefresh();
+  return useMutation({
+    mutationFn: (email: string) => api.grantAdmin(email),
+    onSuccess: (list) => {
+      qc.setQueryData(keys.adminList(user?.uid), list);
+      refresh();
+    },
+  });
+}
+
+export function useUpdateAdminSettings() {
+  const { api, user } = useAuth();
+  const qc = useQueryClient();
+  const refresh = useAdminRefresh();
+  return useMutation({
+    mutationFn: (body: UpdateAdminSettingsRequest) => api.updateAdminSettings(body),
+    onSuccess: (settings) => {
+      qc.setQueryData(keys.adminSettings(user?.uid), settings);
+      refresh();
+    },
+  });
 }

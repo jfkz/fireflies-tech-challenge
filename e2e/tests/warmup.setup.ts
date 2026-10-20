@@ -1,6 +1,21 @@
 import { test as setup } from '@playwright/test';
 
-const ROUTES = ['/', '/signin', '/signup', '/reset', '/meetings', '/meetings/00000000-0000-4000-8000-000000000000', '/record', '/settings', '/connect', '/nope'];
+const ROUTES = [
+  '/',
+  '/signin',
+  '/signup',
+  '/reset',
+  '/meetings',
+  '/meetings/00000000-0000-4000-8000-000000000000',
+  '/record',
+  '/settings',
+  '/connect',
+  '/admin',
+  '/admin/users',
+  '/admin/users/00000000-0000-4000-8000-000000000000',
+  '/admin/settings',
+  '/nope',
+];
 
 // In a real browser, so lazily imported client chunks (Firebase, Motion) get compiled too.
 setup('compile every route once', async ({ page }) => {

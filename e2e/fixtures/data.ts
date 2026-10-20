@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Device, LatestDownload, Me, MeetingDetail, MeetingListItem, type Segment } from '@boringtalks/shared';
+import { AdminUserDetail, Device, LatestDownload, Me, MeetingDetail, MeetingListItem, type AdminOverview, type Segment } from '@boringtalks/shared';
 
 /** Fixtures are parsed with the shared contract, so a schema change breaks them loudly. */
 
@@ -163,4 +163,56 @@ export function silentWav(seconds = 50): Buffer {
   b.write('data', 36);
   b.writeUInt32LE(data, 40);
   return b;
+}
+
+/** Usage across accounts for the admin overview: a few meetings a day for `days` days. */
+export function adminOverview(days: number): AdminOverview {
+  const today = new Date();
+  const daily = Array.from({ length: days }, (_, i) => {
+    const d = new Date(today.getTime() - (days - 1 - i) * 86_400_000);
+    return { date: d.toISOString().slice(0, 10), meetings: i % 4, hours: (i % 4) * 0.75, signups: i % 7 === 0 ? 1 : 0 };
+  });
+  return {
+    days,
+    tz: 'UTC',
+    users: { total: 42, new7d: 3, newInWindow: 9, active1d: 5, active7d: 17, active30d: 30, admins: 1 },
+    meetings: {
+      total: 310,
+      totalHours: 205.5,
+      inWindow: daily.reduce((n, d) => n + d.meetings, 0),
+      hoursInWindow: daily.reduce((n, d) => n + d.hours, 0),
+      bySource: { macos: 20, windows: 14, browser: 6, upload: 3, demo: 0 },
+      byStatus: { recording: 0, uploaded: 0, transcribing: 1, summarizing: 0, ready: 40, failed: 2 },
+      failureRate: 0.048,
+    },
+    devices: { active30d: 21, versions: [{ platform: 'windows', version: '0.6.0', count: 12 }, { platform: 'macos', version: '0.6.0', count: 9 }] },
+    reports: { last7d: 2, hangs7d: 1 },
+    costs: { summaryInputTokens: 900_000, summaryOutputTokens: 70_000, summaryUsd: 1.25, serverTranscribedHours: 6, transcriptionUsd: 0.6, storageGb: 1.4, storageUsdPerMonth: 0.02 },
+    daily,
+  };
+}
+
+/** One account as the admin dashboard sees it. */
+export function adminUser(overrides: Partial<AdminUserDetail> = {}): AdminUserDetail {
+  return AdminUserDetail.parse({
+    id: randomUUID(),
+    email: 'ann@example.com',
+    name: 'Ann Lee',
+    createdAt: '2026-10-01T09:00:00.000Z',
+    lastActiveAt: new Date().toISOString(),
+    meetingCount: 12,
+    recordedMinutes: 540,
+    lastMeetingAt: new Date().toISOString(),
+    apps: [{ platform: 'windows', version: '0.6.0' }],
+    isAdmin: false,
+    isOwner: false,
+    recordingLimitMinutes: null,
+    effectiveRecordingLimitMinutes: 120,
+    adminGrantedBy: null,
+    last30d: { meetings: 8, recordedMinutes: 360, failed: 1 },
+    devices: [{ id: randomUUID(), name: 'Ann’s PC', platform: 'windows', appVersion: '0.6.0', createdAt: '2026-10-01T09:00:00.000Z', lastSeenAt: new Date().toISOString(), revokedAt: null }],
+    meetings: [{ id: randomUUID(), startedAt: new Date().toISOString(), source: 'windows', status: 'ready', durationSec: 2700, audioBytes: 32_000_000, error: null }],
+    reports: [],
+    ...overrides,
+  });
 }

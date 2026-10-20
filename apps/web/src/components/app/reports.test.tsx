@@ -30,14 +30,14 @@ const R1 = '33333333-3333-4333-8333-333333333331';
 const R2 = '33333333-3333-4333-8333-333333333332';
 
 describe('AppShell', () => {
-  it('shows Reports to admins only', async () => {
+  it('shows Admin to admins only', async () => {
     const { unmount } = renderWithProviders(<AppShell>body</AppShell>, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME) }) }) });
-    expect((await screen.findAllByRole('link', { name: 'Reports' }))[0]).toHaveAttribute('href', '/admin/reports');
+    expect((await screen.findAllByRole('link', { name: 'Admin' }))[0]).toHaveAttribute('href', '/admin');
     unmount();
     const me = vi.fn(async () => ({ ...ME, isAdmin: false }));
     renderWithProviders(<AppShell>body</AppShell>, { auth: authValue({ api: fakeApi({ me }) }) });
     await waitFor(() => expect(me).toHaveBeenCalled());
-    expect(screen.queryByRole('link', { name: 'Reports' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Admin' })).toBeNull();
   });
 });
 

@@ -280,6 +280,11 @@ describe('DevicesRepository', () => {
     await db.update(devices).set({ lastSeenAt: sql`now() - interval '2 minutes'` });
     await devs.touch(d.id);
     expect((await devs.findById(d.id))!.lastSeenAt!.getTime()).toBeGreaterThan(Date.now() - 30_000);
+    // A new app version is kept at once, even within the minute.
+    await devs.touch(d.id, { platform: 'windows', version: '0.6.0' });
+    expect(await devs.findById(d.id)).toMatchObject({ platform: 'windows', appVersion: '0.6.0' });
+    await devs.touch(d.id, { platform: 'windows', version: '0.6.1' });
+    expect((await devs.findById(d.id))?.appVersion).toBe('0.6.1');
 
     expect((await devs.listActive(userId)).map((x) => x.id)).toContain(d.id);
     expect(await devs.revoke('00000000-0000-4000-8000-000000000000', d.id)).toBe(false);
@@ -288,6 +293,16 @@ describe('DevicesRepository', () => {
     expect(await devs.findActiveByTokenHash('th1')).toBeNull();
     expect(await devs.listActive(userId)).toEqual([]);
     expect(await devs.findById('00000000-0000-4000-8000-000000000000')).toBeNull();
+  });
+});
+
+describe('UsersRepository.touchActive', () => {
+  it('keeps last_active_at to the minute', async () => {
+    await users.touchActive(userId);
+    const first = (await users.findById(userId))?.lastActiveAt;
+    expect(first).toBeInstanceOf(Date);
+    await users.touchActive(userId);
+    expect((await users.findById(userId))?.lastActiveAt).toEqual(first);
   });
 });
 

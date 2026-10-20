@@ -12,13 +12,16 @@ describe('env', () => {
     expect(env.ADMIN_EMAILS).toEqual([]);
   });
 
-  it('knows admins by email in any case', () => {
+  it('knows owners by email in any case, and admins by owner or flag', () => {
     const config = testConfig({ ADMIN_EMAILS: 'Boss@Example.com, ops@example.com' });
     expect(config.env.ADMIN_EMAILS).toEqual(['boss@example.com', 'ops@example.com']);
-    expect(config.isAdmin('BOSS@example.com')).toBe(true);
-    expect(config.isAdmin('ann@example.com')).toBe(false);
-    expect(config.isAdmin(null)).toBe(false);
-    expect(testConfig().isAdmin('boss@example.com')).toBe(false);
+    expect(config.isOwner('BOSS@example.com')).toBe(true);
+    expect(config.isOwner('ann@example.com')).toBe(false);
+    expect(config.isOwner(null)).toBe(false);
+    expect(testConfig().isOwner('boss@example.com')).toBe(false);
+    expect(config.isAdmin({ email: 'boss@example.com', isAdmin: false })).toBe(true);
+    expect(config.isAdmin({ email: 'ann@example.com', isAdmin: true })).toBe(true);
+    expect(config.isAdmin({ email: 'ann@example.com', isAdmin: false })).toBe(false);
   });
 
   it('lists every problem at once', () => {

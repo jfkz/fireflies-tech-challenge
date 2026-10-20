@@ -532,12 +532,30 @@ deploy, and against production after a merge.
 3. `curl -X POST <api>/reports` without a token.
    **Expected:** `401`.
 4. With your email in `ADMIN_EMAILS`, open the dashboard.
-   **Expected:** the nav shows **Reports**; `/admin/reports` lists the report from step 1 first (kind, your
+   **Expected:** the nav shows **Admin**; its **Reports** tab lists the report from step 1 first (kind, your
    email, app version, system, first line of the message). **Hangs** / **Sent by users** and the user filter
    narrow the list; opening the report shows the message, diagnostics and the log, and **Copy log** copies it.
 5. Sign in as an account not in `ADMIN_EMAILS`.
-   **Expected:** no **Reports** link; `/admin/reports` says “Only admins can see problem reports.”;
+   **Expected:** no **Admin** link; `/admin/reports` says “Only admins can see this.”;
    `curl <api>/admin/reports` with that account's token (or a device token) is `403`.
+
+### 9b. Admin dashboard and recording limits
+1. As an owner (`ADMIN_EMAILS`), open **Admin › Overview**.
+   **Expected:** users, active users, meetings and hours, failed share, AI spend and storage match what you
+   know of the environment; the chart has a column per day (hover one: its value and date; **Show as a
+   table** lists them); **7 / 30 / 90 days** change everything; demo meetings aren't counted.
+2. **Users**: search part of a test account's email; open it.
+   **Expected:** its meetings, minutes, last active time, computers with platform and version (after the
+   desktop app made a request), latest meetings as date/source/status/length/size only, no titles.
+3. **Make admin** on a second test account (signed in once), then sign in as it.
+   **Expected:** it sees **Admin**; it can't remove the owner (“is an owner”), nor its own rights.
+4. As the owner, set that account's **Recording limit** to 1 minute; as it, record in the browser.
+   **Expected:** `/record` says recordings stop at 1 min; at 0:30 a countdown banner; at 1:00 it stops, saves
+   and opens the meeting by itself.
+5. **Settings**: set the global limit to 90 minutes, then 120 again; **Add an admin** with an email nobody
+   signed in with.
+   **Expected:** “changed by <you>”; `GET /me` for an account without its own limit says `recordingLimitSec: 5400`
+   within a minute; adding the unknown email says they need to sign in once first.
 
 ### 10. Versions
 1. Compare `GET /health` `version`, the web footer, the Mac app's About/menu version and the Windows
