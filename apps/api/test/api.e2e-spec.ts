@@ -353,6 +353,26 @@ describe('device link', () => {
     const web = await h.http.post('/reports').set(bearer(firebase)).send({ app: { version: '0.4.0', flavor: 'dev' }, system: { os: 'web' } }).expect(201);
     expect((await new ReportsRepository(h.app.get<Database>(DB)).findById(web.body.id))?.report).toMatchObject({ deviceId: null, kind: 'user', message: '' });
 
+    // Only an admin (ADMIN_EMAILS, a dashboard sign-in) reads them back.
+    const admin = emulatorToken('admin', 'Admin@Example.com');
+    await h.http.get('/admin/reports').set(bearer(firebase)).expect(403);
+    await h.http.get('/admin/reports').set(bearer(deviceToken)).expect(403);
+    await h.http.get('/admin/reports').expect(401);
+    expect((await h.http.get('/me').set(bearer(admin)).expect(200)).body.isAdmin).toBe(true);
+    expect((await h.http.get('/me').set(bearer(firebase)).expect(200)).body.isAdmin).toBe(false);
+    const hangs = await h.http.get('/admin/reports').query({ user: 'device@example.com', kind: 'hang' }).set(bearer(admin)).expect(200);
+    expect(hangs.body).toEqual({ items: [expect.objectContaining({ id: sent.body.id, kind: 'hang', user: expect.objectContaining({ email: 'device@example.com' }), logBytes: report.log.length })], nextCursor: null });
+    expect(hangs.body.items[0]).not.toHaveProperty('log');
+    const mine = await h.http.get('/admin/reports').query({ user: 'device@example.com', limit: 1 }).set(bearer(admin)).expect(200);
+    expect(mine.body.items.map((r: { id: string }) => r.id)).toEqual([web.body.id]);
+    const next = await h.http.get('/admin/reports').query({ user: 'device@example.com', limit: 1, cursor: mine.body.nextCursor }).set(bearer(admin)).expect(200);
+    expect(next.body.items.map((r: { id: string }) => r.id)).toEqual([sent.body.id]);
+    const full = await h.http.get(`/admin/reports/${sent.body.id}`).set(bearer(admin)).expect(200);
+    expect(full.body).toMatchObject({ id: sent.body.id, deviceId: tok.body.deviceId, diagnostics: report.diagnostics, log: report.log });
+    await h.http.get(`/admin/reports/${sent.body.id}`).set(bearer(firebase)).expect(403);
+    await h.http.get('/admin/reports/00000000-0000-4000-8000-000000000000').set(bearer(admin)).expect(404);
+    await h.http.get('/admin/reports/nope').set(bearer(admin)).expect(400);
+
     await h.http.delete(`/devices/${tok.body.deviceId}`).set(bearer(firebase)).expect(204);
     await h.http.get('/meetings').set(bearer(deviceToken)).expect(401);
     await h.http.post('/reports').set(bearer(deviceToken)).send(report).expect(401);

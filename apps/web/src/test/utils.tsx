@@ -30,6 +30,8 @@ export function fakeApi(overrides: Partial<ApiClient> = {}): ApiClient {
     listPeople: notMocked('listPeople'),
     getPerson: notMocked('getPerson'),
     renamePerson: notMocked('renamePerson'),
+    listReports: notMocked('listReports'),
+    getReport: notMocked('getReport'),
     ...overrides,
   } as ApiClient;
 }

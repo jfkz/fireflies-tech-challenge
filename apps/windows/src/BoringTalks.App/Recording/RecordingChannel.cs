@@ -15,15 +15,22 @@ namespace BoringTalks.App.Recording;
 /// Until the speech model is ready the audio waits in a backlog and is transcribed as soon as it
 /// is (up to 20 minutes; past that the meeting is left for the server to transcribe from the audio).
 /// </para>
+/// <para>
+/// A side that plays nothing (or stalls) is caught up with silence twice a second by a timer of its
+/// own, not the UI thread's: if that ever stops, the other side's audio would pile up in the mix.
+/// </para>
 /// </summary>
-public sealed class RecordingChannel
+public sealed class RecordingChannel : IDisposable
 {
+    public static readonly TimeSpan CatchUpInterval = TimeSpan.FromMilliseconds(500);
+
     private const int BacklogLimit = 16000 * 60 * 20;
 
     private readonly long clockStart;
     private readonly RecordingWriter writer;
     private readonly Channel<Func<Task>> jobs = Channel.CreateUnbounded<Func<Task>>(new UnboundedChannelOptions { SingleReader = true });
     private readonly To16k to16k = new();
+    private readonly Timer catchUp;
     // Worker-confined.
     private readonly ChannelTimeline timeline = new();
     private readonly List<float[]> backlog = [];
@@ -42,6 +49,7 @@ public sealed class RecordingChannel
         {
             await foreach (var job in jobs.Reader.ReadAllAsync()) await job();
         });
+        catchUp = new Timer(_ => CatchUp(), null, CatchUpInterval, CatchUpInterval);
     }
 
     public AudioChannel Kind { get; }
@@ -58,7 +66,7 @@ public sealed class RecordingChannel
         if (samples.Length > 0) Post(() => Process(samples, elapsed));
     }
 
-    /// <summary>Fills the silence up to now if the capture has stalled (or plays nothing).</summary>
+    /// <summary>Fills the silence up to now if the capture has stalled (or plays nothing). On the timer's thread.</summary>
     public void CatchUp()
     {
         var elapsed = Elapsed;
@@ -86,6 +94,8 @@ public sealed class RecordingChannel
     /// <summary>After the capture stopped: brings the channel up to <paramref name="elapsed"/> and waits for everything queued.</summary>
     public async Task<Ending> EndAsync(double elapsed)
     {
+        // The meeting ends at elapsed: no silence after it.
+        catchUp.Change(Timeout.Infinite, Timeout.Infinite);
         Ending ending = new(false, null);
         await Run(() =>
         {
@@ -125,6 +135,13 @@ public sealed class RecordingChannel
                 droppedBacklog = true;
             }
         }
+    }
+
+    /// <summary>The meeting is over (or this side never started): no more catching up, and the worker ends.</summary>
+    public void Dispose()
+    {
+        catchUp.Dispose();
+        jobs.Writer.TryComplete();
     }
 
     private void Post(Action job) => jobs.Writer.TryWrite(() =>

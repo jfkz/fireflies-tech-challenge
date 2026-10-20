@@ -3,7 +3,7 @@ import { UpdateSettingsRequest, type Me } from '@boringtalks/shared';
 import { CurrentUser } from '../auth/auth.decorators';
 import { ZodPipe } from '../common/zod.pipe';
 import type { UserRow } from '../db/schema';
-import { toMe, UsersService } from './users.service';
+import { UsersService } from './users.service';
 
 @Controller('me')
 export class MeController {
@@ -11,7 +11,7 @@ export class MeController {
 
   @Get()
   me(@CurrentUser() user: UserRow): Me {
-    return toMe(user);
+    return this.users.me(user);
   }
 
   @Patch('settings')

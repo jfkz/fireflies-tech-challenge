@@ -5,7 +5,8 @@ import { createTestDb } from '../testing/pglite';
 import { testConfig, user } from '../testing/fixtures';
 import { DevicesRepository } from '../devices/devices.repository';
 import { UsersRepository } from '../users/users.repository';
-import { ReportsController } from './reports.controller';
+import { decodeCursor, encodeCursor } from '../common/cursor';
+import { AdminReportsController, ReportsController } from './reports.controller';
 import { ReportsRepository, type ReportListItem } from './reports.repository';
 import { ReportsService } from './reports.service';
 
@@ -55,6 +56,14 @@ describe('ReportsRepository', () => {
     expect(await repo.findById(first.id)).toMatchObject({ email: 'Ann@Example.com', report: { log: 'héllo' } });
     expect(await repo.findById('00000000-0000-4000-8000-000000000000')).toBeNull();
   });
+
+  it('narrows to a kind and continues after a report', async () => {
+    expect((await repo.list({ kind: 'hang' })).map((r) => r.kind)).toEqual(['hang']);
+    const [newest, ...older] = await repo.list();
+    const after = await repo.list({ before: { startedAt: newest.createdAt, id: newest.id } });
+    expect(after.map((r) => r.id)).toEqual(older.map((r) => r.id));
+    expect(await repo.list({ before: { startedAt: new Date('2000-01-01T00:00:00Z'), id: newest.id } })).toEqual([]);
+  });
 });
 
 describe('ReportsService', () => {
@@ -90,6 +99,77 @@ describe('ReportsService', () => {
     await t.service.create(user(), null, body());
     expect(t.jobs.email).toHaveBeenCalledWith({ type: 'problem-report', userId: user().id, reportId: stored.id });
     expect(testConfig({ REPORTS_NOTIFY_EMAIL: '' }).env.REPORTS_NOTIFY_EMAIL).toBeUndefined();
+  });
+
+  it('pages every report for admins, newest first', async () => {
+    const t = setup();
+    const row = (id: string, at: string): ReportListItem => ({
+      id,
+      userId: user().id,
+      deviceId: null,
+      kind: 'hang',
+      message: 'Froze',
+      appVersion: '0.5.0',
+      appBuild: '3',
+      flavor: 'release',
+      os: 'Windows 11',
+      model: '',
+      createdAt: new Date(at),
+      email: 'ann@example.com',
+      logBytes: 4,
+    });
+    const list = vi.fn().mockResolvedValue([row('33333333-3333-4333-8333-333333333331', '2026-10-09T10:00:00Z'), row('33333333-3333-4333-8333-333333333332', '2026-10-08T10:00:00Z')]);
+    const service = new ReportsService(testConfig(), { list } as never, t.jobs as never);
+
+    const page = await service.list({ kind: 'hang', user: 'ann@example.com', limit: 1 });
+    expect(list).toHaveBeenCalledWith({ user: 'ann@example.com', kind: 'hang', before: null, limit: 2 });
+    expect(page.items).toEqual([
+      {
+        id: '33333333-3333-4333-8333-333333333331',
+        kind: 'hang',
+        message: 'Froze',
+        user: { id: user().id, email: 'ann@example.com' },
+        deviceId: null,
+        app: { version: '0.5.0', build: '3', flavor: 'release' },
+        system: { os: 'Windows 11', model: '' },
+        logBytes: 4,
+        createdAt: '2026-10-09T10:00:00.000Z',
+      },
+    ]);
+    expect(decodeCursor(page.nextCursor!)).toEqual({ startedAt: new Date('2026-10-09T10:00:00Z'), id: '33333333-3333-4333-8333-333333333331' });
+
+    const cursor = encodeCursor({ startedAt: new Date('2026-10-09T10:00:00Z'), id: '33333333-3333-4333-8333-333333333331' });
+    await expect(service.list({ cursor, limit: 2 })).resolves.toMatchObject({ nextCursor: null });
+    expect(list).toHaveBeenLastCalledWith({ before: { startedAt: new Date('2026-10-09T10:00:00Z'), id: '33333333-3333-4333-8333-333333333331' }, limit: 3 });
+    await expect(service.list({ cursor: 'nope', limit: 2 })).rejects.toThrow();
+  });
+
+  it('shows one report in full, or 404', async () => {
+    const t = setup();
+    const findById = vi.fn().mockResolvedValue(null);
+    const service = new ReportsService(testConfig(), { findById } as never, t.jobs as never);
+    await expect(service.get(stored.id)).rejects.toThrow('Report not found');
+    findById.mockResolvedValue({
+      email: null,
+      report: { ...stored, userId: user().id, deviceId: 'd-1', message: '', appBuild: '', os: 'macOS', model: '', diagnostics: { a: 'b' }, log: 'héllo' },
+    });
+    await expect(service.get(stored.id)).resolves.toMatchObject({
+      id: stored.id,
+      user: { id: user().id, email: null },
+      deviceId: 'd-1',
+      diagnostics: { a: 'b' },
+      log: 'héllo',
+      logBytes: 6,
+      createdAt: '2026-10-08T18:00:00.000Z',
+    });
+  });
+
+  it('is what the admin controller calls', async () => {
+    const service = { list: vi.fn().mockResolvedValue({ items: [], nextCursor: null }), get: vi.fn().mockResolvedValue({ id: 'r' }) };
+    const controller = new AdminReportsController(service as never);
+    await expect(controller.list({ limit: 50 })).resolves.toEqual({ items: [], nextCursor: null });
+    await expect(controller.get('r')).resolves.toEqual({ id: 'r' });
+    expect(service.get).toHaveBeenCalledWith('r');
   });
 
   it('is what the controller calls', async () => {
@@ -136,7 +216,7 @@ describe('reports CLI', () => {
     });
     expect(out).toContain('From     (no email) (user 11111111-1111-4111-8111-111111111111, device d-1)');
     expect(out).toContain('App      BoringTalks 0.4.0 dev (7)');
-    expect(out).toContain('Mac      macOS 26.2, Mac15,3');
+    expect(out).toContain('System   macOS 26.2, Mac15,3');
     expect(out).toContain('It froze');
     expect(out).toContain('mic.device: AirPods');
     expect(out).toMatch(/── Log\nlast line\n$/);

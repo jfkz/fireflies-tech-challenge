@@ -149,13 +149,9 @@ public sealed partial class MeetingRecorder : ObservableObject
             StartedAt = DateTimeOffset.Now;
             foreach (var kind in Enum.GetValues<AudioChannel>()) channels[kind] = new RecordingChannel(kind, clockStart, writer, keepBacklog: transcribe);
 
-            // Keep both sides on the clock from the first moment: a side that is slow to start
-            // (or never does), or plays nothing, is filled with silence instead of stalling the mix.
-            ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) =>
-            {
-                foreach (var channel in channels.Values) channel.CatchUp();
-                CheckAutoStop();
-            }, ui);
+            // Each side keeps itself on the clock from the first moment (a side that is slow to start,
+            // or plays nothing, is filled with silence by its channel); this watches for the meeting's end.
+            ticker = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) => CheckAutoStop(), ui);
             ticker.Start();
 
             // Both sides at once: the first words of a call must not wait for the other side's device.
@@ -192,7 +188,7 @@ public sealed partial class MeetingRecorder : ObservableObject
         Phase = RecorderPhase.Finishing;
         ticker?.Stop();
         foreach (var timer in restarts.Values) timer.Stop();
-        foreach (var capture in captures.Values) capture.Dispose();
+        await ReleaseCapturesAsync([.. captures.Values]);
         captures.Clear();
         var elapsed = ClockNow;
         // A model that has just arrived may be attaching right now.
@@ -292,7 +288,7 @@ public sealed partial class MeetingRecorder : ObservableObject
         if (Phase == RecorderPhase.Starting)
         {
             writer?.Remove(kind);
-            channels.Remove(kind);
+            if (channels.Remove(kind, out var channel)) channel.Dispose();
         }
         log($"{kind}: {message}");
     }
@@ -309,7 +305,8 @@ public sealed partial class MeetingRecorder : ObservableObject
             ((DispatcherTimer)sender!).Stop();
             if (Phase != RecorderPhase.Recording) return;
             log($"audio device changed; restarting {kind}");
-            if (captures.Remove(kind, out var old)) old.Dispose();
+            if (captures.Remove(kind, out var old)) await ReleaseCapturesAsync([old]);
+            if (Phase != RecorderPhase.Recording) return;
             await StartCaptureAsync(kind);
         }, ui);
         restarts[kind] = timer;
@@ -471,7 +468,8 @@ public sealed partial class MeetingRecorder : ObservableObject
 
     private async Task AbandonAsync()
     {
-        foreach (var capture in captures.Values) capture.Dispose();
+        await ReleaseCapturesAsync([.. captures.Values]);
+        captures.Clear();
         if (writer is not null)
         {
             await writer.FinishAsync();
@@ -480,14 +478,40 @@ public sealed partial class MeetingRecorder : ObservableObject
         Reset();
     }
 
+    /// <summary>
+    /// Stops and lets go of captures on the thread pool, where they were opened (Core Audio objects
+    /// stay in their apartment), never on the UI thread: a driver that doesn't answer is given up
+    /// on after <see cref="StartTimeout"/> instead of freezing the menu.
+    /// </summary>
+    private async Task ReleaseCapturesAsync(IReadOnlyList<IAudioCapture> all)
+    {
+        if (all.Count == 0) return;
+        var released = Task.Run(() =>
+        {
+            foreach (var capture in all)
+            {
+                try
+                {
+                    capture.Dispose();
+                }
+                catch (Exception error)
+                {
+                    Platform.Log.Error("recorder", "a capture failed to stop", error);
+                }
+            }
+        });
+        if (await Task.WhenAny(released, Task.Delay(StartTimeout)) != released) log($"a capture didn't stop in {StartTimeout.TotalSeconds:0} s; going on without it");
+    }
+
     private void Reset()
     {
         ticker?.Stop();
         ticker = null;
         foreach (var timer in restarts.Values) timer.Stop();
         restarts.Clear();
-        foreach (var capture in captures.Values) capture.Dispose();
+        _ = ReleaseCapturesAsync([.. captures.Values]);
         captures.Clear();
+        foreach (var channel in channels.Values) channel.Dispose();
         channels.Clear();
         writer?.Dispose();
         writer = null;

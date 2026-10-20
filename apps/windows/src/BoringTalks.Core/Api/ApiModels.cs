@@ -100,6 +100,33 @@ public sealed record ApiIssue(string Path, string Message);
 /// <summary>Error body of every API response.</summary>
 public sealed record ApiErrorBody(int StatusCode, string Message, IReadOnlyList<ApiIssue>? Issues);
 
+[JsonConverter(typeof(LenientEnumConverter<ProblemReportKind>))]
+public enum ProblemReportKind
+{
+    /// <summary>The user chose Report a Problem….</summary>
+    User,
+    /// <summary>The app noticed it had stopped responding.</summary>
+    Hang,
+}
+
+/// <param name="Flavor">"release" or "dev", like the shared <c>DeviceApp</c>.</param>
+public sealed record ProblemReportApp(string Version, string Build, string Flavor);
+
+/// <param name="Os">"Windows 11 Pro 24H2 (10.0.26100)".</param>
+/// <param name="Model">The PC's maker and model, "LENOVO 21HM".</param>
+public sealed record ProblemReportSystem(string Os, string Model);
+
+/// <summary><c>POST /reports</c>: what the user wrote, what the app knows about itself, and its own recent log.</summary>
+public sealed record ProblemReportRequest(
+    ProblemReportKind Kind,
+    string Message,
+    ProblemReportApp App,
+    ProblemReportSystem System,
+    IReadOnlyDictionary<string, string> Diagnostics,
+    string Log);
+
+public sealed record ProblemReportResponse(string Id, DateTimeOffset ReceivedAt);
+
 /// <summary>Contract limits from packages/shared.</summary>
 public static class ApiLimits
 {

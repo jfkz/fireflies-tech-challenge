@@ -55,20 +55,25 @@ public sealed class ChannelTimeline(double sampleRate = 16000, double toleranceS
 ///
 /// Both arrive on the same clock (see <see cref="ChannelTimeline"/>), so sample <i>n</i> of one
 /// plays with sample <i>n</i> of the other; whatever one channel has that the other
-/// hasn't delivered yet waits here.
+/// hasn't delivered yet waits here, up to <see cref="MaxLagSamples"/>: a channel further behind than
+/// that has stopped delivering, and counts as silent so the other's audio doesn't pile up in memory.
 /// </summary>
 public sealed class AudioMixer
 {
+    /// <summary>A minute at 16 kHz.</summary>
+    public const int DefaultMaxLag = 16000 * 60;
+
     private readonly Dictionary<AudioChannel, List<float>> pending = [];
     private readonly HashSet<AudioChannel> active;
 
     private readonly Dictionary<AudioChannel, SpeechLeveler>? levelers;
 
     /// <param name="level">Each side's speech brought to the same level first (<see cref="SpeechLeveler"/>).</param>
-    public AudioMixer(IEnumerable<AudioChannel>? channels = null, bool stereo = false, bool level = false)
+    public AudioMixer(IEnumerable<AudioChannel>? channels = null, bool stereo = false, bool level = false, int maxLagSamples = DefaultMaxLag)
     {
         active = [.. channels ?? Enum.GetValues<AudioChannel>()];
         Stereo = stereo;
+        MaxLagSamples = maxLagSamples;
         if (level) levelers = active.ToDictionary(c => c, _ => new SpeechLeveler());
     }
 
@@ -76,6 +81,12 @@ public sealed class AudioMixer
     public bool Stereo { get; }
 
     public int Channels => Stereo ? 2 : 1;
+
+    /// <summary>How far one channel may get ahead of another before the one behind is filled with silence.</summary>
+    public int MaxLagSamples { get; }
+
+    /// <summary>Silence put in for channels that fell more than <see cref="MaxLagSamples"/> behind.</summary>
+    public long PaddedSamples { get; private set; }
 
     /// <summary>Gain per channel, after levelling.</summary>
     public Dictionary<AudioChannel, float> Gains { get; } = new() { [AudioChannel.Microphone] = 1.0f, [AudioChannel.System] = 1.0f };
@@ -110,6 +121,8 @@ public sealed class AudioMixer
             }
         }
         var lengths = active.Select(c => pending.TryGetValue(c, out var l) ? l.Count : 0).ToList();
+        if (!flush && lengths.Max() - lengths.Min() > MaxLagSamples) CatchUpLaggards(lengths.Max());
+        lengths = [.. active.Select(c => pending.TryGetValue(c, out var l) ? l.Count : 0)];
         var count = flush ? lengths.Max() : lengths.Min();
         if (count <= 0) return [];
         if (Stereo) return Split(count);
@@ -129,6 +142,18 @@ public sealed class AudioMixer
             if (MathF.Abs(v) > 0.9f) mixed[i] = v > 0 ? 0.9f + 0.1f * MathF.Tanh((v - 0.9f) * 10) : -0.9f - 0.1f * MathF.Tanh((-v - 0.9f) * 10);
         }
         return mixed;
+    }
+
+    private void CatchUpLaggards(int length)
+    {
+        foreach (var channel in active)
+        {
+            if (!pending.TryGetValue(channel, out var list)) pending[channel] = list = [];
+            var missing = length - list.Count;
+            if (missing <= 0) continue;
+            list.AddRange(new float[missing]);
+            PaddedSamples += missing;
+        }
     }
 
     /// <summary><paramref name="count"/> frames, left then right; a side with nothing (it never started) is silent.</summary>

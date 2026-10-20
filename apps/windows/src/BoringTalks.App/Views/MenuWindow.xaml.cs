@@ -136,6 +136,20 @@ public partial class MenuWindow : Window
         SettingsRequested?.Invoke();
     }
 
+    private void Report_Click(object sender, RoutedEventArgs e)
+    {
+        HideMenu();
+        model.App.ReportProblem();
+    }
+
+    private void ReportHang_Click(object sender, RoutedEventArgs e)
+    {
+        HideMenu();
+        model.App.ReportProblem(model.App.Reporter.PendingHang);
+    }
+
+    private void DismissHang_Click(object sender, RoutedEventArgs e) => model.App.Reporter.DismissHang();
+
     private void Quit_Click(object sender, RoutedEventArgs e) => QuitRequested?.Invoke();
 
     public event Action? SettingsRequested;

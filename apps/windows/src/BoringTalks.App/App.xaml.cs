@@ -21,6 +21,7 @@ public partial class App : Application
     private MenuWindow? menu;
     private SettingsWindow? settings;
     private LiveTranscriptWindow? live;
+    private ReportWindow? report;
     private bool quitting;
 
     public App(string[] arguments, SingleInstance instance)
@@ -51,6 +52,10 @@ public partial class App : Application
         model.PropertyChanged += OnModelChanged;
         model.ShowMenuRequested += () => menu.ShowMenu();
         model.RestartToUpdateRequested += () => Quit(restartForUpdate: true);
+        model.Reporter.ShowWindowRequested += () => (report ??= new ReportWindow(model)).ShowReport();
+        var watchdog = new UiWatchdog(Dispatcher, model.Reporter.HangStore, Log.For("watchdog"));
+        watchdog.Recovered += model.Reporter.HangEnded;
+        watchdog.Start();
 
         AppModel.TryRegister(Registration.RegisterProtocol);
         AppModel.TryRegister(() => Registration.SetOpenAtSignIn(model.Settings.OpenAtSignIn));
@@ -90,6 +95,18 @@ public partial class App : Application
             _ = DebugRecordAsync(seconds);
         }
 #endif
+        if (Array.IndexOf(args, "--write-report") is var write and >= 0 && write + 1 < args.Length)
+        {
+            // What a report would send, written to a file without sending it (QA).
+            var file = Path.GetFullPath(args[write + 1]);
+            _ = model.Reporter.WriteAsync(file).ContinueWith(t => Log.For("report")(t.IsCompletedSuccessfully ? $"wrote {file}" : $"couldn't write {file}: {t.Exception?.InnerException?.Message}"), TaskScheduler.Default);
+            return;
+        }
+        if (args.Contains("--report"))
+        {
+            model.ReportProblem();
+            return;
+        }
         if (Array.IndexOf(args, "--show-settings") is var tab and >= 0)
         {
             // Settings on a given tab (transcription, recording, calls, account), for screenshots and QA.

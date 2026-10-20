@@ -1,0 +1,8 @@
+{
+  "kind": "hang",
+  "message": "Pressed Record on the Zoom notification and the menu stopped responding",
+  "app": { "version": "0.5.8", "build": "0.5.8", "flavor": "release" },
+  "system": { "os": "Windows 11 Pro 23H2 (10.0.22631)", "model": "LENOVO 21HM" },
+  "diagnostics": { "hang.seconds": "420", "recorder.phase": "starting" },
+  "log": "2026-10-14 11:30:53.121 INF [app] Zoom is in a call; offering to record"
+}
