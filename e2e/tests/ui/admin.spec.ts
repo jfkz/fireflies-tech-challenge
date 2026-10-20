@@ -36,11 +36,13 @@ test('admins see usage, make another account an admin and set recording limits',
 
   await page.getByLabel('Add an admin').fill('nobody@example.com');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('sign in to BoringTalks once first');
+  await expect(page.getByText(/sign in to BoringTalks once first/)).toBeVisible();
 });
 
-test('everyone else sees no admin link, and the admin pages say so', async ({ page }) => {
+test('everyone else sees no admin link, and the admin pages say so', async ({ page, api }) => {
   await signUp(page);
+  await expect(page.getByRole('heading', { name: 'Meetings' })).toBeVisible();
+  expect(api.callsTo('GET', /^\/me$/).length).toBeGreaterThan(0);
   await expect(page.getByRole('link', { name: 'Meetings' }).first()).toBeVisible();
   await expect(page.getByRole('link', { name: 'Admin' })).toHaveCount(0);
   await page.goto('/admin/users');

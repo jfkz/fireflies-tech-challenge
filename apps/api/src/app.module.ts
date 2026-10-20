@@ -4,7 +4,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import type { Redis } from 'ioredis';
 import { AdminModule } from './admin/admin.module';
-import { AppSettingsModule } from './app-settings/app-settings.module';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { UserThrottlerGuard } from './auth/throttler.guard';
@@ -40,7 +39,6 @@ import { UsersModule } from './users/users.module';
         storage: new ThrottlerStorageRedisService(redis),
       }),
     }),
-    AppSettingsModule,
     AuthModule,
     UsersModule,
     DevicesModule,
