@@ -102,9 +102,11 @@ or `windows`. `404` until that build has been published, and for any other platf
 
 ### `GET /me` → `Me`
 ```json
-{ "id": "3cf2…", "email": "ann@example.com", "name": "Ann", "emailOnReady": true, "createdAt": "2026-10-06T11:05:10.373Z", "isAdmin": false }
+{ "id": "3cf2…", "email": "ann@example.com", "name": "Ann", "emailOnReady": true, "createdAt": "2026-10-06T11:05:10.373Z", "isAdmin": false, "isOwner": false, "recordingLimitSec": 7200 }
 ```
-`isAdmin` is true when the account's email is in `ADMIN_EMAILS` (any case): it may use `/admin/*`.
+- `isAdmin`: may use `/admin/*`, as an owner (email in `ADMIN_EMAILS`, any case; `isOwner`) or made an admin on the dashboard.
+- `recordingLimitSec`: the longest recording the apps allow this user, in seconds (their own limit, else the
+  global one); `null` = no limit. Missing from APIs before it existed (treat as 2 hours).
 
 ### `PATCH /me/settings` (`UpdateSettingsRequest`) → `Me`
 At least one of:
@@ -374,7 +376,8 @@ account owner gets a "New Mac connected" email. Store the token in the Keychain;
 and is revoked from the dashboard.
 
 ### `GET /devices` → `Device[]`
-Active (not revoked) devices. `lastSeenAt` is updated at most once a minute.
+Active (not revoked) devices. `lastSeenAt` is updated at most once a minute. `platform` (`macos` /
+`windows`) and `appVersion` come from the app's User-Agent (`BoringTalks-Windows/0.6.0`); null until seen.
 
 ### `DELETE /devices/:id` → `204`
 Revokes the device; its token stops working immediately. `404` if unknown or already revoked.
@@ -406,8 +409,7 @@ by admins with the two endpoints below (or `node dist/reports.js`, [DEPLOYMENT](
 and emailed (without the log) to `REPORTS_NOTIFY_EMAIL` when it is set.
 
 ### `GET /admin/reports?user=&kind=&cursor=&limit=` → `ProblemReportPage`
-Admins only: a Firebase (dashboard) sign-in whose email is in `ADMIN_EMAILS`. Anyone else gets `403`,
-device tokens included. Every user's reports, newest first, without diagnostics and log. `user` is a
+Admins only (see [Admin dashboard](#admin-dashboard)). Anyone else gets `403`, device tokens included. Every user's reports, newest first, without diagnostics and log. `user` is a
 user id or an email (any case), `kind` is `user` or `hang`, `limit` 1–200 (default 50); follow
 `nextCursor` for more (`400` for a cursor this API didn't make).
 ```json
@@ -435,6 +437,43 @@ Admins only. One report as above plus `diagnostics` and `log`. `404` if there is
 `400` for an id that is not a UUID.
 
 ---
+
+## Admin dashboard
+
+All `/admin/*` routes need a dashboard (Firebase) sign-in of an admin: an owner (`ADMIN_EMAILS`) or an
+account made an admin there. Anyone else gets `403`, device tokens included. Demo meetings are never
+counted, and meetings appear as metadata only (no titles, transcripts or summaries).
+
+### `GET /admin/overview?days=&tz=` → `AdminOverview`
+`days` 7–365 (default 30), `tz` an IANA time zone (default `UTC`; `400` for an unknown one). Users (total,
+new in 7 days and in the window, active in 1/7/30 days, admins), meetings (total and hours; in the window
+by source and status, failure rate = failed ÷ (ready + failed)), connected desktop apps by platform and
+version, problem reports in 7 days, estimated costs for the window (summary tokens at $1/$5 per million,
+server transcription at $0.10 per channel-hour, audio stored at $0.015/GB-month) and one entry per day
+(`signups`, `meetings`, `hours`).
+
+### `GET /admin/users?q=&cursor=&limit=` → `AdminUserPage`
+Newest accounts first; `q` is part of an email or name, or a user id; `limit` 1–200 (default 50); follow
+`nextCursor`. Each: `email`, `name`, `createdAt`, `lastActiveAt`, `meetingCount`, `recordedMinutes`,
+`lastMeetingAt`, `apps` (connected desktop apps), `isAdmin`, `isOwner`, `recordingLimitMinutes`
+(null = default, 0 = none).
+
+### `GET /admin/users/:id` → `AdminUserDetail`
+The above plus `effectiveRecordingLimitMinutes`, `adminGrantedBy`, `last30d`, `devices` (with revoked
+ones), the newest 20 `meetings` (id, startedAt, source, status, durationSec, audioBytes, error) and the
+newest 10 problem `reports`. `404` for an unknown user.
+
+### `PATCH /admin/users/:id` (`UpdateAdminUserRequest`) → `AdminUserDetail`
+`{ "isAdmin": true }` and/or `{ "recordingLimitMinutes": 45 }` (`null` = back to the default, `0` = none,
+at most 1440). `409` to remove an owner's rights (change `ADMIN_EMAILS`) or your own.
+
+### `GET /admin/admins` → `AdminList`, `POST /admin/admins` (`{ "email" }`) → `201 AdminList`
+Owners (with `id: null` until they sign in) and dashboard admins. The POST makes an existing account an
+admin; `404` "They need to sign in to BoringTalks once first" when no account has that email.
+
+### `GET /admin/settings` → `AdminSettings`, `PATCH /admin/settings` (`{ "recordingLimitMinutes" }`) → `AdminSettings`
+The global recording limit in minutes (0 = none, at most 1440), who changed it last and when. Other API
+replicas pick a change up within a minute.
 
 ## Example: Mac recording end to end
 

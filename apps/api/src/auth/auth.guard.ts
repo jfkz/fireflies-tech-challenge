@@ -32,9 +32,10 @@ export class AuthGuard implements CanActivate {
       if (adminOnly || this.reflector.getAllAndOverride<boolean>(FIREBASE_ONLY, targets)) {
         throw new ForbiddenException('This action needs a dashboard sign-in');
       }
-      const found = await this.deviceTokens.authenticate(token);
+      const found = await this.deviceTokens.authenticate(token, req.headers['user-agent']);
       if (!found) throw new UnauthorizedException('Invalid or revoked device token');
       req.auth = { user: found.user, via: 'device', deviceId: found.deviceId };
+      await this.users.touch(found.user);
       return true;
     }
 
@@ -45,7 +46,8 @@ export class AuthGuard implements CanActivate {
       if (err instanceof InvalidTokenError) throw new UnauthorizedException('Invalid token');
       throw err;
     }
-    if (adminOnly && !this.config.isAdmin(req.auth.user.email)) throw new ForbiddenException('Only an admin can see this');
+    if (adminOnly && !this.config.isAdmin(req.auth.user)) throw new ForbiddenException('Only an admin can see this');
+    await this.users.touch(req.auth.user);
     return true;
   }
 }

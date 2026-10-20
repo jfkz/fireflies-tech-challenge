@@ -62,6 +62,22 @@ export function recorderReducer(state: RecorderState, event: RecorderEvent): Rec
   }
 }
 
+/** How long before the recording limit the recorder warns. */
+export const LIMIT_WARNING_SEC = 300;
+
+export type LimitVerdict = { kind: 'ok' } | { kind: 'warning'; secondsLeft: number } | { kind: 'stop' };
+
+/**
+ * The recording limit (from /me, in seconds; null = none) against the time recorded: a warning in the
+ * last 5 minutes (half the limit when that is shorter), then stop.
+ */
+export function limitVerdict(elapsedSec: number, limitSec: number | null | undefined): LimitVerdict {
+  if (!limitSec || limitSec <= 0) return { kind: 'ok' };
+  const left = limitSec - elapsedSec;
+  if (left <= 0) return { kind: 'stop' };
+  return left <= Math.min(LIMIT_WARNING_SEC, limitSec / 2) ? { kind: 'warning', secondsLeft: Math.ceil(left) } : { kind: 'ok' };
+}
+
 const PREFERRED_TYPES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
 
 /** The first container MediaRecorder supports here, in the order the API prefers. */

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   customType,
   date,
@@ -13,7 +14,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { AudioChannels, DeviceApp, MeetingSource, MeetingStatus, ProblemReportKind } from '@boringtalks/shared';
+import type { AudioChannels, DeviceApp, DevicePlatform, MeetingSource, MeetingStatus, ProblemReportKind } from '@boringtalks/shared';
 
 /** Who named a speaker: the summarizer from the conversation, or the user by hand (never overwritten). */
 export interface SpeakerNameEntry {
@@ -29,16 +30,28 @@ const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' });
 
 const createdAt = () => timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow();
 
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  firebaseUid: text('firebase_uid').notNull().unique(),
-  email: text('email'),
-  name: text('name'),
-  /** The user typed their name in settings, so sign-ins stop overwriting it with the provider's. */
-  nameLocked: boolean('name_locked').notNull().default(false),
-  emailOnReady: boolean('email_on_ready').notNull().default(true),
-  createdAt: createdAt(),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    firebaseUid: text('firebase_uid').notNull().unique(),
+    email: text('email'),
+    name: text('name'),
+    /** The user typed their name in settings, so sign-ins stop overwriting it with the provider's. */
+    nameLocked: boolean('name_locked').notNull().default(false),
+    emailOnReady: boolean('email_on_ready').notNull().default(true),
+    /** Made an admin from the dashboard (owners come from ADMIN_EMAILS instead). */
+    isAdmin: boolean('is_admin').notNull().default(false),
+    /** The admin who last granted or removed admin rights. */
+    adminGrantedBy: uuid('admin_granted_by'),
+    /** Longest recording the apps allow this user: null = the global default, 0 = no limit. */
+    recordingLimitMinutes: integer('recording_limit_minutes'),
+    /** The last request from any of their clients, kept to the minute. */
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true, mode: 'date' }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('users_email_lower_idx').on(sql`lower(${t.email})`)],
+);
 
 export const devices = pgTable(
   'devices',
@@ -52,6 +65,9 @@ export const devices = pgTable(
     createdAt: createdAt(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true, mode: 'date' }),
     revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'date' }),
+    /** From the app's User-Agent ("BoringTalks-Windows/0.6.0"), updated as it is seen. */
+    platform: text('platform').$type<DevicePlatform>(),
+    appVersion: text('app_version'),
   },
   (t) => [index('devices_user_idx').on(t.userId)],
 );
@@ -87,6 +103,8 @@ export const meetings = pgTable(
     audioContentType: text('audio_content_type'),
     /** True once the audio object was seen in storage (HeadObject). */
     hasAudio: boolean('has_audio').notNull().default(false),
+    /** The audio object's size when processing started. */
+    audioBytes: bigint('audio_bytes', { mode: 'number' }),
     /** 'mic-system' when the Mac recorded the microphone and system audio on separate channels; null = mixed. */
     audioChannels: text('audio_channels').$type<AudioChannels>(),
     /** A mono mix of a split-channel recording, made by the worker for playback. */
@@ -232,6 +250,14 @@ export const problemReports = pgTable(
   },
   (t) => [index('problem_reports_created_idx').on(t.createdAt), index('problem_reports_user_idx').on(t.userId)],
 );
+
+/** Settings for the whole service, edited on the admin dashboard (`recording.limitMinutes`, …). */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<unknown>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  updatedBy: uuid('updated_by'),
+});
 
 export type UserRow = typeof users.$inferSelect;
 export type DeviceRow = typeof devices.$inferSelect;

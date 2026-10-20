@@ -14,6 +14,8 @@ const device = (o: Partial<DeviceRow> = {}): DeviceRow => ({
   createdAt: new Date('2026-10-06T10:00:00Z'),
   lastSeenAt: null,
   revokedAt: null,
+  platform: null,
+  appVersion: null,
   ...o,
 });
 
@@ -80,9 +82,16 @@ describe('device link (PKCE)', () => {
 
   it('lists and revokes devices', async () => {
     const { repo, service } = setup();
-    repo.listActive.mockResolvedValue([device({ lastSeenAt: new Date('2026-10-06T11:00:00Z') })]);
+    repo.listActive.mockResolvedValue([device({ lastSeenAt: new Date('2026-10-06T11:00:00Z'), platform: 'windows', appVersion: '0.6.0' })]);
     await expect(service.list(user())).resolves.toEqual([
-      { id: device().id, name: 'MacBook Air', createdAt: '2026-10-06T10:00:00.000Z', lastSeenAt: '2026-10-06T11:00:00.000Z' },
+      {
+        id: device().id,
+        name: 'MacBook Air',
+        createdAt: '2026-10-06T10:00:00.000Z',
+        lastSeenAt: '2026-10-06T11:00:00.000Z',
+        platform: 'windows',
+        appVersion: '0.6.0',
+      },
     ]);
     repo.revoke.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     await expect(service.revoke(user(), device().id)).resolves.toBeUndefined();
@@ -105,6 +114,18 @@ describe('DeviceTokensService', () => {
     const { repo, tokens } = setup();
     repo.findActiveByTokenHash.mockResolvedValue({ device: device({ lastSeenAt: new Date() }), user: user() });
     await tokens.authenticate('btd_x');
+    expect(repo.touch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the app version from the User-Agent at once, and only when it changed', async () => {
+    const { repo, tokens } = setup();
+    repo.findActiveByTokenHash.mockResolvedValue({ device: device({ lastSeenAt: new Date() }), user: user() });
+    await tokens.authenticate('btd_x', 'BoringTalks-Windows/0.6.0');
+    expect(repo.touch).toHaveBeenCalledWith(device().id, { platform: 'windows', version: '0.6.0' });
+    repo.touch.mockClear();
+    repo.findActiveByTokenHash.mockResolvedValue({ device: device({ lastSeenAt: new Date(), platform: 'windows', appVersion: '0.6.0' }), user: user() });
+    await tokens.authenticate('btd_x', 'BoringTalks-Windows/0.6.0');
+    await tokens.authenticate('btd_x', 'curl/8');
     expect(repo.touch).not.toHaveBeenCalled();
   });
 

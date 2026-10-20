@@ -3,13 +3,15 @@
 import { MAX_AUDIO_BYTES } from '@boringtalks/shared';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useId, useState, useSyncExternalStore, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent, type DragEvent } from 'react';
 import { TalkingHead } from '@/components/avatar/TalkingHead';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ErrorNote } from '@/components/ui/ErrorNote';
+import { useMe } from '@/hooks/queries';
 import { useMicrophones } from '@/hooks/useMicrophones';
 import { useRecorder } from '@/hooks/useRecorder';
 import { TALKER } from '@/lib/avatar/styles';
+import { formatMinutes } from '@/lib/dates';
 import { formatBytes, formatClock } from '@/lib/format';
 import { AUDIO_ACCEPT, checkAudioFile, normalizeAudioType, submitAudio, type SubmitStage } from '@/lib/upload';
 import { holdUpdates } from '@/lib/version';
@@ -61,7 +63,8 @@ function ProgressBar({ value, label }: { value: number; label: string }) {
 function RecorderPanel() {
   const { api } = useAuth();
   const router = useRouter();
-  const rec = useRecorder(api);
+  const limitSec = useMe().data?.recordingLimitSec ?? null;
+  const rec = useRecorder(api, undefined, limitSec);
   const [withTab, setWithTab] = useState(false);
   const mics = useMicrophones();
   const micSelectId = useId();
@@ -79,6 +82,17 @@ function RecorderPanel() {
   useEffect(() => {
     if (s.kind === 'done') router.push(`/meetings/${s.meetingId}`);
   }, [s, router]);
+
+  // Stopped at the limit: nobody may be there to press Save, so save it.
+  const autoSaved = useRef(false);
+  const { stoppedByLimit, submit } = rec;
+  useEffect(() => {
+    if (!stoppedByLimit) autoSaved.current = false;
+    else if (s.kind === 'recorded' && !autoSaved.current) {
+      autoSaved.current = true;
+      void submit(title);
+    }
+  }, [s.kind, stoppedByLimit, submit, title]);
 
   // Never offer a reload over a recording that hasn't reached the server yet.
   const unsaved = s.kind !== 'idle' && s.kind !== 'done' && !(s.kind === 'error' && !s.recorded);
@@ -107,7 +121,7 @@ function RecorderPanel() {
           </p>
           <LevelMeter level={s.kind === 'recording' ? rec.level : 0} />
           <p className="mt-2 text-sm font-bold text-ink-soft" role="status">
-            {s.kind === 'idle' && 'Ready when you are. The head wakes up when you start.'}
+            {s.kind === 'idle' && `Ready when you are. The head wakes up when you start.${limitSec ? ` Recordings stop at ${formatMinutes(limitSec)}.` : ''}`}
             {s.kind === 'requesting' && 'Waiting for permission…'}
             {s.kind === 'recording' && (s.withTab ? 'Recording you and the shared tab.' : 'Recording your microphone.')}
             {s.kind === 'stopping' && 'Finishing the recording…'}
@@ -117,6 +131,17 @@ function RecorderPanel() {
           </p>
         </div>
       </div>
+
+      {rec.limitLeft !== null && limitSec && (
+        <p className="mt-4 rounded-2xl border-2 border-ink bg-sun-soft px-4 py-2.5 text-sm font-bold text-ink" role="alert">
+          Recordings stop at {formatMinutes(limitSec)}: this one stops in {formatClock(rec.limitLeft)} and is saved.
+        </p>
+      )}
+      {rec.stoppedByLimit && limitSec && s.kind !== 'error' && s.kind !== 'idle' && (
+        <p className="mt-4 rounded-2xl border-2 border-ink bg-sun-soft px-4 py-2.5 text-sm font-bold text-ink" role="status">
+          It reached the {formatMinutes(limitSec)} recording limit, so it stopped and is being saved.
+        </p>
+      )}
 
       {s.kind === 'error' && (
         <div className="mt-4">

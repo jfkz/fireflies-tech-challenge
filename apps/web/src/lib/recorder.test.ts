@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { INITIAL_RECORDER, levelFromSamples, mediaErrorMessage, pickRecorderMimeType, recorderReducer, type RecorderEvent, type RecorderState } from './recorder';
+import {
+  INITIAL_RECORDER,
+  levelFromSamples,
+  limitVerdict,
+  mediaErrorMessage,
+  pickRecorderMimeType,
+  recorderReducer,
+  type RecorderEvent,
+  type RecorderState,
+} from './recorder';
 
 const run = (events: RecorderEvent[], from: RecorderState = INITIAL_RECORDER) => events.reduce(recorderReducer, from);
 const blob = new Blob(['x'.repeat(10)]);
@@ -101,5 +110,23 @@ describe('recorder helpers', () => {
     expect(mediaErrorMessage({ name: 'NotReadableError' }, 'microphone')).toMatch(/Another app/);
     expect(mediaErrorMessage(new Error('weird'), 'microphone')).toBe('Could not start recording: weird');
     expect(mediaErrorMessage(null, 'microphone')).toBe('Could not start recording.');
+  });
+});
+
+describe('limitVerdict', () => {
+  it('warns in the last 5 minutes, then stops at the limit', () => {
+    expect(limitVerdict(0, 7200)).toEqual({ kind: 'ok' });
+    expect(limitVerdict(6899, 7200)).toEqual({ kind: 'ok' });
+    expect(limitVerdict(6900.5, 7200)).toEqual({ kind: 'warning', secondsLeft: 300 });
+    expect(limitVerdict(7199.2, 7200)).toEqual({ kind: 'warning', secondsLeft: 1 });
+    expect(limitVerdict(7200, 7200)).toEqual({ kind: 'stop' });
+  });
+
+  it('warns for half of a short limit, and never without one', () => {
+    expect(limitVerdict(29, 60)).toEqual({ kind: 'ok' });
+    expect(limitVerdict(30, 60)).toEqual({ kind: 'warning', secondsLeft: 30 });
+    expect(limitVerdict(99_999, null)).toEqual({ kind: 'ok' });
+    expect(limitVerdict(99_999, undefined)).toEqual({ kind: 'ok' });
+    expect(limitVerdict(99_999, 0)).toEqual({ kind: 'ok' });
   });
 });

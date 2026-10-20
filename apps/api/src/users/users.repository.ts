@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { InjectDb, type Database } from '../db/db.module';
 import { users, type UserRow } from '../db/schema';
 
@@ -26,6 +26,14 @@ export class UsersRepository {
   async updateProfile(id: string, values: { email: string | null; name: string | null }): Promise<UserRow> {
     const [row] = await this.db.update(users).set(values).where(eq(users.id, id)).returning();
     return row;
+  }
+
+  /** Keeps last_active_at to the minute (no write when it is fresh). */
+  async touchActive(id: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ lastActiveAt: new Date() })
+      .where(and(eq(users.id, id), or(isNull(users.lastActiveAt), lt(users.lastActiveAt, sql`now() - interval '1 minute'`))));
   }
 
   async updateSettings(id: string, values: { emailOnReady?: boolean; name?: string; nameLocked?: boolean }): Promise<UserRow> {

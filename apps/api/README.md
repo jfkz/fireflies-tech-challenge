@@ -85,6 +85,7 @@ Validated with zod at boot (`src/config/env.ts`); the process exits with a list 
 | `EMAIL_REPLY_TO` | | `BoringTalks <hello@boringtalks.lol>`: where replies go (the sending subdomain receives no mail) |
 | `EMAIL_ALLOWLIST` | | comma list; when set, mail only these addresses (dev) |
 | `REPORTS_NOTIFY_EMAIL` | | empty = reports are only stored; set, each Mac problem report is emailed there (without its log) |
+| `ADMIN_EMAILS` | | comma list of owners: always admins of the dashboard (`/admin`), where they can make other accounts admins |
 | `DIARIZE_MODEL` | | `google/gemini-3-flash`: tells voices apart when `TRANSCRIBE_MODEL` can't (Whisper); empty = off |
 | `THROTTLE_LIMIT` | | `120` requests/min per user |
 

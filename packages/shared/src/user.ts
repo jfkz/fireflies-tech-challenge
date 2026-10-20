@@ -6,8 +6,12 @@ export const Me = z.object({
   name: z.string().nullable(),
   emailOnReady: z.boolean(),
   createdAt: z.string().datetime(),
-  /** Listed in the API's ADMIN_EMAILS: may read every user's problem reports. */
+  /** May use the admin dashboard: an owner (the API's ADMIN_EMAILS) or made an admin there. */
   isAdmin: z.boolean().optional(),
+  /** Listed in ADMIN_EMAILS: an admin nobody can remove from the dashboard. */
+  isOwner: z.boolean().optional(),
+  /** The longest recording the apps allow this user, in seconds; null = no limit. Missing from older APIs. */
+  recordingLimitSec: z.number().int().positive().nullable().optional(),
 });
 export type Me = z.infer<typeof Me>;
 

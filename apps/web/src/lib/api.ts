@@ -1,4 +1,9 @@
 import {
+  AdminList,
+  AdminOverview,
+  AdminSettings,
+  AdminUserDetail,
+  AdminUserPage,
   ApiError,
   AuthorizeDeviceResponse,
   Device,
@@ -14,7 +19,9 @@ import {
   ProblemReportPage,
   TaskPage,
   UploadUrlResponse,
+  type AdminOverviewQuery,
   type AuthorizeDeviceRequest,
+  type ListAdminUsersQuery,
   type CompleteMeetingRequest,
   type CreateMeetingRequest,
   type ListMeetingsQuery,
@@ -22,6 +29,8 @@ import {
   type ListTasksQuery,
   type MeetingStatsQuery,
   type RenamePersonRequest,
+  type UpdateAdminSettingsRequest,
+  type UpdateAdminUserRequest,
   type UpdateMeetingRequest,
   type UpdateSettingsRequest,
   type UploadUrlRequest,
@@ -145,6 +154,20 @@ export function createApiClient({ baseUrl, getToken, fetch: fetchImpl }: ApiClie
     listReports: (q: Partial<ListProblemReportsQuery> = {}, signal?: AbortSignal) =>
       request('GET', '/admin/reports', { schema: ProblemReportPage, query: { user: q.user, kind: q.kind, cursor: q.cursor, limit: q.limit }, signal }),
     getReport: (id: string, signal?: AbortSignal) => request('GET', `/admin/reports/${encodeURIComponent(id)}`, { schema: ProblemReportDetail, signal }),
+
+    /** Admins only: usage across all accounts for the last `days` days. */
+    adminOverview: (q: Partial<AdminOverviewQuery> = {}, signal?: AbortSignal) =>
+      request('GET', '/admin/overview', { schema: AdminOverview, query: { days: q.days, tz: q.tz }, signal }),
+    adminUsers: (q: Partial<ListAdminUsersQuery> = {}, signal?: AbortSignal) =>
+      request('GET', '/admin/users', { schema: AdminUserPage, query: { q: q.q, cursor: q.cursor, limit: q.limit }, signal }),
+    adminUser: (id: string, signal?: AbortSignal) => request('GET', `/admin/users/${encodeURIComponent(id)}`, { schema: AdminUserDetail, signal }),
+    updateAdminUser: (id: string, body: UpdateAdminUserRequest) =>
+      request('PATCH', `/admin/users/${encodeURIComponent(id)}`, { schema: AdminUserDetail, body }),
+    adminList: (signal?: AbortSignal) => request('GET', '/admin/admins', { schema: AdminList, signal }),
+    /** Makes an existing account an admin (404 when nobody signed in with that email yet). */
+    grantAdmin: (email: string) => request('POST', '/admin/admins', { schema: AdminList, body: { email } }),
+    adminSettings: (signal?: AbortSignal) => request('GET', '/admin/settings', { schema: AdminSettings, signal }),
+    updateAdminSettings: (body: UpdateAdminSettingsRequest) => request('PATCH', '/admin/settings', { schema: AdminSettings, body }),
 
     /** The newest build for each desktop app; null for one that hasn't shipped yet. */
     downloads: (signal?: AbortSignal) => request('GET', '/downloads', { schema: Downloads, auth: false, signal }),

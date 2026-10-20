@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Me, UpdateSettingsRequest } from '@boringtalks/shared';
+import { effectiveRecordingLimit, type Me, type UpdateSettingsRequest } from '@boringtalks/shared';
+import { AppSettingsService } from '../app-settings/app-settings.service';
 import type { FirebaseIdentity } from '../auth/firebase-verifier';
 import { AppConfig } from '../config/config.module';
 import type { UserRow } from '../db/schema';
@@ -19,6 +20,7 @@ export class UsersService {
     private readonly demo: DemoService,
     private readonly jobs: JobsService,
     private readonly meetings: MeetingsRepository,
+    private readonly settings: AppSettingsService,
   ) {}
 
   /**
@@ -64,8 +66,19 @@ export class UsersService {
     return this.me(updated);
   }
 
-  me(user: UserRow): Me {
-    return toMe(user, this.config.isAdmin(user.email));
+  async me(user: UserRow): Promise<Me> {
+    const limit = effectiveRecordingLimit(user.recordingLimitMinutes, await this.settings.recordingLimitMinutes());
+    return {
+      ...toMe(user, this.config.isAdmin(user)),
+      isOwner: this.config.isOwner(user.email),
+      recordingLimitSec: limit === null ? null : limit * 60,
+    };
+  }
+
+  /** Keeps when the user was last active, to the minute. */
+  async touch(user: UserRow): Promise<void> {
+    const last = user.lastActiveAt?.getTime() ?? 0;
+    if (Date.now() - last > 60_000) await this.repo.touchActive(user.id);
   }
 }
 

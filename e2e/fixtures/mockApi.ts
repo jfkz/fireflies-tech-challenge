@@ -1,6 +1,12 @@
 import type { Page, Route } from '@playwright/test';
 import {
+  AdminOverview,
   AuthorizeDeviceRequest,
+  GrantAdminRequest,
+  UpdateAdminSettingsRequest,
+  UpdateAdminUserRequest,
+  type AdminSettings,
+  type AdminUserDetail,
   CreateMeetingRequest,
   Downloads,
   MeetingDetail,
@@ -12,7 +18,7 @@ import {
   type Me,
   type MeetingStatus,
 } from '@boringtalks/shared';
-import { AUDIO_URL, demoMeeting, device, me as makeMe, processingMeeting, silentWav, toListItem, UPLOAD_HOST } from './data';
+import { adminOverview, adminUser, AUDIO_URL, demoMeeting, device, me as makeMe, processingMeeting, silentWav, toListItem, UPLOAD_HOST } from './data';
 
 export const MOCK_API_URL = 'http://localhost:4999';
 
@@ -36,6 +42,8 @@ export interface MockApi {
   uploads: { url: string; contentType: string | undefined; size: number }[];
   /** Status a processing meeting moves to on each GET, so polling can be observed. */
   progression: MeetingStatus[];
+  /** What the admin endpoints serve (only to a `me` with isAdmin). */
+  admin: { users: AdminUserDetail[]; settings: AdminSettings };
   callsTo(method: string, pathPattern: RegExp): Call[];
 }
 
@@ -77,6 +85,7 @@ export async function mockApi(
     calls: [],
     uploads: [],
     progression: ['transcribing', 'summarizing', 'ready'],
+    admin: { users: [adminUser()], settings: { recordingLimitMinutes: 120, updatedAt: null, updatedBy: null } },
     callsTo(method, pattern) {
       return state.calls.filter((c) => c.method === method && pattern.test(c.path));
     },
@@ -267,6 +276,61 @@ export async function mockApi(
     if (dev && method === 'DELETE') {
       state.devices = state.devices.filter((d) => d.id !== dev[1]);
       return route.fulfill({ status: 204, headers: CORS });
+    }
+
+    // ---- admin
+    if (path.startsWith('/admin/')) {
+      if (!state.me.isAdmin) return error(route, 403, 'Only an admin can see this');
+      const admins = () => ({
+        admins: [
+          { id: state.me.id, email: state.me.email, name: state.me.name, isOwner: true },
+          ...state.admin.users.filter((u) => u.isAdmin && !u.isOwner).map((u) => ({ id: u.id, email: u.email, name: u.name, isOwner: false })),
+        ],
+      });
+      if (path === '/admin/overview' && method === 'GET') {
+        return json(route, 200, AdminOverview.parse(adminOverview(Number(url.searchParams.get('days') ?? 30))));
+      }
+      if (path === '/admin/users' && method === 'GET') {
+        const q = (url.searchParams.get('q') ?? '').toLowerCase();
+        const items = state.admin.users.filter((u) => !q || `${u.email} ${u.name}`.toLowerCase().includes(q));
+        return json(route, 200, { items, nextCursor: null });
+      }
+      const userMatch = /^\/admin\/users\/([^/]+)$/.exec(path);
+      if (userMatch) {
+        const i = state.admin.users.findIndex((u) => u.id === userMatch[1]);
+        if (i < 0) return error(route, 404, 'User not found');
+        if (method === 'PATCH') {
+          const parsed = UpdateAdminUserRequest.safeParse(body);
+          if (!parsed.success) return error(route, 400, parsed.error.issues[0].message);
+          const u = state.admin.users[i];
+          const limit = parsed.data.recordingLimitMinutes === undefined ? u.recordingLimitMinutes : parsed.data.recordingLimitMinutes;
+          const global = state.admin.settings.recordingLimitMinutes;
+          state.admin.users[i] = {
+            ...u,
+            isAdmin: parsed.data.isAdmin ?? u.isAdmin,
+            adminGrantedBy: parsed.data.isAdmin === undefined ? u.adminGrantedBy : { id: state.me.id, email: state.me.email },
+            recordingLimitMinutes: limit,
+            effectiveRecordingLimitMinutes: (limit ?? global) > 0 ? (limit ?? global) : null,
+          };
+        }
+        return json(route, 200, state.admin.users[i]);
+      }
+      if (path === '/admin/admins' && method === 'GET') return json(route, 200, admins());
+      if (path === '/admin/admins' && method === 'POST') {
+        const parsed = GrantAdminRequest.safeParse(body);
+        if (!parsed.success) return error(route, 400, parsed.error.issues[0].message);
+        const u = state.admin.users.find((x) => x.email?.toLowerCase() === parsed.data.email.toLowerCase());
+        if (!u) return error(route, 404, 'No account with that email yet. They need to sign in to BoringTalks once first.');
+        u.isAdmin = true;
+        return json(route, 201, admins());
+      }
+      if (path === '/admin/settings' && method === 'GET') return json(route, 200, state.admin.settings);
+      if (path === '/admin/settings' && method === 'PATCH') {
+        const parsed = UpdateAdminSettingsRequest.safeParse(body);
+        if (!parsed.success) return error(route, 400, parsed.error.issues[0].message);
+        state.admin.settings = { ...parsed.data, updatedAt: new Date().toISOString(), updatedBy: state.me.email };
+        return json(route, 200, state.admin.settings);
+      }
     }
 
     return error(route, 404, `No mock for ${method} ${path}`);

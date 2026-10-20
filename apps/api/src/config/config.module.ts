@@ -13,8 +13,14 @@ export class AppConfig {
     return emulatorEnabled(this.env);
   }
 
-  isAdmin(email: string | null): boolean {
+  /** Listed in ADMIN_EMAILS: always an admin, and nobody can take that away on the dashboard. */
+  isOwner(email: string | null): boolean {
     return !!email && this.env.ADMIN_EMAILS.includes(email.toLowerCase());
+  }
+
+  /** An owner, or made an admin on the dashboard. */
+  isAdmin(user: { email: string | null; isAdmin: boolean }): boolean {
+    return user.isAdmin || this.isOwner(user.email);
   }
 }
 

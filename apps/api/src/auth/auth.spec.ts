@@ -96,7 +96,7 @@ describe('FirebaseVerifier', () => {
 describe('AuthGuard', () => {
   const reflector = new Reflector();
   const firebase = { verify: vi.fn() };
-  const users = { ensureUser: vi.fn() };
+  const users = { ensureUser: vi.fn(), touch: vi.fn() };
   const deviceTokens = { authenticate: vi.fn() };
   const guard = new AuthGuard(reflector, firebase as never, users as never, deviceTokens as never, testConfig({ ADMIN_EMAILS: 'Boss@Example.com' }));
 
@@ -148,6 +148,7 @@ describe('AuthGuard', () => {
     const { context, req } = ctx('normal', 'Bearer btd_abc');
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(req.auth).toEqual({ user: user(), via: 'device', deviceId: 'd-1' });
+    expect(users.touch).toHaveBeenCalledWith(user());
   });
 
   it('rejects revoked or unknown device tokens', async () => {
@@ -163,6 +164,8 @@ describe('AuthGuard', () => {
   it('lets only the admins in ADMIN_EMAILS onto admin routes, and never with a device token', async () => {
     firebase.verify.mockResolvedValue({ uid: 'fb-1', email: 'a@b.c', name: null });
     users.ensureUser.mockResolvedValue(user({ email: 'boss@example.com' }));
+    await expect(guard.canActivate(ctx('adminOnly', 'Bearer eyJ.token').context)).resolves.toBe(true);
+    users.ensureUser.mockResolvedValue(user({ isAdmin: true }));
     await expect(guard.canActivate(ctx('adminOnly', 'Bearer eyJ.token').context)).resolves.toBe(true);
     users.ensureUser.mockResolvedValue(user());
     await expect(guard.canActivate(ctx('adminOnly', 'Bearer eyJ.token').context)).rejects.toBeInstanceOf(ForbiddenException);

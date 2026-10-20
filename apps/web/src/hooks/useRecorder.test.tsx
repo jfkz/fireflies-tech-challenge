@@ -88,6 +88,24 @@ describe('useRecorder', () => {
     expect(api.uploadUrl).toHaveBeenCalledWith('m1', { contentType: 'audio/webm', sizeBytes: 3 });
   });
 
+  it('warns before the recording limit, then stops there by itself', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    try {
+      const { result } = renderHook(() => useRecorder(fakeApi(), undefined, 600));
+      await act(() => result.current.start());
+      expect(result.current.limitLeft).toBeNull();
+      act(() => vi.advanceTimersByTime(301_000));
+      expect(result.current.limitLeft).toBe(299);
+      act(() => vi.advanceTimersByTime(300_000));
+      expect(result.current.state).toMatchObject({ kind: 'recorded' });
+      expect(result.current.stoppedByLimit).toBe(true);
+      act(() => result.current.discard());
+      expect(result.current.stoppedByLimit).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('records from the chosen microphone', async () => {
     const { result } = renderHook(() => useRecorder(fakeApi()));
     await act(() => result.current.start(false, 'built-in'));

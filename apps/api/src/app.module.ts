@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import type { Redis } from 'ioredis';
+import { AdminModule } from './admin/admin.module';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { UserThrottlerGuard } from './auth/throttler.guard';
@@ -46,6 +47,7 @@ import { UsersModule } from './users/users.module';
     PeopleModule,
     DownloadsModule,
     ReportsModule,
+    AdminModule,
     HealthModule,
   ],
   providers: [

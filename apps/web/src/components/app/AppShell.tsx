@@ -18,7 +18,7 @@ const LINKS = [
 ] as const;
 
 /** Only for the accounts in the API's ADMIN_EMAILS. */
-const ADMIN_LINKS = [{ href: '/admin/reports', label: 'Reports' }] as const;
+const ADMIN_LINKS = [{ href: '/admin', label: 'Admin' }] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();

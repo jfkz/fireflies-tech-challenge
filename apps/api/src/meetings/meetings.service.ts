@@ -230,7 +230,7 @@ export class MeetingsService {
     if (!canStart(meeting.status, target)) {
       throw new ConflictException(`A meeting that is ${meeting.status} cannot move to ${target}`);
     }
-    const patch = { hasAudio: Boolean(audio), ...(durationSec !== undefined ? { durationSec } : {}) };
+    const patch = { hasAudio: Boolean(audio), audioBytes: audio?.size ?? null, ...(durationSec !== undefined ? { durationSec } : {}) };
     const started = await this.repo.startRun(meeting.id, meeting.status, target, patch);
     if (!started) throw new ConflictException('The meeting changed while starting; try again');
     if (target === 'summarizing') await this.jobs.summarize(started.id, started.attempts);
