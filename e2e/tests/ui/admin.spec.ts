@@ -36,7 +36,7 @@ test('admins see usage, make another account an admin and set recording limits',
 
   await page.getByLabel('Add an admin').fill('nobody@example.com');
   await page.getByRole('button', { name: 'Add', exact: true }).click();
-  await expect(page.getByText(/sign in to BoringTalks once first/)).toBeVisible();
+  await expect(page.getByText(/No account with that email yet/)).toBeVisible();
 });
 
 test('everyone else sees no admin link, and the admin pages say so', async ({ page, api }) => {
