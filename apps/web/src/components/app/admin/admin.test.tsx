@@ -103,10 +103,17 @@ describe('AdminOverviewView', () => {
     expect(within(sources).queryByText('Demo')).toBeNull();
     expect(screen.getByRole('region', { name: 'Desktop apps connected' })).toHaveTextContent('Mac (version not seen yet)');
     expect(screen.getByRole('link', { name: 'Read them' })).toHaveAttribute('href', '/admin/reports');
+    expect(screen.queryByRole('link', { name: 'Product analytics in PostHog' })).toBeNull();
     expect(adminOverview).toHaveBeenCalledWith(expect.objectContaining({ days: 30 }), expect.anything());
 
     fireEvent.click(within(screen.getByRole('group', { name: 'Period' })).getByRole('button', { name: '90 days' }));
     await waitFor(() => expect(adminOverview).toHaveBeenLastCalledWith(expect.objectContaining({ days: 90 }), expect.anything()));
+  });
+
+  it('links to PostHog when there is a project to link to', async () => {
+    const adminOverview = vi.fn(async () => ({ ...OVERVIEW, analyticsUrl: 'https://eu.posthog.com/project/1' }));
+    renderWithProviders(<AdminOverviewView />, { auth: authValue({ api: fakeApi({ me: vi.fn(async () => ME), adminOverview }) }) });
+    expect(await screen.findByRole('link', { name: 'Product analytics in PostHog' })).toHaveAttribute('href', 'https://eu.posthog.com/project/1');
   });
 
   it('says what went wrong', async () => {

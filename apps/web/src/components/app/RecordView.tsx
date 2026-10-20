@@ -11,6 +11,7 @@ import { useMe } from '@/hooks/queries';
 import { useMicrophones } from '@/hooks/useMicrophones';
 import { useRecorder } from '@/hooks/useRecorder';
 import { TALKER } from '@/lib/avatar/styles';
+import { analytics } from '@/lib/analytics';
 import { formatMinutes } from '@/lib/dates';
 import { formatBytes, formatClock } from '@/lib/format';
 import { AUDIO_ACCEPT, checkAudioFile, normalizeAudioType, submitAudio, type SubmitStage } from '@/lib/upload';
@@ -293,6 +294,7 @@ function UploadPanel() {
         onStage: (stage) => setState((s) => (s.kind === 'submitting' ? { ...s, stage } : s)),
         onProgress: (progress) => setState((s) => (s.kind === 'submitting' ? { ...s, progress } : s)),
       });
+      analytics.track('file_uploaded', { sizeBytes: file.size, contentType });
       router.push(`/meetings/${id}`);
     } catch (err) {
       setState({ kind: 'error', message: err instanceof Error ? err.message : 'Upload failed.' });

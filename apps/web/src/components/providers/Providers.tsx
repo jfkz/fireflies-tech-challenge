@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { domAnimation, LazyMotion, MotionConfig } from 'motion/react';
 import { useState, type ReactNode } from 'react';
 import { ApiRequestError } from '@/lib/api-error';
+import { Analytics } from './Analytics';
 import { AuthProvider } from './AuthProvider';
 
 export function makeQueryClient() {
@@ -24,6 +25,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={client}>
       <AuthProvider>
+        <Analytics />
         <LazyMotion features={domAnimation} strict>
           <MotionConfig reducedMotion="user">{children}</MotionConfig>
         </LazyMotion>

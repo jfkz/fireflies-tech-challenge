@@ -32,8 +32,9 @@ function setup() {
   const users = { findById: vi.fn() };
   const jobs = { email: vi.fn() };
   const tokens = new DeviceTokensService(repo as never);
-  const service = new DevicesService(repo as never, tokens, users as never, jobs as never);
-  return { repo, users, jobs, tokens, service };
+  const analytics = { capture: vi.fn() };
+  const service = new DevicesService(repo as never, tokens, users as never, jobs as never, analytics as never);
+  return { repo, users, jobs, tokens, service, analytics };
 }
 
 const verifier = 'x'.repeat(50);
@@ -57,7 +58,7 @@ describe('device link (PKCE)', () => {
   });
 
   it('swaps code + verifier for a device token and emails a security notice', async () => {
-    const { repo, users, jobs, service } = setup();
+    const { repo, users, jobs, service, analytics } = setup();
     repo.consumeCode.mockResolvedValue({ userId: user().id, codeChallenge: challenge, deviceName: 'MacBook Air' });
     users.findById.mockResolvedValue(user());
     repo.insertDevice.mockImplementation((v: { tokenHash: string }) => Promise.resolve(device({ tokenHash: v.tokenHash })));
@@ -66,6 +67,7 @@ describe('device link (PKCE)', () => {
     expect(res.user).toEqual({ email: 'ann@example.com', name: 'Ann' });
     expect(repo.insertDevice.mock.calls[0][0].tokenHash).toBe(createHash('sha256').update(res.token).digest('hex'));
     expect(jobs.email).toHaveBeenCalledWith({ type: 'device-connected', userId: user().id, deviceId: res.deviceId });
+    expect(analytics.capture).toHaveBeenCalledWith(user().id, 'device_connected');
   });
 
   it('rejects a wrong verifier, a used code and a deleted user', async () => {

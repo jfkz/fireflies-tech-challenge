@@ -54,8 +54,9 @@ function setup() {
   };
   const jobs = { summarize: vi.fn(), transcribe: vi.fn() };
   const transcripts = new TranscriptService(repo as never, storage as never);
-  const service = new MeetingsService(repo as never, transcripts, storage as never, jobs as never);
-  return { repo, storage, jobs, service };
+  const analytics = { capture: vi.fn() };
+  const service = new MeetingsService(repo as never, transcripts, storage as never, jobs as never, analytics as never);
+  return { repo, storage, jobs, service, analytics };
 }
 
 describe('mapper', () => {
@@ -121,7 +122,7 @@ describe('MeetingsService', () => {
 
   describe('create with an idempotency key', () => {
     it('creates once and returns the same meeting for a repeated key', async () => {
-      const { repo, service } = setup();
+      const { repo, service, analytics } = setup();
       repo.findByClientKey.mockResolvedValueOnce(null).mockResolvedValueOnce(meeting({ clientKey: 'k1' }));
       repo.createOnce.mockImplementation((v: object) => Promise.resolve(meeting(v)));
       const first = await service.create(user(), { source: 'macos' }, 'k1');
@@ -129,6 +130,8 @@ describe('MeetingsService', () => {
       expect(repo.createOnce.mock.calls[0][0]).toMatchObject({ clientKey: 'k1', userId: user().id });
       const again = await service.create(user(), { source: 'macos' }, 'k1');
       expect(again).toMatchObject({ created: false, meeting: { id: meeting().id } });
+      // A repeated request is the same meeting: counted once.
+      expect(analytics.capture.mock.calls).toEqual([[user().id, 'meeting_created', { source: 'macos' }]]);
       expect(repo.createOnce).toHaveBeenCalledTimes(1);
       expect(repo.create).not.toHaveBeenCalled();
     });
@@ -403,13 +406,14 @@ describe('MeetingsService', () => {
     });
 
     it('transcribes when there is only audio', async () => {
-      const { repo, storage, jobs, service } = setup();
+      const { repo, storage, jobs, service, analytics } = setup();
       repo.findOwned.mockResolvedValue(meeting({ audioKey: 'a' }));
       repo.hasSegments.mockResolvedValue(false);
       storage.head.mockResolvedValue({ size: 10, contentType: 'audio/webm' });
       repo.startRun.mockResolvedValue(meeting({ status: 'transcribing', attempts: 1 }));
       await service.complete(user(), meeting().id, {});
       expect(repo.startRun).toHaveBeenCalledWith(meeting().id, 'recording', 'transcribing', { hasAudio: true, audioBytes: 10 });
+      expect(analytics.capture).toHaveBeenCalledWith(user().id, 'meeting_completed', { source: 'macos', durationSec: null, hasAudio: false, serverTranscribed: true });
       expect(jobs.transcribe).toHaveBeenCalledWith(meeting().id, 1);
     });
 

@@ -99,6 +99,15 @@ export function AdminOverviewView() {
               </>
             )}{' '}
             · {o.users.admins} {o.users.admins === 1 ? 'admin' : 'admins'} · demo meetings are not counted
+            {o.analyticsUrl && (
+              <>
+                {' '}
+                ·{' '}
+                <a href={o.analyticsUrl} target="_blank" rel="noreferrer" className="font-extrabold text-call-deep underline underline-offset-2">
+                  Product analytics in PostHog
+                </a>
+              </>
+            )}
           </p>
         </div>
       )}

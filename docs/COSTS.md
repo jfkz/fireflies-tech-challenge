@@ -32,7 +32,8 @@ isn't wanted, not as the default.
 | **Total variable cost** | **≈ $20** | **≈ $380** |
 
 Fixed costs: Railway (API + worker + Postgres + Redis, usage-based, a few dollars a month idle),
-Vercel Hobby (free), Cloudflare R2 (10 GB free), Firebase Auth (free up to 50k MAU), Resend free tier.
+Vercel Hobby (free), Cloudflare R2 (10 GB free), Firebase Auth (free up to 50k MAU), Resend free tier,
+PostHog Cloud (1M events a month free; no session recordings).
 
 ## Why not the obvious alternatives
 

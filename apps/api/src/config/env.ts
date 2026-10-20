@@ -68,6 +68,12 @@ export const EnvSchema = z
     ADMIN_EMAILS: csv.transform((emails) => emails.map((e) => e.toLowerCase())),
 
     THROTTLE_LIMIT: z.coerce.number().int().positive().default(120),
+
+    /** PostHog project API key; empty turns server-side product events off. */
+    POSTHOG_KEY: z.string().optional().or(z.literal('').transform(() => undefined)),
+    POSTHOG_HOST: z.string().url().default('https://eu.i.posthog.com'),
+    /** The PostHog project's page, linked from the admin dashboard. */
+    POSTHOG_PROJECT_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   })
   .superRefine((env, ctx) => {
     if (env.AI_FAKE && env.NODE_ENV !== 'test') {

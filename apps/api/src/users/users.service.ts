@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { effectiveRecordingLimit, type Me, type UpdateSettingsRequest } from '@boringtalks/shared';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { AppSettingsService } from '../app-settings/app-settings.service';
 import type { FirebaseIdentity } from '../auth/firebase-verifier';
 import { AppConfig } from '../config/config.module';
@@ -21,6 +22,7 @@ export class UsersService {
     private readonly jobs: JobsService,
     private readonly meetings: MeetingsRepository,
     private readonly settings: AppSettingsService,
+    private readonly analytics?: AnalyticsService,
   ) {}
 
   /**
@@ -45,6 +47,7 @@ export class UsersService {
       return winner;
     }
     this.logger.log({ userId: created.id }, 'new user');
+    this.analytics?.capture(created.id, 'user_signed_up', { hasName: Boolean(created.name) });
     await this.demo.seed(created.id, new Date(), created.name);
     await this.jobs.email({ type: 'welcome', userId: created.id });
     return created;

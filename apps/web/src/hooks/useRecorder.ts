@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { analytics } from '@/lib/analytics';
 import type { ApiClient } from '@/lib/api';
 import {
   INITIAL_RECORDER,
@@ -85,6 +86,7 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put'], lim
       const l = live.current;
       if (limitVerdict(seconds, limit.current).kind === 'stop' && l?.recorder.state === 'recording') {
         setStoppedByLimit(true);
+        analytics.track('recording_stopped', { durationSec: Math.round(seconds), byLimit: true });
         dispatch({ type: 'stop' });
         l.recorder.stop();
       }
@@ -184,6 +186,7 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put'], lim
         live.current = { recorder, streams, context, raf: 0 };
         recorder.start(1000);
         dispatch({ type: 'granted', startedAt: Date.now() });
+        analytics.track('recording_started', { withTab });
         live.current.raf = requestAnimationFrame(meter);
       } catch (err) {
         for (const s of streams) for (const t of s.getTracks()) t.stop();
@@ -198,6 +201,7 @@ export function useRecorder(api: ApiClient, put?: SubmitAudioOptions['put'], lim
     const l = live.current;
     if (!l || l.recorder.state !== 'recording') return;
     dispatch({ type: 'stop' });
+    analytics.track('recording_stopped', { byLimit: false });
     l.recorder.stop();
   }, []);
 

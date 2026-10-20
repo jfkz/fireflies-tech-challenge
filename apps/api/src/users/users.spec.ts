@@ -16,13 +16,15 @@ function setup() {
   const meetings = { renameOwner: vi.fn() };
   const config = testConfig({ ADMIN_EMAILS: 'boss@example.com' });
   const settings = { recordingLimitMinutes: vi.fn().mockResolvedValue(120) };
+  const analytics = { capture: vi.fn() };
   return {
     repo,
     demo,
     jobs,
     meetings,
     settings,
-    service: new UsersService(config, repo as never, demo as never, jobs as never, meetings as never, settings as never),
+    analytics,
+    service: new UsersService(config, repo as never, demo as never, jobs as never, meetings as never, settings as never, analytics as never),
   };
 }
 
@@ -44,12 +46,13 @@ describe('UsersService.ensureUser', () => {
   });
 
   it('creates a new user with a demo meeting and a welcome email', async () => {
-    const { repo, demo, jobs, service } = setup();
+    const { repo, demo, jobs, service, analytics } = setup();
     repo.findByFirebaseUid.mockResolvedValue(null);
     repo.insertIfAbsent.mockResolvedValue(user());
     await service.ensureUser({ uid: 'fb-1', email: 'ann@example.com', name: 'Ann' });
     expect(demo.seed).toHaveBeenCalledWith(user().id, expect.any(Date), 'Ann');
     expect(jobs.email).toHaveBeenCalledWith({ type: 'welcome', userId: user().id });
+    expect(analytics.capture).toHaveBeenCalledWith(user().id, 'user_signed_up', { hasName: true });
   });
 
   it('does not seed twice when a parallel request created the user', async () => {

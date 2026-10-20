@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useId, useState, type FormEvent } from 'react';
+import { analytics } from '@/lib/analytics';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { authErrorMessage, safeContinue, safeNext } from '@/lib/auth-errors';
 import { useAuthMood } from './AuthMood';
@@ -39,11 +40,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
     if (!auth.loading && auth.user) router.replace(next);
   }, [auth.loading, auth.user, next, router]);
 
-  async function run(action: () => Promise<void>) {
+  async function run(action: () => Promise<void>, method: 'password' | 'google') {
     setError(null);
     setBusy(true);
     try {
       await action();
+      analytics.track('signed_in', { method, mode });
       poke('yay');
     } catch (err) {
       setError(authErrorMessage(err));
@@ -54,7 +56,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
-    void run(() => (mode === 'signin' ? auth.signIn(email.trim(), password) : auth.signUp(email.trim(), password)));
+    void run(() => (mode === 'signin' ? auth.signIn(email.trim(), password) : auth.signUp(email.trim(), password)), 'password');
   }
 
   const otherHref = `${mode === 'signin' ? '/signup' : '/signin'}${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`;
@@ -64,7 +66,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
       <h1 className="font-display text-4xl leading-none sm:text-5xl">{copy.title}</h1>
       <p className="mt-3 font-semibold text-ink-soft">{copy.lead}</p>
 
-      <button type="button" className="btn btn-secondary mt-7 w-full" onClick={() => run(auth.signInWithGoogle)} disabled={busy}>
+      <button type="button" className="btn btn-secondary mt-7 w-full" onClick={() => run(auth.signInWithGoogle, 'google')} disabled={busy}>
         <GoogleGlyph /> Continue with Google
       </button>
       <div className="my-5 flex items-center gap-3 text-sm font-extrabold text-ink-soft" aria-hidden>

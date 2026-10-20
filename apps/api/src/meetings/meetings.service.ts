@@ -1,3 +1,4 @@
+import { AnalyticsService } from '../analytics/analytics.service';
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import {
   canTransition,
@@ -71,6 +72,7 @@ export class MeetingsService {
     private readonly transcripts: TranscriptService,
     private readonly storage: StorageService,
     private readonly jobs: JobsService,
+    private readonly analytics?: AnalyticsService,
   ) {}
 
   async list(user: UserRow, query: ListMeetingsQuery): Promise<MeetingPage> {
@@ -103,6 +105,12 @@ export class MeetingsService {
    * after a lost response) returns the meeting the first one created.
    */
   async create(user: UserRow, body: CreateMeetingRequest, clientKey?: string): Promise<{ meeting: MeetingDetail; created: boolean }> {
+    const result = await this.createOnce(user, body, clientKey);
+    if (result.created) this.analytics?.capture(user.id, 'meeting_created', { source: body.source });
+    return result;
+  }
+
+  private async createOnce(user: UserRow, body: CreateMeetingRequest, clientKey?: string): Promise<{ meeting: MeetingDetail; created: boolean }> {
     const startedAt = body.startedAt ? new Date(body.startedAt) : new Date();
     const values = {
       userId: user.id,
@@ -205,7 +213,14 @@ export class MeetingsService {
     if (!COMPLETABLE.includes(meeting.status)) {
       throw new ConflictException(`The meeting was already completed (it is ${meeting.status})`);
     }
-    return this.detail(await this.startProcessing(meeting, body.durationSec));
+    const started = await this.startProcessing(meeting, body.durationSec);
+    this.analytics?.capture(user.id, 'meeting_completed', {
+      source: started.source,
+      durationSec: started.durationSec,
+      hasAudio: started.hasAudio,
+      serverTranscribed: started.status === 'transcribing',
+    });
+    return this.detail(started);
   }
 
   /**

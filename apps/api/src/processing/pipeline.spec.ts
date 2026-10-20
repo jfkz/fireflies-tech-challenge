@@ -44,6 +44,7 @@ function setup() {
   const summarizer = { summarize: vi.fn().mockResolvedValue(result) };
   const diarizer = { diarize: vi.fn(async ({ segments }: { audio: Uint8Array; segments: Segment[] }) => segments) };
   const chains = { link: vi.fn().mockResolvedValue(null) };
+  const analytics = { capture: vi.fn() };
   const pipeline = new PipelineService(
     meetings as never,
     transcripts as never,
@@ -54,8 +55,9 @@ function setup() {
     summarizer as never,
     diarizer as never,
     chains as never,
+    analytics as never,
   );
-  return { meetings, transcripts, storage, users, jobs, transcriber, summarizer, diarizer, chains, pipeline };
+  return { meetings, transcripts, storage, users, jobs, transcriber, summarizer, diarizer, chains, pipeline, analytics };
 }
 
 describe('PipelineService.transcribe', () => {
@@ -252,6 +254,14 @@ describe('PipelineService.summarize', () => {
       },
     );
     expect(t.jobs.email).toHaveBeenCalledWith({ type: 'meeting-ready', userId: user().id, meetingId: m.id, run: 1 });
+    expect(t.analytics.capture).toHaveBeenCalledWith(m.userId, 'meeting_ready', {
+      source: 'macos',
+      durationSec: null,
+      attempts: 1,
+      model: 'm',
+      inputTokens: 5,
+      outputTokens: 2,
+    });
   });
 
   it('names the voices, keeps names typed by hand, and moves action item owners to the names', async () => {
@@ -300,9 +310,11 @@ describe('PipelineService.summarize', () => {
     t.meetings.findById.mockResolvedValue(meeting({ status: 'summarizing', attempts: 1 }));
     await t.pipeline.fail({ meetingId: meeting().id, run: 1 }, 'summarizing', new Error('x'.repeat(600)));
     expect(t.meetings.transition).toHaveBeenCalledWith(meeting().id, 'summarizing', { status: 'failed', error: 'x'.repeat(500) });
+    expect(t.analytics.capture).toHaveBeenCalledWith(meeting().userId, 'meeting_failed', { source: 'macos', stage: 'summarizing' });
     t.meetings.findById.mockResolvedValue(meeting({ status: 'ready', attempts: 1 }));
     await t.pipeline.fail({ meetingId: meeting().id, run: 1 }, 'summarizing', new Error('late'));
     expect(t.meetings.transition).toHaveBeenCalledTimes(1);
+    expect(t.analytics.capture).toHaveBeenCalledTimes(1);
   });
 });
 

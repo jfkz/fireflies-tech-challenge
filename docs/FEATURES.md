@@ -334,7 +334,8 @@ on these pages, and `403` from `/admin/*`.
   transcription at docs/COSTS.md list prices) and audio stored. A column chart per day of meetings,
   hours or sign-ups (hover or focus a day for its value; **Show as a table** has every number), and
   breakdowns of where meetings come from, where they are now, and which desktop app versions are
-  connected. **7 / 30 / 90 days**. Demo meetings are never counted.
+  connected. **7 / 30 / 90 days**. Demo meetings are never counted. With `POSTHOG_PROJECT_URL` set, a
+  link to product analytics in PostHog.
 - *Users*: every account, newest first, searchable by email, name or id, 50 at a time: meetings and
   minutes, when they joined and were last active, the desktop apps they use (platform and version, from
   the apps' User-Agent), owner/admin badges and their own recording limit. A user's page adds the last 30
@@ -361,6 +362,20 @@ the app build and system, the message, every diagnostic and the app's log, with 
 
 **Where.** `components/app/ReportsView.tsx`, `app/(app)/admin/reports/`; `useReports` / `useReport` in
 `hooks/queries.ts`.
+
+### Product analytics
+
+**What.** With a PostHog key set (PostHog Cloud, EU), page views and a handful of events:
+`download_clicked` (platform, which button), `signed_in` (password or Google), `recording_started` /
+`recording_stopped` (and whether the limit stopped it) and `file_uploaded` from the browser;
+`user_signed_up`, `device_connected`, `meeting_created`, `meeting_completed`, `meeting_ready`,
+`meeting_failed` and `problem_report_sent` from the API and worker, which covers the desktop apps.
+Visitors stay anonymous and cookie-free; after sign-in the account id (never the email) ties the
+browser and the server together. No session recordings and no meeting content in any event. The
+admin overview links to the PostHog project. No key, no analytics: nothing is loaded or sent.
+
+**Where.** `lib/analytics.ts`, `components/providers/Analytics.tsx`, the `/ingest` rewrites in
+`next.config.ts`; `apps/api/src/analytics/`.
 
 ### Errors and 404
 
