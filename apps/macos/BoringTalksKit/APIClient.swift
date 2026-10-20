@@ -52,6 +52,11 @@ public protocol MeetingsAPI: Sendable {
     func listMeetings(limit: Int) async throws -> MeetingPage
 }
 
+/// The account: its recording limit.
+public protocol AccountAPI: Sendable {
+    func me() async throws -> Me
+}
+
 /// Sending a problem report from Report a Problem… (or after the app was stuck).
 public protocol ReportsAPI: Sendable {
     func sendProblemReport(_ report: ProblemReportRequest) async throws -> ProblemReportResponse
@@ -59,7 +64,7 @@ public protocol ReportsAPI: Sendable {
 
 /// The BoringTalks API over URLSession. Every call carries the device token as a
 /// bearer token, except the presigned upload, which carries its own signature.
-public final class APIClient: MeetingsAPI, DeviceAuthAPI, ReportsAPI {
+public final class APIClient: MeetingsAPI, DeviceAuthAPI, ReportsAPI, AccountAPI {
     private let baseURL: URL
     private let session: URLSession
     private let token: @Sendable () async -> String?
@@ -97,6 +102,10 @@ public final class APIClient: MeetingsAPI, DeviceAuthAPI, ReportsAPI {
 
     public func listMeetings(limit: Int) async throws -> MeetingPage {
         try await send("GET", "meetings", query: [URLQueryItem(name: "limit", value: String(limit))], body: Optional<Ignored>.none)
+    }
+
+    public func me() async throws -> Me {
+        try await send("GET", "me", body: Optional<Ignored>.none)
     }
 
     public func sendProblemReport(_ report: ProblemReportRequest) async throws -> ProblemReportResponse {

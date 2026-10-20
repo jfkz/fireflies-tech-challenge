@@ -1,4 +1,5 @@
 using Microsoft.Toolkit.Uwp.Notifications;
+using BoringTalks.Core;
 
 namespace BoringTalks.App.Platform;
 
@@ -57,6 +58,12 @@ public sealed class Notifier : IDisposable
         .AddText("Still in a meeting?")
         .AddText($"Nobody has spoken for a while. BoringTalks stops recording in {(int)Math.Round(stopsIn)} seconds unless you keep it going.")
         .AddButton(new ToastButton().SetContent("Keep recording").AddArgument("action", "keep")));
+
+    /// <summary>The recording limit is near. Nothing keeps it going, so no button.</summary>
+    public void WarnLimit(double stopsIn, double limitSeconds) => Show(WarningTag, b => b
+        .AddArgument("action", "open")
+        .AddText($"Recording stops in {Math.Max(1, (int)Math.Round(stopsIn / 60))} min")
+        .AddText($"Recordings are limited to {RecordingLimit.Describe(limitSeconds)}. What was recorded is saved and uploaded as usual."));
 
     public void ClearWarning() => Remove(WarningTag);
 

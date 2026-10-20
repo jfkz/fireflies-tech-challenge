@@ -267,6 +267,16 @@ Against dev: install **BoringTalks Dev** from https://download.boringtalks.lol/d
 | Turn notifications off for BoringTalks in System Settings, repeat | No notifications; the countdown is in the menu, and the stop shows an alert |
 | **Stop after silence** = Never, stay quiet for 2 minutes | Nothing happens; the meeting keeps recording |
 
+### 4b2. Shortcut, sounds and the recording limit
+
+| Step | Expected |
+|---|---|
+| With another app in front, press **⌃⌥⌘R** | A rising chime, then BoringTalks records (red icon); ⌃⌥⌘R again: it stops with a falling chime and uploads. Played back on the dashboard, neither chime is in the recording |
+| Settings › Recording › **Start/stop shortcut**: click it, press ⌃⇧F8 | It shows ⌃⇧F8; ⌃⌥⌘R does nothing now, ⌃⇧F8 starts and stops. **Default** brings ⌃⌥⌘R back; **Clear** shows None |
+| Set a shortcut another app owns (e.g. one you set in System Settings › Keyboard Shortcuts) | “… is already used by another app” under it |
+| Turn **Play a sound…** off, start and stop | No chimes |
+| As an admin, give this account a 6-minute limit (dashboard › Admin › Users); start a meeting | Settings › Recording says recordings stop at 6 minutes. At 3:00 a “Recording stops in 3 min” notification and a countdown in the menu without **Keep recording**; at 6:00 it stops and uploads (“It reached the 6 minutes recording limit…”) |
+
 ### 4c. Calls: offer to record, stop when the call ends
 
 | Step | Expected |
@@ -414,6 +424,16 @@ in `%APPDATA%\BoringTalks\settings.json` (or `--api-url` / `--web-url`). Logs:
 | Leave the call while recording | ~30 s after the others go quiet the recording stops by itself ("The Teams call ended…") |
 | `BoringTalks.exe --mic-users 60` while joining and leaving calls | One line per change: each app holding a microphone and the call app it counts as |
 
+### 4b. Shortcut, sounds and the recording limit
+
+| Step | Expected |
+|---|---|
+| With another app in front, press **Ctrl+Alt+R** | A rising chime, then BoringTalks records (red dot); Ctrl+Alt+R again: a falling chime, it stops and uploads. Neither chime is in the recording. The tray menu shows Ctrl+Alt+R next to **Start meeting** |
+| Settings › Recording: click the shortcut box, press Ctrl+Shift+F8 | It shows Ctrl+Shift+F8 and works; Ctrl+Alt+R no longer does. **Default** / **Clear** work |
+| Pick a shortcut another app has registered | “… is already used by another app” under the box |
+| Signed out, press the shortcut | The menu opens |
+| As an admin, give this account a 6-minute limit; start a meeting | Settings says recordings stop at 6 minutes; at 3:00 a toast and a menu countdown without **Keep recording**; at 6:00 it stops and uploads |
+
 ### 5. Offline, relaunch, sign out, recordings
 
 | Step | Expected |
@@ -560,4 +580,4 @@ deploy, and against production after a merge.
 ### 10. Versions
 1. Compare `GET /health` `version`, the web footer, the Mac app's About/menu version and the Windows
    app's Settings version.
-   **Expected:** all share major.minor (0.5.x); `pnpm check:versions` passes.
+   **Expected:** all share major.minor (0.6.x); `pnpm check:versions` passes.

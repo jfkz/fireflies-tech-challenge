@@ -101,7 +101,8 @@
         <!-- Stopping by itself -->
         <Border Style="{StaticResource Notice}" Background="#26E07A1F" Visibility="{Binding CountdownText, Converter={StaticResource VisibleWhen}}">
           <DockPanel>
-            <Button DockPanel.Dock="Right" Content="Keep recording" Padding="8,4" FontSize="12" Click="Keep_Click" VerticalAlignment="Center" />
+            <Button DockPanel.Dock="Right" Content="Keep recording" Padding="8,4" FontSize="12" Click="Keep_Click" VerticalAlignment="Center"
+                    Visibility="{Binding CanKeepRecording, Converter={StaticResource VisibleWhen}}" />
             <TextBlock Text="{Binding CountdownText}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
           </DockPanel>
         </Border>

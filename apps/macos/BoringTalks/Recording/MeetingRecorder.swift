@@ -27,12 +27,16 @@ final class MeetingRecorder {
     @ObservationIgnored var avoidBluetoothMic = true
     /// Quiet this long (seconds) stops the meeting; 0 never does. Read when a meeting starts.
     @ObservationIgnored var silenceLimit: TimeInterval = 300
+    /// The account's longest recording in seconds (0: none). Read when a meeting starts; see `updateRecordingLimit`.
+    @ObservationIgnored var recordingLimitSeconds: TimeInterval = 0
 
     enum AutoStopReason: Equatable {
         /// Nobody spoke for this many seconds.
         case silence(TimeInterval)
         /// The app holding the call released the microphone.
         case callEnded(app: String)
+        /// The account's recording limit (seconds) was reached.
+        case limit(TimeInterval)
     }
 
     struct PendingStop: Equatable {
@@ -47,6 +51,10 @@ final class MeetingRecorder {
     @ObservationIgnored var onSilenceWarning: (@MainActor (TimeInterval?) -> Void)?
     /// Time to stop. The owner stops the meeting.
     @ObservationIgnored var onAutoStop: (@MainActor (AutoStopReason) -> Void)?
+    /// The recording limit is near: it stops in this many seconds (once per meeting).
+    @ObservationIgnored var onLimitWarning: (@MainActor (TimeInterval) -> Void)?
+    /// Stop pressed (or a stop by itself): the microphone and the Mac's sound are no longer recorded.
+    @ObservationIgnored var onCapturesStopped: (@MainActor () -> Void)?
     let live = LiveTranscript()
 
     @ObservationIgnored private let models: SpeechModels
@@ -72,6 +80,8 @@ final class MeetingRecorder {
     @ObservationIgnored private var attached: Set<AudioChannel> = []
     @ObservationIgnored private var attaching: Task<Void, Never>?
     @ObservationIgnored private var silence = SilenceWatch(limit: 0)
+    @ObservationIgnored private var limit = RecordingLimit(seconds: 0)
+    @ObservationIgnored private var limitWarned = false
     @ObservationIgnored private var callEnd = CallEndWatch()
     @ObservationIgnored private var endedCallApp: String?
     /// Meeting-clock seconds when the transcript last heard someone, per side.
@@ -120,6 +130,8 @@ final class MeetingRecorder {
         live.reset()
         registry = VoiceRegistry()
         silence = SilenceWatch(limit: silenceLimit)
+        limit = RecordingLimit(seconds: recordingLimitSeconds)
+        limitWarned = false
         callEnd = CallEndWatch()
         endedCallApp = nil
         lastSpeech = [:]
@@ -187,6 +199,7 @@ final class MeetingRecorder {
         modelWait?.cancel()
         restarts.values.forEach { $0.cancel() }
         stopCaptures()
+        onCapturesStopped?()
         let elapsed = ProcessInfo.processInfo.systemUptime - clockStart
         // A model that has just arrived may be attaching right now.
         await attaching?.value
@@ -455,31 +468,60 @@ final class MeetingRecorder {
     private var clockNow: TimeInterval { ProcessInfo.processInfo.systemUptime - clockStart }
 
     /// Called every half second while recording.
+    /// A new limit from the API while a meeting may be running: it applies to that meeting at once.
+    func updateRecordingLimit(_ seconds: TimeInterval) {
+        recordingLimitSeconds = seconds
+        if phase == .starting || phase == .recording, seconds != limit.seconds {
+            limit = RecordingLimit(seconds: seconds)
+        }
+    }
+
     private func checkAutoStop() {
         guard phase == .recording, !autoStopReported else { return }
         let now = clockNow
+        // The recording limit comes first; a call ending or silence may still stop it sooner.
+        var atLimit: PendingStop?
+        switch limit.verdict(elapsed: now) {
+        case .stop:
+            return report(.limit(limit.seconds))
+        case .warning(let left):
+            atLimit = PendingStop(reason: .limit(limit.seconds), at: Date().addingTimeInterval(left))
+            if !limitWarned {
+                limitWarned = true
+                Self.log.notice("the recording limit is \(Int(left), privacy: .public) s away")
+                onLimitWarning?(left)
+            }
+        case .listening:
+            break
+        }
         if let app = endedCallApp {
             switch callEnd.verdict(lastOthers: othersActivity(now: now), now: now) {
             case .stop:
                 return report(.callEnded(app: app))
             case .stopping(let left):
-                return setPendingStop(PendingStop(reason: .callEnded(app: app), at: Date().addingTimeInterval(left)))
+                return setPendingStop(Self.sooner(PendingStop(reason: .callEnded(app: app), at: Date().addingTimeInterval(left)), atLimit))
             case .recording:
                 break
             }
         }
-        guard silence.isOn else { return setPendingStop(nil) }
+        guard silence.isOn else { return setPendingStop(atLimit) }
         let lastActivity = activity(of: Array(channels.keys), now: now)
         switch silence.verdict(lastActivity: lastActivity, now: now) {
         case .listening:
-            setPendingStop(nil)
+            setPendingStop(atLimit)
         case .warning(let left):
             if case .silence = pendingStop?.reason { return }
             Self.log.notice("quiet for \(Int(self.silence.quiet(lastActivity: lastActivity, now: now)), privacy: .public) s; stopping in \(Int(left), privacy: .public) s")
-            setPendingStop(PendingStop(reason: .silence(silence.limit), at: Date().addingTimeInterval(left)))
+            setPendingStop(Self.sooner(PendingStop(reason: .silence(silence.limit), at: Date().addingTimeInterval(left)), atLimit))
         case .stop:
             report(.silence(silence.limit))
         }
+    }
+
+    private static func sooner(_ a: PendingStop?, _ b: PendingStop?) -> PendingStop? {
+        guard let a else { return b }
+        guard let b else { return a }
+        return a.at <= b.at ? a : b
     }
 
     private func report(_ reason: AutoStopReason) {

@@ -69,6 +69,8 @@ public sealed partial class MenuViewModel : ObservableObject
             : $"{AppName} {ready.Version} is ready. It installs after this meeting, when you restart or quit."
         : null;
     public bool CanRestartToUpdate => App.CanRestartToUpdate;
+    /// <summary>A stop for silence or a call ending can be put off; the recording limit can't.</summary>
+    public bool CanKeepRecording => Recorder.PendingStop?.Reason is not AutoStopReason.LimitReached;
     /// <summary>The watchdog saw the app freeze: offer to report it.</summary>
     public string? HangBanner => App.Reporter.PendingHang is { } hang ? ProblemReporter.Describe(hang) : null;
     public string HeaderCaption => App.Auth == AuthState.SignedIn ? App.Email ?? "Signed in" : "Meetings, written down for you";
@@ -175,7 +177,12 @@ public sealed partial class MenuViewModel : ObservableObject
         if (Recorder.IsRecording && Recorder.PendingStop is { } pending)
         {
             var left = (int)Math.Ceiling(Math.Max(0, (pending.At - DateTimeOffset.Now).TotalSeconds));
-            var why = pending.Reason is AutoStopReason.CallEnded c ? $"The {c.App} call ended." : "Nobody has spoken for a while.";
+            var why = pending.Reason switch
+            {
+                AutoStopReason.CallEnded c => $"The {c.App} call ended.",
+                AutoStopReason.LimitReached l => $"Recordings are limited to {RecordingLimit.Describe(l.Seconds)}.",
+                _ => "Nobody has spoken for a while.",
+            };
             CountdownText = $"{why} Stopping in {left / 60}:{left % 60:00}.";
         }
         else

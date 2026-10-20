@@ -10,6 +10,7 @@ client. The Windows tests (`apps/windows/tests`) read these files directly.
 | `device-token-response.json` | `DeviceTokenResponse` (`POST /devices/token`) |
 | `error-400.json` | `ApiError` |
 | `latest-windows.json` | `LatestDownload` (`latest-windows.json` on the download host) |
+| `me.json` | `Me` (`GET /me`) |
 | `meeting-page.json` | `MeetingPage` (`GET /meetings`) |
 | `problem-report-request.json` | `ProblemReportRequest` (`POST /reports`) |
 | `problem-report-response.json` | `ProblemReportResponse` (`POST /reports`) |

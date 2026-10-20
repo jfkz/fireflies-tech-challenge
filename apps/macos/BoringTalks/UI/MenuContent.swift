@@ -264,8 +264,11 @@ private struct StopCountdown: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
-            Button("Keep recording", action: keep)
-                .controlSize(.small)
+            // The recording limit can't be put off.
+            if !isLimit {
+                Button("Keep recording", action: keep)
+                    .controlSize(.small)
+            }
         }
         .padding(8)
         .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
@@ -275,11 +278,20 @@ private struct StopCountdown: View {
         switch pending.reason {
         case .silence: "Nobody has spoken for a while."
         case .callEnded(let app): "The \(app) call ended."
+        case .limit(let seconds): "Recordings are limited to \(RecordingLimit.describe(seconds))."
         }
     }
 
+    private var isLimit: Bool {
+        if case .limit = pending.reason { true } else { false }
+    }
+
     private var icon: String {
-        if case .callEnded = pending.reason { "phone.down" } else { "moon.zzz" }
+        switch pending.reason {
+        case .callEnded: "phone.down"
+        case .limit: "timer"
+        case .silence: "moon.zzz"
+        }
     }
 }
 

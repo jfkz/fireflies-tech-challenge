@@ -1,3 +1,4 @@
+import BoringTalksKit
 import Foundation
 import Observation
 
@@ -29,6 +30,22 @@ final class Preferences {
     /// Stop the recording when nobody has spoken for this many minutes; 0 never stops.
     var silenceStopMinutes: Int {
         didSet { defaults.set(silenceStopMinutes, forKey: "silenceStopMinutes") }
+    }
+
+    /// The global shortcut that starts and stops recording ("⌃⌥⌘R"); empty: none.
+    var recordHotkey: String {
+        didSet { defaults.set(recordHotkey, forKey: "recordHotkey") }
+    }
+
+    /// A short tone when a recording starts and when it stops.
+    var playSounds: Bool {
+        didSet { defaults.set(playSounds, forKey: "playSounds") }
+    }
+
+    /// The longest recording the account allows, in minutes (0: none), as the API last said
+    /// (GET /me); kept so a meeting started offline still stops at it.
+    var recordingLimitMinutes: Int {
+        didSet { defaults.set(recordingLimitMinutes, forKey: "recordingLimitMinutes") }
     }
 
     /// Transcribe on this Mac (Parakeet). Off: record both sides on their own channels and let
@@ -69,6 +86,9 @@ final class Preferences {
         keepAudioDays = defaults.object(forKey: "keepAudioDays") as? Int ?? 7
         avoidBluetoothMic = defaults.object(forKey: "avoidBluetoothMic") as? Bool ?? true
         silenceStopMinutes = max(0, defaults.object(forKey: "silenceStopMinutes") as? Int ?? 5)
+        recordHotkey = defaults.string(forKey: "recordHotkey") ?? Hotkey.defaultText
+        playSounds = defaults.object(forKey: "playSounds") as? Bool ?? true
+        recordingLimitMinutes = max(0, defaults.object(forKey: "recordingLimitMinutes") as? Int ?? 120)
         transcribeOnMac = defaults.object(forKey: "transcribeOnMac") as? Bool ?? true
         offerToRecordCalls = defaults.object(forKey: "offerToRecordCalls") as? Bool ?? true
         autoRecordCalls = defaults.object(forKey: "autoRecordCalls") as? Bool ?? false

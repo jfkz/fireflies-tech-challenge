@@ -120,6 +120,25 @@
         <StackPanel>
           <Border Style="{StaticResource Group}">
             <StackPanel>
+              <DockPanel>
+                <TextBlock Text="Start/stop shortcut" Width="150" VerticalAlignment="Center" />
+                <Button DockPanel.Dock="Right" Content="Clear" Margin="6,0,0,0" Padding="8,3" Click="ClearHotkey_Click" />
+                <Button DockPanel.Dock="Right" Content="Default" Margin="6,0,0,0" Padding="8,3" Click="DefaultHotkey_Click" />
+                <TextBox x:Name="HotkeyBox" Text="{Binding HotkeyText, Mode=OneWay}" IsReadOnly="True" IsReadOnlyCaretVisible="False" Padding="4,3"
+                         PreviewKeyDown="HotkeyBox_PreviewKeyDown" GotKeyboardFocus="HotkeyBox_GotFocus" LostKeyboardFocus="HotkeyBox_LostFocus"
+                         AutomationProperties.Name="Start/stop shortcut" />
+              </DockPanel>
+              <TextBlock Style="{StaticResource Help}" Margin="0,6,0,0"
+                         Text="Click the box and press the keys (Ctrl, Alt, Shift or Win with a letter, digit or F-key). Works in any app: it starts a meeting, or stops the one recording." />
+              <TextBlock Text="{Binding App.HotkeyError}" Foreground="{StaticResource Danger}" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
+                         Visibility="{Binding App.HotkeyError, Converter={StaticResource VisibleWhen}}" />
+              <CheckBox Content="Play a sound when recording starts and stops" IsChecked="{Binding PlaySounds}" />
+              <TextBlock Style="{StaticResource Help}" Text="A short tone, so you know without looking. It isn't in the recording." />
+              <TextBlock Style="{StaticResource Help}" Margin="0,0,0,0" Text="{Binding LimitText}" />
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource Group}">
+            <StackPanel>
               <DockPanel Margin="0,0,0,10">
                 <TextBlock Text="Microphone" Width="150" VerticalAlignment="Center" />
                 <ComboBox ItemsSource="{Binding Microphones}" DisplayMemberPath="Name" SelectedValuePath="Id"

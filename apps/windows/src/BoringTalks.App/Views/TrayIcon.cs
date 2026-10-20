@@ -91,6 +91,7 @@ public sealed class TrayIcon : IDisposable
             icon.ToolTipText = app.Uploads.Waiting > 0 ? $"{AppFlavor.Current.Name} — {app.Uploads.Waiting} uploading" : AppFlavor.Current.Name;
         }
         recordItem.Header = recorder.IsRecording ? "Stop meeting" : "Start meeting";
+        recordItem.InputGestureText = app.Settings.RecordHotkey;
         recordItem.IsEnabled = recorder.Phase is RecorderPhase.Idle or RecorderPhase.Recording && app.Auth == AuthState.SignedIn;
     }
 

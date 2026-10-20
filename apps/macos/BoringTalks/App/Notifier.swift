@@ -1,4 +1,5 @@
 import AppKit
+import BoringTalksKit
 import UserNotifications
 
 /// System notifications for things that happen while the menu is closed: a call
@@ -69,6 +70,14 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         Task {
             _ = await post(id: IDs.warning, category: IDs.silenceCategory, title: "Still in a meeting?",
                            body: "Nobody has spoken for a while. BoringTalks stops recording in \(Int(seconds.rounded())) seconds unless you keep it going.")
+        }
+    }
+
+    /// The recording limit is near. Nothing keeps it going, so no button.
+    func warnLimit(stopsIn seconds: TimeInterval, limit: TimeInterval) {
+        Task {
+            _ = await post(id: IDs.warning, category: nil, title: "Recording stops in \(max(1, Int((seconds / 60).rounded()))) min",
+                           body: "Recordings are limited to \(RecordingLimit.describe(limit)). What was recorded is saved and uploaded as usual.")
         }
     }
 

@@ -95,6 +95,25 @@ public sealed record DeviceTokenUser(string? Email, string? Name);
 
 public sealed record DeviceTokenResponse(string Token, string DeviceId, DeviceTokenUser User);
 
+/// <summary>The signed-in account (<c>GET /me</c>): the part the app needs.</summary>
+public sealed record Me
+{
+    public required string Id { get; init; }
+    public string? Email { get; init; }
+    public string? Name { get; init; }
+
+    /// <summary>Seconds; null = no limit; missing (Undefined) from an API older than limits.</summary>
+    public System.Text.Json.JsonElement RecordingLimitSec { get; init; }
+
+    /// <summary>The recording limit in minutes (0 = none), or <paramref name="fallback"/> when the API doesn't say.</summary>
+    public int RecordingLimitMinutes(int fallback) => RecordingLimitSec.ValueKind switch
+    {
+        System.Text.Json.JsonValueKind.Number => Math.Max(1, (int)Math.Round(RecordingLimitSec.GetDouble() / 60)),
+        System.Text.Json.JsonValueKind.Null => 0,
+        _ => fallback,
+    };
+}
+
 public sealed record ApiIssue(string Path, string Message);
 
 /// <summary>Error body of every API response.</summary>

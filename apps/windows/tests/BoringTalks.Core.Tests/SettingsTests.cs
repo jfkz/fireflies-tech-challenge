@@ -24,6 +24,9 @@ public sealed class SettingsTests
         Assert.Equal("", settings.MicrophoneId);
         Assert.False(settings.RecordGames);
         Assert.Equal("transcription", settings.SettingsTab);
+        Assert.Equal("Ctrl+Alt+R", settings.RecordHotkey);
+        Assert.True(settings.PlaySounds);
+        Assert.Equal(120, settings.RecordingLimitMinutes);
         Assert.Equal("de", (settings with { Language = "de" }).LanguageCode);
     }
 
@@ -48,13 +51,15 @@ public sealed class SettingsTests
     {
         using var folder = new TemporaryFolder();
         var path = folder.File("settings.json");
-        File.WriteAllText(path, """{ "apiUrl": "https://api.dev.boringtalks.lol", "keepAudioDays": -3, "extraCallApps": ["huddle.exe"], "ignoredCallApps": null }""");
+        File.WriteAllText(path, """{ "apiUrl": "https://api.dev.boringtalks.lol", "keepAudioDays": -3, "extraCallApps": ["huddle.exe"], "ignoredCallApps": null, "recordHotkey": null, "recordingLimitMinutes": -1 }""");
         var loaded = new JsonSettingsStore(path).Load();
         Assert.Equal("https://api.dev.boringtalks.lol", loaded.ApiUrl);
         Assert.Equal(0, loaded.KeepAudioDays);
         Assert.Equal(["huddle.exe"], loaded.ExtraCallApps);
         Assert.Empty(loaded.IgnoredCallApps);
         Assert.True(loaded.UploadAudio);
+        Assert.Equal("", loaded.RecordHotkey);
+        Assert.Equal(0, loaded.RecordingLimitMinutes);
 
         File.WriteAllText(path, "{oops");
         Assert.Equal(5, new JsonSettingsStore(path).Load().SilenceStopMinutes);
