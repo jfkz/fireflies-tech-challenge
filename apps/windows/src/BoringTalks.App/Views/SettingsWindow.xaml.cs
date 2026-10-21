@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using BoringTalks.App.ViewModels;
 using BoringTalks.Core;
@@ -56,6 +57,12 @@ public sealed class SettingsViewModel : ObservableObject
     public bool RecordGames { get => S.RecordGames; set => App.UpdateSettings(s => s with { RecordGames = value }); }
     public bool StopWhenCallEnds { get => S.StopWhenCallEnds; set => App.UpdateSettings(s => s with { StopWhenCallEnds = value }); }
     public bool OpenAtSignIn { get => S.OpenAtSignIn; set => App.UpdateSettings(s => s with { OpenAtSignIn = value }); }
+    public bool PlaySounds { get => S.PlaySounds; set => App.UpdateSettings(s => s with { PlaySounds = value }); }
+    public string HotkeyText => S.RecordHotkey.Length > 0 ? S.RecordHotkey : "None";
+    public void SetHotkey(string value) => App.UpdateSettings(s => s with { RecordHotkey = value });
+    public string LimitText => S.RecordingLimitMinutes > 0
+        ? $"Recordings stop at {RecordingLimit.Describe(S.RecordingLimitMinutes * 60)}, set for your account; BoringTalks warns 5 minutes before."
+        : "Your account has no recording limit.";
     public IReadOnlyList<string> IgnoredApps => S.IgnoredCallApps;
 
     private IReadOnlyList<MicChoice.Device> connected = [];
@@ -182,6 +189,32 @@ public partial class SettingsWindow : Window
     {
         if (sender is Button { Tag: string app }) model.App.AskAgain(app);
     }
+
+    // ---- The start/stop shortcut box: press the keys to set it.
+
+    private void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        e.Handled = true;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin) return;
+        if (key is Key.Escape or Key.Tab)
+        {
+            Keyboard.ClearFocus();
+            return;
+        }
+        var modifiers = HotkeyModifiers.None;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) modifiers |= HotkeyModifiers.Control;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)) modifiers |= HotkeyModifiers.Alt;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) modifiers |= HotkeyModifiers.Shift;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Windows)) modifiers |= HotkeyModifiers.Win;
+        if (Hotkey.Create(modifiers, key.ToString()) is { } hotkey) model.SetHotkey(hotkey.ToString());
+    }
+
+    // While the box has the keyboard, the shortcut being changed mustn't start a recording.
+    private void HotkeyBox_GotFocus(object sender, KeyboardFocusChangedEventArgs e) => model.App.SuspendHotkey(true);
+    private void HotkeyBox_LostFocus(object sender, KeyboardFocusChangedEventArgs e) => model.App.SuspendHotkey(false);
+    private void ClearHotkey_Click(object sender, RoutedEventArgs e) => model.SetHotkey("");
+    private void DefaultHotkey_Click(object sender, RoutedEventArgs e) => model.SetHotkey(Hotkey.Default);
 
     private void SignIn_Click(object sender, RoutedEventArgs e) => model.App.SignIn();
     private async void SignOut_Click(object sender, RoutedEventArgs e) => await model.App.SignOutAsync();

@@ -36,6 +36,8 @@ final class AppModel {
     private(set) var autoStopNotice: String?
     /// A call app has been using the microphone: the name of the app we're asking about.
     private(set) var callOffer: String?
+    /// Why the start/stop shortcut couldn't be set (another app has it), or nil.
+    private(set) var hotkeyError: String?
     /// The live transcript window is showing.
     var liveWindowVisible = false
     /// Optional title for the next meeting.
@@ -49,6 +51,8 @@ final class AppModel {
     @ObservationIgnored private let micMonitor = MicUsageMonitor()
     @ObservationIgnored private var callSignals = CallSignals()
     @ObservationIgnored private var callTask: Task<Void, Never>?
+    @ObservationIgnored private let hotkey = GlobalHotkey()
+    @ObservationIgnored private var hotkeySuspended = false
     @ObservationIgnored var onLiveWindowChange: ((Bool) -> Void)?
     private static let log = Log.logger("app")
 
@@ -79,6 +83,15 @@ final class AppModel {
             if let left { notifier.warnSilence(stopsIn: left) } else { notifier.clearWarning() }
         }
         recorder.onAutoStop = { [weak self] reason in self?.stopByItself(reason) }
+        recorder.onLimitWarning = { [weak self] left in
+            guard let self else { return }
+            notifier.warnLimit(stopsIn: left, limit: recorder.recordingLimitSeconds)
+        }
+        // After the captures stopped, so the stop chime isn't in the recording.
+        recorder.onCapturesStopped = { [weak self] in
+            if self?.preferences.playSounds == true { Sounds.playStop() }
+        }
+        hotkey.onPressed = { [weak self] in self?.toggleRecording() }
         notifier.onKeepRecording = { [weak self] in self?.keepRecording() }
         notifier.onRecordCall = { [weak self] in self?.recordCall() }
         notifier.onDeclineCall = { [weak self] in self?.declineCall() }
@@ -93,6 +106,7 @@ final class AppModel {
         try? folders.create()
         _ = Self.launchedAt
         reporter.start()
+        applyHotkey()
         Task {
             await queue.setObserver { snapshot in
                 Task { @MainActor [weak self] in self?.receive(snapshot) }
@@ -102,6 +116,7 @@ final class AppModel {
                 auth = .signedIn(email: credential.email)
                 await queue.start()
                 refreshMeetings()
+                refreshMe()
             } else {
                 auth = .signedOut
             }
@@ -197,6 +212,7 @@ final class AppModel {
                 await queue.resume()
                 await queue.start()
                 refreshMeetings()
+                refreshMe()
                 NSApp.activate()
             } catch {
                 authError = error.localizedDescription
@@ -228,12 +244,18 @@ final class AppModel {
     // MARK: - Recording
 
     func startMeeting() {
+        guard recorder.phase == .idle else { return }
         recordError = nil
         autoStopNotice = nil
+        // The limit as last known; a fresher one from the API applies as soon as it arrives.
+        refreshMe()
         Task {
             do {
                 recorder.avoidBluetoothMic = preferences.avoidBluetoothMic
                 recorder.silenceLimit = TimeInterval(preferences.silenceStopMinutes * 60)
+                recorder.recordingLimitSeconds = TimeInterval(preferences.recordingLimitMinutes * 60)
+                // Before the captures start, so the chime isn't in the recording.
+                if preferences.playSounds { await Sounds.playStart() }
                 if preferences.silenceStopMinutes > 0 { Task { await notifier.requestPermission() } }
                 try await recorder.start(title: titleDraft, language: preferences.languageCode, uploadAudio: preferences.uploadAudio,
                                          transcribeLocally: preferences.transcribeOnMac)
@@ -265,6 +287,7 @@ final class AppModel {
         let why = switch reason {
         case .silence(let limit): "Nobody spoke for \(SilenceWatch.describe(limit))"
         case .callEnded(let app): "The \(app) call ended"
+        case .limit(let seconds): "It reached the \(RecordingLimit.describe(seconds)) recording limit"
         }
         Task {
             let meeting = await recorder.stop()
@@ -280,6 +303,54 @@ final class AppModel {
             }
             autoStopNotice = message
             notifier.recordingStopped(message)
+        }
+    }
+
+    /// The start/stop shortcut: starts a meeting, or stops the one recording. Signed out, nothing to do.
+    func toggleRecording() {
+        guard case .signedIn = auth else {
+            Self.log.notice("start/stop shortcut pressed while signed out")
+            return
+        }
+        if recorder.isRecording { stopMeeting() } else if recorder.phase == .idle { startMeeting() }
+    }
+
+    func setRecordHotkey(_ text: String) {
+        preferences.recordHotkey = text
+        applyHotkey()
+    }
+
+    /// Off while Settings' shortcut box listens for a new one; back on afterwards.
+    func suspendHotkey(_ suspended: Bool) {
+        hotkeySuspended = suspended
+        applyHotkey()
+    }
+
+    private func applyHotkey() {
+        guard !hotkeySuspended else {
+            hotkey.unregister()
+            return
+        }
+        hotkeyError = hotkey.register(Hotkey(preferences.recordHotkey))
+        if let hotkeyError { Self.log.notice("\(hotkeyError, privacy: .public)") }
+    }
+
+    /// The account's recording limit from the API, kept in the preferences for meetings started offline.
+    func refreshMe() {
+        guard case .signedIn = auth else { return }
+        Task {
+            do {
+                let minutes = try await api.me().recordingLimitMinutes(fallback: preferences.recordingLimitMinutes)
+                if minutes != preferences.recordingLimitMinutes {
+                    Self.log.notice("recording limit: \(minutes, privacy: .public) min")
+                    preferences.recordingLimitMinutes = minutes
+                }
+                recorder.updateRecordingLimit(TimeInterval(minutes * 60))
+            } catch APIError.unauthorized {
+                await signedOutByServer()
+            } catch {
+                // Offline or a server hiccup: the last known limit stays.
+            }
         }
     }
 
@@ -472,6 +543,9 @@ final class AppModel {
             "calls.offer": callOffer ?? "-",
             "prefs.avoidBluetoothMic": preferences.avoidBluetoothMic ? "yes" : "no",
             "prefs.silenceStopMinutes": String(preferences.silenceStopMinutes),
+            "prefs.recordHotkey": preferences.recordHotkey.isEmpty ? "none" : preferences.recordHotkey + (hotkeyError == nil ? "" : " (taken)"),
+            "prefs.playSounds": preferences.playSounds ? "yes" : "no",
+            "account.recordingLimitMinutes": String(preferences.recordingLimitMinutes),
             "prefs.transcribeOnMac": preferences.transcribeOnMac ? "yes" : "no",
             "prefs.offerToRecordCalls": preferences.offerToRecordCalls ? "yes" : "no",
             "prefs.autoRecordCalls": preferences.autoRecordCalls ? "yes" : "no",

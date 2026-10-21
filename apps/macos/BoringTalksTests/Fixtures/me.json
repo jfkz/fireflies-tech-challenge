@@ -1,0 +1,10 @@
+{
+  "id": "3cf2a1e0-5b7d-4f6a-9c1e-2d3b4a5c6d7e",
+  "email": "mike@example.com",
+  "name": "Mike",
+  "emailOnReady": true,
+  "createdAt": "2026-10-01T09:00:00.000Z",
+  "isAdmin": false,
+  "isOwner": false,
+  "recordingLimitSec": 7200
+}

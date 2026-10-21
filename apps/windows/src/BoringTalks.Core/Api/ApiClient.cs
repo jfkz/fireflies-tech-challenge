@@ -69,6 +69,12 @@ public interface IMeetingsApi
     Task<MeetingPage> ListMeetingsAsync(int limit, CancellationToken cancellation = default);
 }
 
+/// <summary>The account: its recording limit.</summary>
+public interface IAccountApi
+{
+    Task<Me> GetMeAsync(CancellationToken cancellation = default);
+}
+
 /// <summary>Report a Problem….</summary>
 public interface IReportsApi
 {
@@ -79,7 +85,7 @@ public interface IReportsApi
 /// The BoringTalks API over HttpClient. Every call carries the device token as a
 /// bearer token, except the presigned upload, which carries its own signature.
 /// </summary>
-public sealed class ApiClient : IMeetingsApi, IDeviceAuthApi, IReportsApi
+public sealed class ApiClient : IMeetingsApi, IDeviceAuthApi, IReportsApi, IAccountApi
 {
     private readonly Uri baseUrl;
     private readonly HttpClient http;
@@ -116,6 +122,9 @@ public sealed class ApiClient : IMeetingsApi, IDeviceAuthApi, IReportsApi
 
     public Task<MeetingPage> ListMeetingsAsync(int limit, CancellationToken cancellation = default) =>
         SendAsync<MeetingPage>(HttpMethod.Get, $"meetings?limit={limit}", body: null, cancellation: cancellation);
+
+    public Task<Me> GetMeAsync(CancellationToken cancellation = default) =>
+        SendAsync<Me>(HttpMethod.Get, "me", body: null, cancellation: cancellation);
 
     public Task<ProblemReportResponse> SendProblemReportAsync(ProblemReportRequest report, CancellationToken cancellation = default) =>
         SendAsync<ProblemReportResponse>(HttpMethod.Post, "reports", report, cancellation: cancellation);

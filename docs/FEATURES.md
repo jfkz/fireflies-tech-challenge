@@ -473,13 +473,34 @@ Each feature: what it does, where it lives (`apps/macos/…`), and its limits.
   either side, so typing, a fan or background music don't keep a finished meeting going; until
   the speech model is loaded, any clear sound on the level meters counts instead.
 - **Where:** `BoringTalksKit/SilenceWatch.swift` (the rule, unit-tested),
-  `BoringTalks/Recording/MeetingRecorder.swift` (`checkSilence`, every half second),
-  `BoringTalks/App/AppModel.swift` (`stopForSilence`), `BoringTalks/App/Notifier.swift`,
-  `BoringTalks/UI/MenuContent.swift` (`SilenceWarning`).
+  `BoringTalks/Recording/MeetingRecorder.swift` (`checkAutoStop`, every half second),
+  `BoringTalks/App/AppModel.swift` (`stopByItself`), `BoringTalks/App/Notifier.swift`,
+  `BoringTalks/UI/MenuContent.swift` (`StopCountdown`).
 - **Limits:** notification permission is asked when the first meeting starts; without it the
   stop is shown as an alert and the warning only in the menu. The trailing quiet stays in the
   recording (and its duration). Any value can be set with
   `defaults write games.cutthecheese.boringtalks silenceStopMinutes -int <minutes>`.
+
+### Start/stop shortcut, sounds and the recording limit
+
+- **Shortcut:** **⌃⌥⌘R** (Settings › Recording › **Start/stop shortcut**; click it and press other
+  keys, **Default** or **Clear**) starts a meeting from any app, or stops the one recording; signed
+  out it does nothing. Carbon's `RegisterEventHotKey`, so no Accessibility permission. A shortcut
+  another app already has is refused with “… is already used by another app”. While the box listens,
+  the old shortcut is off.
+- **Sounds:** a short rising chime when a recording starts and a falling one when it stops (also when
+  it stops by itself), made in memory (`Chime`), on by default (**Play a sound when recording starts
+  and stops**). The start chime ends before the captures start and the stop chime plays after they
+  stopped, so neither is in the recording (the system-audio tap would hear it otherwise).
+- **Recording limit:** the account's limit from `GET /me` (2 hours unless an admin changed it; kept
+  in the preferences for meetings started offline, refreshed at launch, sign-in and each start, and
+  applied to a meeting already running). In its last 5 minutes (half the limit when that's shorter) a
+  notification “Recording stops in 5 min” and a countdown in the menu, with no **Keep recording**; at
+  the limit the meeting stops and uploads (“It reached the 2 hours recording limit, so BoringTalks
+  stopped recording…”). Settings › Recording says the limit.
+- **Where:** `BoringTalksKit/Hotkey.swift`, `RecordingLimit.swift`, `Chime.swift` (unit-tested),
+  `BoringTalks/App/GlobalHotkey.swift`, `Sounds.swift`, `AppModel.swift` (`toggleRecording`,
+  `refreshMe`), `Recording/MeetingRecorder.swift` (`checkAutoStop`), `UI/ShortcutRecorder.swift`.
 
 ### Offer to record a call, stop when it ends
 
@@ -731,6 +752,23 @@ feature is on Windows and where it differs. Paths are relative to `apps/windows/
 - **Limits:** call apps are recognized by executable name (Zoom, Teams, Webex, Slack, Discord,
   WhatsApp, Telegram, Skype, browsers) or Store package; others via `extraCallApps` in
   `%APPDATA%\BoringTalks\settings.json`.
+
+### Start/stop shortcut, sounds and the recording limit
+
+- **Shortcut:** **Ctrl+Alt+R** (Settings › Recording › **Start/stop shortcut**: click the box and press
+  other keys, **Default** or **Clear**) starts a meeting from any app, or stops the one recording;
+  signed out it opens the menu. The tray's **Start/Stop meeting** shows it. `RegisterHotKey` on a
+  message-only window; a shortcut another app has is refused with “… is already used by another app”.
+  While the box has the keyboard, the old shortcut is off.
+- **Sounds:** a short rising chime on start and a falling one on stop (also when it stops by itself),
+  made in memory (`Chime`), on by default. BoringTalks' own sound is left out by process loopback; the
+  start chime also ends before the microphone opens and the stop chime plays after it closed.
+- **Recording limit:** as on the Mac: from `GET /me` (`RecordingLimitMinutes` in settings.json for
+  meetings started offline), a toast “Recording stops in 5 min” and a menu countdown without **Keep
+  recording**, then stop and upload.
+- **Where:** `BoringTalks.Core/Hotkey.cs`, `RecordingLimit.cs`, `Audio/Chime.cs`, `Api/ApiClient.cs`
+  (`GetMeAsync`); `BoringTalks.App/Platform/GlobalHotkey.cs`, `Sounds.cs`, `ViewModels/AppModel.cs`
+  (`ToggleRecording`, `RefreshMeAsync`), `Recording/MeetingRecorder.cs` (`CheckAutoStop`).
 
 ### On-device transcription and telling the other people apart
 

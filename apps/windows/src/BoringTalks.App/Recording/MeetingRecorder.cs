@@ -27,6 +27,8 @@ public abstract record AutoStopReason
     public sealed record Silence(double Limit) : AutoStopReason;
     /// <summary>The app holding the call released the microphone.</summary>
     public sealed record CallEnded(string App) : AutoStopReason;
+    /// <summary>The account's recording limit (seconds) was reached.</summary>
+    public sealed record LimitReached(double Seconds) : AutoStopReason;
 }
 
 /// <summary>The recording stops by itself at <c>At</c> unless someone keeps it going.</summary>
@@ -62,6 +64,8 @@ public sealed partial class MeetingRecorder : ObservableObject
     private DispatcherTimer? ticker;
     private Task attaching = Task.CompletedTask;
     private SilenceWatch silence = new(0);
+    private RecordingLimit limit = new(0);
+    private bool limitWarned;
     private CallEndWatch callEnd = new();
     private string? endedCallApp;
     private bool autoStopReported;
@@ -102,8 +106,15 @@ public sealed partial class MeetingRecorder : ObservableObject
     /// <summary>Quiet this long (seconds) stops the meeting; 0 never does. Read when a meeting starts.</summary>
     public double SilenceLimit { get; set; } = 300;
 
+    /// <summary>The account's longest recording in seconds (0: none). Read when a meeting starts; see <see cref="UpdateRecordingLimit"/>.</summary>
+    public double RecordingLimitSeconds { get; set; }
+
     /// <summary>The silence countdown began (with the seconds left), or was called off (null).</summary>
     public event Action<double?>? SilenceWarning;
+    /// <summary>The recording limit is near: it stops in this many seconds (once per meeting).</summary>
+    public event Action<double>? LimitWarning;
+    /// <summary>Stop pressed (or a stop by itself): the microphone and the PC's sound are no longer recorded.</summary>
+    public event Action? CapturesStopped;
     /// <summary>Time to stop. The owner stops the meeting.</summary>
     public event Action<AutoStopReason>? AutoStop;
 
@@ -132,6 +143,8 @@ public sealed partial class MeetingRecorder : ObservableObject
         Live.Reset();
         registry = new VoiceRegistry();
         silence = new SilenceWatch(SilenceLimit);
+        limit = new RecordingLimit(RecordingLimitSeconds);
+        limitWarned = false;
         callEnd = new CallEndWatch();
         endedCallApp = null;
         lastSpeech.Clear();
@@ -190,6 +203,7 @@ public sealed partial class MeetingRecorder : ObservableObject
         foreach (var timer in restarts.Values) timer.Stop();
         await ReleaseCapturesAsync([.. captures.Values]);
         captures.Clear();
+        CapturesStopped?.Invoke();
         var elapsed = ClockNow;
         // A model that has just arrived may be attaching right now.
         await attaching;
@@ -389,10 +403,34 @@ public sealed partial class MeetingRecorder : ObservableObject
     }
 
     /// <summary>Called every half second while recording.</summary>
+    /// <summary>A new limit from the API while a meeting may be running: it applies to that meeting at once.</summary>
+    public void UpdateRecordingLimit(double seconds)
+    {
+        RecordingLimitSeconds = seconds;
+        if (Phase is RecorderPhase.Starting or RecorderPhase.Recording && seconds != limit.Seconds) limit = new RecordingLimit(seconds);
+    }
+
     private void CheckAutoStop()
     {
         if (Phase != RecorderPhase.Recording || autoStopReported) return;
         var now = ClockNow;
+        // The recording limit comes first; a call ending or silence may still stop it sooner.
+        PendingStop? atLimit = null;
+        switch (limit.Verdict(now))
+        {
+            case SilenceVerdict.Stop:
+                Report(new AutoStopReason.LimitReached(limit.Seconds));
+                return;
+            case SilenceVerdict.Warning(var left):
+                atLimit = new PendingStop(new AutoStopReason.LimitReached(limit.Seconds), DateTimeOffset.Now.AddSeconds(left));
+                if (!limitWarned)
+                {
+                    limitWarned = true;
+                    log($"the {RecordingLimit.Describe(limit.Seconds)} recording limit is {(int)left} s away");
+                    LimitWarning?.Invoke(left);
+                }
+                break;
+        }
         if (endedCallApp is { } app)
         {
             switch (callEnd.Verdict(OthersActivity(), now))
@@ -401,31 +439,33 @@ public sealed partial class MeetingRecorder : ObservableObject
                     Report(new AutoStopReason.CallEnded(app));
                     return;
                 case CallEndVerdict.Stopping(var left):
-                    SetPendingStop(new PendingStop(new AutoStopReason.CallEnded(app), DateTimeOffset.Now.AddSeconds(left)));
+                    SetPendingStop(Sooner(new PendingStop(new AutoStopReason.CallEnded(app), DateTimeOffset.Now.AddSeconds(left)), atLimit));
                     return;
             }
         }
         if (!silence.IsOn)
         {
-            SetPendingStop(null);
+            SetPendingStop(atLimit);
             return;
         }
         var lastActivity = Activity([.. channels.Keys]);
         switch (silence.Verdict(lastActivity, now))
         {
             case SilenceVerdict.Listening:
-                SetPendingStop(null);
+                SetPendingStop(atLimit);
                 break;
             case SilenceVerdict.Warning(var left):
                 if (PendingStop?.Reason is AutoStopReason.Silence) return;
                 log($"quiet for {(int)silence.Quiet(lastActivity, now)} s; stopping in {(int)left} s");
-                SetPendingStop(new PendingStop(new AutoStopReason.Silence(silence.Limit), DateTimeOffset.Now.AddSeconds(left)));
+                SetPendingStop(Sooner(new PendingStop(new AutoStopReason.Silence(silence.Limit), DateTimeOffset.Now.AddSeconds(left)), atLimit));
                 break;
             case SilenceVerdict.Stop:
                 Report(new AutoStopReason.Silence(silence.Limit));
                 break;
         }
     }
+
+    private static PendingStop? Sooner(PendingStop? a, PendingStop? b) => a is null ? b : b is null || a.At <= b.At ? a : b;
 
     private void Report(AutoStopReason reason)
     {

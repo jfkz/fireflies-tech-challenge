@@ -68,6 +68,20 @@ struct SettingsView: View {
     @ViewBuilder private var recording: some View {
         @Bindable var preferences = model.preferences
         Section {
+            LabeledContent("Start/stop shortcut") {
+                ShortcutRecorder(shortcut: preferences.recordHotkey, onChange: model.setRecordHotkey, onListening: model.suspendHotkey)
+            }
+            caption("Click it and press the keys (⌃, ⌥, ⇧ or ⌘ with a letter, digit or F-key). Works in any app: it starts a meeting, or stops the one recording.")
+            if let error = model.hotkeyError {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+            Toggle("Play a sound when recording starts and stops", isOn: $preferences.playSounds)
+            caption("A short tone, so you know without looking. It isn't in the recording.")
+            caption(preferences.recordingLimitMinutes > 0
+                    ? "Recordings stop at \(RecordingLimit.describe(TimeInterval(preferences.recordingLimitMinutes * 60))), set for your account; BoringTalks warns 5 minutes before."
+                    : "Your account has no recording limit.")
+        }
+        Section {
             Toggle("Keep Bluetooth headsets in high quality", isOn: $preferences.avoidBluetoothMic)
             caption("Recording with a Bluetooth headset's microphone switches the headset to call quality. With this on, “You” is recorded with the Mac's own microphone instead.")
             Toggle("Upload meeting audio", isOn: $preferences.uploadAudio)

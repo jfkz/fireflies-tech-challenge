@@ -5,7 +5,7 @@ import type { z } from 'zod';
 import { DeviceTokenResponse } from './device';
 import { MeetingDetail, MeetingPage, TranscriptUpload, UploadUrlResponse } from './meeting';
 import { ProblemReportRequest, ProblemReportResponse } from './report';
-import { ApiError, LatestDownload } from './user';
+import { ApiError, LatestDownload, Me } from './user';
 
 const dir = join(__dirname, '..', 'fixtures');
 
@@ -14,6 +14,7 @@ const schemas: Record<string, z.ZodType> = {
   'device-token-response.json': DeviceTokenResponse,
   'error-400.json': ApiError,
   'latest-windows.json': LatestDownload,
+  'me.json': Me,
   'meeting-page.json': MeetingPage,
   'problem-report-request.json': ProblemReportRequest,
   'problem-report-response.json': ProblemReportResponse,

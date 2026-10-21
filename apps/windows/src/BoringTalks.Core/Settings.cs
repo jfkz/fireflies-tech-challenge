@@ -39,6 +39,18 @@ public sealed record Settings
     /// <summary>Stop the recording when nobody has spoken for this many minutes; 0 never stops.</summary>
     public int SilenceStopMinutes { get; init; } = 5;
 
+    /// <summary>The global shortcut that starts and stops recording ("Ctrl+Alt+R"); empty: none.</summary>
+    public string RecordHotkey { get; init; } = Hotkey.Default;
+
+    /// <summary>A short tone when a recording starts and when it stops.</summary>
+    public bool PlaySounds { get; init; } = true;
+
+    /// <summary>
+    /// The longest recording the account allows, in minutes (0: none), as the API last said (GET /me);
+    /// kept so a meeting started offline still stops at it.
+    /// </summary>
+    public int RecordingLimitMinutes { get; init; } = 120;
+
     /// <summary>Ask to record when a call app (Zoom, Teams, a browser…) starts using the microphone.</summary>
     public bool OfferToRecordCalls { get; init; } = true;
 
@@ -94,6 +106,8 @@ public sealed class JsonSettingsStore(string path)
             {
                 KeepAudioDays = Math.Max(0, settings.KeepAudioDays),
                 SilenceStopMinutes = Math.Max(0, settings.SilenceStopMinutes),
+                RecordingLimitMinutes = Math.Max(0, settings.RecordingLimitMinutes),
+                RecordHotkey = settings.RecordHotkey ?? "",
                 IgnoredCallApps = settings.IgnoredCallApps ?? [],
                 ExtraCallApps = settings.ExtraCallApps ?? [],
             };

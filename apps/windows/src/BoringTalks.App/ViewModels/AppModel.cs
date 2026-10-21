@@ -49,6 +49,8 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     private readonly DispatcherTimer callTimer;
     private readonly DispatcherTimer refreshTimer;
     private readonly DispatcherTimer modelRetry;
+    private readonly GlobalHotkey hotkey = new();
+    private bool hotkeySuspended;
     private readonly Action<string> log = Log.For("app");
 
     public AppModel(AppConfig config, AppFolders folders, JsonSettingsStore settingsStore, Dispatcher ui)
@@ -76,6 +78,13 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
             else Notifier.ClearWarning();
         };
         Recorder.AutoStop += reason => _ = StopByItselfAsync(reason);
+        Recorder.LimitWarning += left => Notifier.WarnLimit(left, Recorder.RecordingLimitSeconds);
+        // After the microphone closed, so the stop chime isn't in the recording.
+        Recorder.CapturesStopped += () =>
+        {
+            if (Settings.PlaySounds) Sounds.PlayStop();
+        };
+        hotkey.Pressed += ToggleRecording;
 
         // The token is read through the authenticator, which caches it.
         api = new ApiClient(config.ApiUrl, http, _ => ValueTask.FromResult(authenticator?.Token()), $"BoringTalks-Windows/{Version}");
@@ -134,6 +143,8 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     [ObservableProperty] public partial bool LiveWindowVisible { get; set; }
     /// <summary>Where the self-update stands: checking, downloading, a new build waiting for a restart…</summary>
     [ObservableProperty] public partial UpdateState UpdateState { get; private set; }
+    /// <summary>Why the start/stop shortcut couldn't be set (another app has it), or null.</summary>
+    [ObservableProperty] public partial string? HotkeyError { get; private set; }
     /// <summary>Optional title for the next meeting.</summary>
     [ObservableProperty] public partial string TitleDraft { get; set; } = "";
 
@@ -167,11 +178,13 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         }
         Queue.Load();
         Reporter.Start();
+        ApplyHotkey();
         if (authenticator.Credential() is { } credential)
         {
             SetSignedIn(credential.Email);
             Queue.Start();
             RefreshMeetings();
+            _ = RefreshMeAsync();
         }
         else
         {
@@ -288,6 +301,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
             Queue.Resume();
             Queue.Start();
             RefreshMeetings();
+            _ = RefreshMeAsync();
             ShowMenuRequested?.Invoke();
         }
         catch (Exception error) when (error is ApiException or NoSignInInProgressException or IOException)
@@ -319,13 +333,19 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
 
     public async Task StartMeetingAsync()
     {
+        if (Recorder.Phase != RecorderPhase.Idle) return;
         RecordError = null;
         AutoStopNotice = null;
+        // The limit as last known; a fresher one from the API applies as soon as it arrives.
+        _ = RefreshMeAsync();
         try
         {
             Recorder.AvoidBluetoothMic = Settings.AvoidBluetoothMic;
             Recorder.MicrophoneId = Settings.MicrophoneId;
             Recorder.SilenceLimit = Settings.SilenceStopMinutes * 60;
+            Recorder.RecordingLimitSeconds = Settings.RecordingLimitMinutes * 60;
+            // Before the microphone opens, so the chime isn't in the recording.
+            if (Settings.PlaySounds) await Sounds.PlayStartAsync();
             await Recorder.StartAsync(TitleDraft, Settings.LanguageCode, Settings.UploadAudio, Settings.TranscribeOnPc);
             callSignals.RecordingStarted(Now);
             ClearCallOffer();
@@ -363,6 +383,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         {
             AutoStopReason.Silence s => $"Nobody spoke for {SilenceWatch.Describe(s.Limit)}",
             AutoStopReason.CallEnded c => $"The {c.App} call ended",
+            AutoStopReason.LimitReached l => $"It reached the {RecordingLimit.Describe(l.Seconds)} recording limit",
             _ => "The meeting ended",
         };
         var meeting = await Recorder.StopAsync();
@@ -380,6 +401,61 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
         }
         AutoStopNotice = message;
         Notifier.RecordingStopped(message);
+    }
+
+    /// <summary>The start/stop shortcut: starts a meeting, or stops the one recording; signed out, opens the menu.</summary>
+    public void ToggleRecording()
+    {
+        if (Auth != AuthState.SignedIn)
+        {
+            ShowMenuRequested?.Invoke();
+            return;
+        }
+        if (Recorder.IsRecording) _ = StopMeetingAsync();
+        else if (Recorder.Phase == RecorderPhase.Idle) _ = StartMeetingAsync();
+    }
+
+    /// <summary>Off while Settings' shortcut box listens for a new one; back on afterwards.</summary>
+    public void SuspendHotkey(bool suspended)
+    {
+        hotkeySuspended = suspended;
+        ApplyHotkey();
+    }
+
+    /// <summary>Registers the shortcut from Settings (none when empty or not one).</summary>
+    private void ApplyHotkey()
+    {
+        if (hotkeySuspended)
+        {
+            hotkey.Register(null);
+            return;
+        }
+        HotkeyError = hotkey.Register(Hotkey.Parse(Settings.RecordHotkey));
+        if (HotkeyError is not null) log(HotkeyError);
+    }
+
+    /// <summary>The account's recording limit from the API, kept in the settings for meetings started offline.</summary>
+    private async Task RefreshMeAsync()
+    {
+        if (Auth != AuthState.SignedIn) return;
+        try
+        {
+            var minutes = (await api.GetMeAsync()).RecordingLimitMinutes(Settings.RecordingLimitMinutes);
+            if (minutes != Settings.RecordingLimitMinutes)
+            {
+                log(minutes == 0 ? "no recording limit" : $"recording limit: {minutes} min");
+                UpdateSettings(s => s with { RecordingLimitMinutes = minutes });
+            }
+            Recorder.UpdateRecordingLimit(minutes * 60);
+        }
+        catch (ApiException error) when (error.Kind == ApiErrorKind.Unauthorized)
+        {
+            SignedOutByServer();
+        }
+        catch (ApiException)
+        {
+            // Offline or a server hiccup: the last known limit stays.
+        }
     }
 
     /// <summary>The "Keep recording" button (in the menu or on the warning notification).</summary>
@@ -555,6 +631,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
             else games.Stop();
         }
         if (old.OpenAtSignIn != Settings.OpenAtSignIn) TryRegister(() => Registration.SetOpenAtSignIn(Settings.OpenAtSignIn));
+        if (old.RecordHotkey != Settings.RecordHotkey) ApplyHotkey();
     }
 
     public static void TryRegister(Action register)
@@ -629,6 +706,9 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
             ["settings.offerToRecordCalls"] = YesNo(Settings.OfferToRecordCalls),
             ["settings.stopWhenCallEnds"] = YesNo(Settings.StopWhenCallEnds),
             ["settings.recordGames"] = YesNo(Settings.RecordGames),
+            ["settings.recordHotkey"] = Settings.RecordHotkey.Length > 0 ? Settings.RecordHotkey + (HotkeyError is null ? "" : " (taken)") : "none",
+            ["settings.playSounds"] = YesNo(Settings.PlaySounds),
+            ["account.recordingLimitMinutes"] = Settings.RecordingLimitMinutes.ToString(CultureInfo.InvariantCulture),
         };
         for (var i = 0; i < Recorder.Warnings.Count; i++) values[$"recorder.warning.{i + 1}"] = Recorder.Warnings[i];
         if (Uploads.Items.Select(u => u.LastError).LastOrDefault(e => e is not null) is { } uploadError) values["uploads.lastError"] = uploadError;
@@ -683,6 +763,7 @@ public sealed partial class AppModel : ObservableObject, IAsyncDisposable
     {
         callTimer.Stop();
         refreshTimer.Stop();
+        hotkey.Dispose();
         modelRetry.Stop();
         Updater.Dispose();
         micMonitor.Dispose();

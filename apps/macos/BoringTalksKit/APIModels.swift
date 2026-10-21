@@ -156,11 +156,77 @@ public struct DeviceTokenResponse: Codable, Equatable, Sendable {
 }
 
 public struct Me: Codable, Equatable, Sendable {
+    /// The longest recording the account allows.
+    public enum RecordingLimitValue: Equatable, Sendable {
+        /// The API is older than limits (the field is missing).
+        case unknown
+        case none
+        case seconds(Int)
+    }
+
     public var id: String
     public var email: String?
     public var name: String?
     public var emailOnReady: Bool
     public var createdAt: Date
+    public var isAdmin: Bool?
+    public var recordingLimit: RecordingLimitValue
+
+    private enum CodingKeys: String, CodingKey {
+        case id, email, name, emailOnReady, createdAt, isAdmin, recordingLimitSec
+    }
+
+    public init(id: String, email: String?, name: String?, emailOnReady: Bool, createdAt: Date, isAdmin: Bool? = nil,
+                recordingLimit: RecordingLimitValue = .unknown) {
+        self.id = id
+        self.email = email
+        self.name = name
+        self.emailOnReady = emailOnReady
+        self.createdAt = createdAt
+        self.isAdmin = isAdmin
+        self.recordingLimit = recordingLimit
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        emailOnReady = try c.decode(Bool.self, forKey: .emailOnReady)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        isAdmin = try c.decodeIfPresent(Bool.self, forKey: .isAdmin)
+        if !c.contains(.recordingLimitSec) {
+            recordingLimit = .unknown
+        } else if try c.decodeNil(forKey: .recordingLimitSec) {
+            recordingLimit = .none
+        } else {
+            recordingLimit = .seconds(try c.decode(Int.self, forKey: .recordingLimitSec))
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(email, forKey: .email)
+        try c.encode(name, forKey: .name)
+        try c.encode(emailOnReady, forKey: .emailOnReady)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(isAdmin, forKey: .isAdmin)
+        switch recordingLimit {
+        case .unknown: break
+        case .none: try c.encodeNil(forKey: .recordingLimitSec)
+        case .seconds(let seconds): try c.encode(seconds, forKey: .recordingLimitSec)
+        }
+    }
+
+    /// The limit in minutes (0 = none), or `fallback` when the API doesn't say.
+    public func recordingLimitMinutes(fallback: Int) -> Int {
+        switch recordingLimit {
+        case .unknown: fallback
+        case .none: 0
+        case .seconds(let seconds): max(1, Int((Double(seconds) / 60).rounded()))
+        }
+    }
 }
 
 /// Error body of every API response.
