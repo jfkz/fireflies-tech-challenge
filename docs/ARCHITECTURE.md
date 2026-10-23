@@ -143,9 +143,9 @@ workers, and streaming (chunked) uploads of the transcript during long meetings.
 
 ## Product analytics
 
-PostHog Cloud (EU), off unless a key is set. The browser loads `posthog-js` only when
+PostHog Cloud (US), off unless a key is set. The browser loads `posthog-js` only when
 `NEXT_PUBLIC_POSTHOG_KEY` is set and only after the page is up, sends through our own `/ingest`
-(a Next.js rewrite to `eu.i.posthog.com`), keeps visitors in memory (no cookie, no banner) and has
+(a Next.js rewrite to `us.i.posthog.com`), keeps visitors in memory (no cookie, no banner) and has
 session recording off, since meeting text is on screen. Signed-in people are identified by their
 account id, never their email. The API and the worker send the server-side events (`posthog-node`,
 `POSTHOG_KEY`) by the same id, so the desktop apps need no SDK: their meetings arrive as

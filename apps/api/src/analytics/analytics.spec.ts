@@ -33,6 +33,6 @@ describe('AnalyticsService', () => {
     const client = createAnalyticsClient(testConfig({ POSTHOG_KEY: 'phc_test', POSTHOG_HOST: 'http://127.0.0.1:9' }));
     expect(client).not.toBeNull();
     await client!.shutdown();
-    expect(testConfig().env.POSTHOG_HOST).toBe('https://eu.i.posthog.com');
+    expect(testConfig().env.POSTHOG_HOST).toBe('https://us.i.posthog.com');
   });
 });

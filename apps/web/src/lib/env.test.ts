@@ -16,7 +16,7 @@ describe('env', () => {
 
   it('turns analytics on only with a PostHog key', async () => {
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', ' ');
-    expect((await import('./env')).env.posthog).toEqual({ key: undefined, uiHost: 'https://eu.posthog.com' });
+    expect((await import('./env')).env.posthog).toEqual({ key: undefined, uiHost: 'https://us.posthog.com' });
     vi.resetModules();
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_UI_HOST', 'https://us.posthog.com/');

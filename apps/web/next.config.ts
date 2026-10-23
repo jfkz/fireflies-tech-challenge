@@ -2,8 +2,8 @@ import type { NextConfig } from 'next';
 import pkg from './package.json' with { type: 'json' };
 
 const firebaseProject = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-/** PostHog's ingestion host (EU cloud unless set); its static assets live next to it. */
-const posthogHost = (process.env.POSTHOG_INGEST_HOST || 'https://eu.i.posthog.com').replace(/\/+$/, '');
+/** PostHog's ingestion host (US cloud unless set); its static assets and project config live next to it. */
+const posthogHost = (process.env.POSTHOG_INGEST_HOST || 'https://us.i.posthog.com').replace(/\/+$/, '');
 const posthogAssets = posthogHost.replace('://eu.i.', '://eu-assets.i.').replace('://us.i.', '://us-assets.i.');
 
 const nextConfig: NextConfig = {
@@ -23,6 +23,7 @@ const nextConfig: NextConfig = {
     // Product analytics through our own domain (lib/analytics.ts), so blockers of third-party hosts don't drop it.
     const analytics = [
       { source: '/ingest/static/:path*', destination: `${posthogAssets}/static/:path*` },
+      { source: '/ingest/array/:path*', destination: `${posthogAssets}/array/:path*` },
       { source: '/ingest/:path*', destination: `${posthogHost}/:path*` },
     ];
     // Firebase Auth's sign-in handler, served from our own domain (see ownAuthDomain in lib/firebase.ts).

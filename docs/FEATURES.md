@@ -365,7 +365,7 @@ the app build and system, the message, every diagnostic and the app's log, with 
 
 ### Product analytics
 
-**What.** With a PostHog key set (PostHog Cloud, EU), page views and a handful of events:
+**What.** With a PostHog key set (PostHog Cloud, US), page views and a handful of events:
 `download_clicked` (platform, which button), `signed_in` (password or Google), `recording_started` /
 `recording_stopped` (and whether the limit stopped it) and `file_uploaded` from the browser;
 `user_signed_up`, `device_connected`, `meeting_created`, `meeting_completed`, `meeting_ready`,

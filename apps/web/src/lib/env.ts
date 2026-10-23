@@ -43,6 +43,6 @@ export const env: Env = {
   },
   posthog: {
     key: optional(process.env.NEXT_PUBLIC_POSTHOG_KEY),
-    uiHost: url('NEXT_PUBLIC_POSTHOG_UI_HOST', process.env.NEXT_PUBLIC_POSTHOG_UI_HOST || 'https://eu.posthog.com'),
+    uiHost: url('NEXT_PUBLIC_POSTHOG_UI_HOST', process.env.NEXT_PUBLIC_POSTHOG_UI_HOST || 'https://us.posthog.com'),
   },
 };
