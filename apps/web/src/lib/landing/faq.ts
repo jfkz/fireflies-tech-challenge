@@ -26,7 +26,7 @@ export const FAQ: readonly { q: string; a: string }[] = [
   },
   {
     q: 'Who can see my meetings?',
-    a: 'Only you. Delete a meeting and its recording, transcript and notes go with it.',
+    a: 'Only you. Delete a meeting and its recording, transcript and notes go with it. We count how BoringTalks is used, like pages opened and meetings recorded, never what was said.',
   },
   {
     q: 'Do I have to tell people I’m recording?',

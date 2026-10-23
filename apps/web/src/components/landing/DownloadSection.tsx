@@ -2,6 +2,7 @@
 
 import type { DownloadPlatform, Downloads, LatestDownload } from '@boringtalks/shared';
 import Link from 'next/link';
+import { analytics } from '@/lib/analytics';
 import { Avatar } from '@/components/avatar/Avatar';
 import { AppIcon } from '@/components/brand/AppIcon';
 import { useDownloads } from '@/hooks/queries';
@@ -86,7 +87,13 @@ function Available({ download, platform }: { download: LatestDownload; platform:
         <Spec label="Download" value={`${formatBytes(download.sizeBytes)} ${FILE_KIND[platform]}`} />
         <Spec label="Released" value={new Date(download.publishedAt).toLocaleDateString('en-US', { dateStyle: 'medium' })} />
       </dl>
-      <a href={download.url} className="btn btn-primary btn-lg mt-7 w-full sm:w-auto" data-testid={TEST_ID[platform]} download>
+      <a
+        href={download.url}
+        className="btn btn-primary btn-lg mt-7 w-full sm:w-auto"
+        data-testid={TEST_ID[platform]}
+        download
+        onClick={() => analytics.track('download_clicked', { platform, where: 'card' })}
+      >
         <DownloadGlyph /> Download for {name}
       </a>
       <p className="mt-3 text-sm font-semibold text-ink-soft">
@@ -104,7 +111,13 @@ function AlsoFor({ download, platform }: { download: LatestDownload; platform: D
       <span>
         version {download.version}, {formatBytes(download.sizeBytes)} {FILE_KIND[platform]}, {minimumOsLabel(platform, download.minimumOs)}.
       </span>
-      <a href={download.url} className="font-extrabold text-call-deep underline underline-offset-2" data-testid={TEST_ID[platform]} download>
+      <a
+        href={download.url}
+        className="font-extrabold text-call-deep underline underline-offset-2"
+        data-testid={TEST_ID[platform]}
+        download
+        onClick={() => analytics.track('download_clicked', { platform, where: 'card-also' })}
+      >
         Download for {PLATFORM_NAME[platform]}
       </a>
     </p>

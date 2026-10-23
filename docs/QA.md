@@ -577,6 +577,21 @@ deploy, and against production after a merge.
    **Expected:** “changed by <you>”; `GET /me` for an account without its own limit says `recordingLimitSec: 5400`
    within a minute; adding the unknown email says they need to sign in once first.
 
+### 9c. Product analytics (PostHog)
+1. With the dev key set, open dev.boringtalks.lol in a private window and watch PostHog's **Activity › Live**.
+   **Expected:** a `$pageview` from `app: web`, `environment: dev.boringtalks.lol`; requests go to
+   `/ingest/…` on our own domain; no PostHog cookie (DevTools › Application).
+2. Click a download button.
+   **Expected:** `download_clicked` with the platform.
+3. Sign in, record 20 s in the browser, stop.
+   **Expected:** `signed_in`, `recording_started`, `recording_stopped`, then `meeting_created`,
+   `meeting_completed` and `meeting_ready` from the API, all on one person whose id is the account id
+   (no email). No title or transcript in any event; no session recording.
+4. Record with a desktop app.
+   **Expected:** `meeting_created` with source `macos`/`windows` and the app version.
+5. Sign out.
+   **Expected:** the next page view is anonymous again.
+
 ### 10. Versions
 1. Compare `GET /health` `version`, the web footer, the Mac app's About/menu version and the Windows
    app's Settings version.

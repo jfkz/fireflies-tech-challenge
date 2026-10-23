@@ -76,6 +76,8 @@ export const AdminOverview = z.object({
     storageUsdPerMonth: z.number().nonnegative(),
   }),
   daily: z.array(AdminDay),
+  /** The PostHog project, for funnels and retention; null when not set up. */
+  analyticsUrl: z.string().url().nullable().optional(),
 });
 export type AdminOverview = z.infer<typeof AdminOverview>;
 

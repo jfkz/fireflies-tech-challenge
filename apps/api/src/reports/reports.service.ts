@@ -1,3 +1,4 @@
+import { AnalyticsService } from '../analytics/analytics.service';
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type {
   ListProblemReportsQuery,
@@ -22,6 +23,7 @@ export class ReportsService {
     private readonly config: AppConfig,
     private readonly reports: ReportsRepository,
     private readonly jobs: JobsService,
+    private readonly analytics?: AnalyticsService,
   ) {}
 
   /** Keeps the report, and tells the operator when REPORTS_NOTIFY_EMAIL is set. */
@@ -43,6 +45,7 @@ export class ReportsService {
       { reportId: row.id, userId: user.id, deviceId, kind: row.kind, appVersion: row.appVersion, flavor: row.flavor, logBytes: Buffer.byteLength(row.log) },
       'problem report received',
     );
+    this.analytics?.capture(user.id, 'problem_report_sent', { kind: row.kind, flavor: row.flavor, appVersion: row.appVersion });
     if (this.config.env.REPORTS_NOTIFY_EMAIL) {
       await this.jobs.email({ type: 'problem-report', userId: user.id, reportId: row.id });
     }

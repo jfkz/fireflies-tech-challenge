@@ -94,6 +94,7 @@ export class AdminService {
         storageUsdPerMonth: round(storageGb * PRICES.storagePerGbMonth),
       },
       daily: dailySeries(firstDay, query.days, perDay, signups),
+      analyticsUrl: this.config.env.POSTHOG_PROJECT_URL ?? null,
     };
   }
 

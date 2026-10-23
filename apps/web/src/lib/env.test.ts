@@ -14,6 +14,15 @@ describe('env', () => {
     expect(env.firebase.apiKey).toBeUndefined();
   });
 
+  it('turns analytics on only with a PostHog key', async () => {
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', ' ');
+    expect((await import('./env')).env.posthog).toEqual({ key: undefined, uiHost: 'https://us.posthog.com' });
+    vi.resetModules();
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_UI_HOST', 'https://us.posthog.com/');
+    expect((await import('./env')).env.posthog).toEqual({ key: 'phc_test', uiHost: 'https://us.posthog.com' });
+  });
+
   it('rejects an API URL that is not a URL', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'not a url');
     await expect(import('./env')).rejects.toThrow(/NEXT_PUBLIC_API_URL must be an absolute URL/);

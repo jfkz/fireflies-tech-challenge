@@ -1,5 +1,6 @@
 'use client';
 
+import { analytics } from '@/lib/analytics';
 import { useDownloads } from '@/hooks/queries';
 import { usePlatform } from '@/hooks/usePlatform';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
@@ -272,7 +273,13 @@ function HeroDownload() {
         className="btn btn-primary btn-lg lg:max-xl:px-5 lg:max-xl:py-3 lg:max-xl:text-base"
         data-testid="hero-download"
         {...(hero.direct
-          ? { download: true, onClick: () => document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' }) }
+          ? {
+              download: true,
+              onClick: () => {
+                analytics.track('download_clicked', { platform, where: 'hero' });
+                document.getElementById('download')?.scrollIntoView({ behavior: 'smooth' });
+              },
+            }
           : {})}
       >
         <DownloadGlyph /> {hero.label}
@@ -283,7 +290,12 @@ function HeroDownload() {
           {hero.others.map((p, i) => (
             <span key={p}>
               {i > 0 && ', '}
-              <a href={data[p]!.url} download className="font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white">
+              <a
+                href={data[p]!.url}
+                download
+                onClick={() => analytics.track('download_clicked', { platform: p, where: 'hero-also' })}
+                className="font-extrabold text-white underline decoration-white/50 underline-offset-4 hover:decoration-white"
+              >
                 {PLATFORM_NAME[p]}
               </a>
             </span>

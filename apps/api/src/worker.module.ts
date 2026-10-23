@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { LoggerModule } from './common/logger.module';
 import { ConfigModule } from './config/config.module';
 import { DbModule } from './db/db.module';
@@ -10,6 +11,6 @@ import { StorageModule } from './storage/storage.module';
 
 /** The background worker: BullMQ processors for transcribe, summarize and email. No HTTP. */
 @Module({
-  imports: [ConfigModule.forRoot(), LoggerModule, DbModule, RedisModule, StorageModule, QueuesModule, ProcessingModule, EmailModule],
+  imports: [ConfigModule.forRoot(), LoggerModule, DbModule, RedisModule, StorageModule, QueuesModule, AnalyticsModule, ProcessingModule, EmailModule],
 })
 export class WorkerModule {}

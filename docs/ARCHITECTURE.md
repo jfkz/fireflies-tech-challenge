@@ -141,6 +141,18 @@ dashboard's `/admin/reports` (`GET /admin/reports`, `@AdminOnly()` in the auth g
 Next steps if traffic grew: Postgres read replica for list/search, Redis Cluster, per-region
 workers, and streaming (chunked) uploads of the transcript during long meetings.
 
+## Product analytics
+
+PostHog Cloud (US), off unless a key is set. The browser loads `posthog-js` only when
+`NEXT_PUBLIC_POSTHOG_KEY` is set and only after the page is up, sends through our own `/ingest`
+(a Next.js rewrite to `us.i.posthog.com`), keeps visitors in memory (no cookie, no banner) and has
+session recording off, since meeting text is on screen. Signed-in people are identified by their
+account id, never their email. The API and the worker send the server-side events (`posthog-node`,
+`POSTHOG_KEY`) by the same id, so the desktop apps need no SDK: their meetings arrive as
+`meeting_created` / `meeting_completed` with the source and app version. Events carry counts,
+sources and durations, never titles, transcripts or summaries. Each event says which environment
+it came from (`environment` = the site's host), so one project can hold both.
+
 ## Repository layout
 
 ```

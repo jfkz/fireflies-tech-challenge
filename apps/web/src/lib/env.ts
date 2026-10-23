@@ -8,6 +8,12 @@ export interface Env {
     appId?: string;
     authEmulator?: string;
   };
+  posthog: {
+    /** Project API key; none turns product analytics off. */
+    key?: string;
+    /** PostHog's own pages (links in its toolbar). */
+    uiHost: string;
+  };
 }
 
 function url(name: string, value: string): string {
@@ -34,5 +40,9 @@ export const env: Env = {
     projectId: optional(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID),
     appId: optional(process.env.NEXT_PUBLIC_FIREBASE_APP_ID),
     authEmulator: optional(process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR),
+  },
+  posthog: {
+    key: optional(process.env.NEXT_PUBLIC_POSTHOG_KEY),
+    uiHost: url('NEXT_PUBLIC_POSTHOG_UI_HOST', process.env.NEXT_PUBLIC_POSTHOG_UI_HOST || 'https://us.posthog.com'),
   },
 };

@@ -1,3 +1,4 @@
+import { AnalyticsService } from '../analytics/analytics.service';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   DEVICE_CALLBACK_URLS,
@@ -23,6 +24,7 @@ export class DevicesService {
     private readonly tokens: DeviceTokensService,
     private readonly users: UsersRepository,
     private readonly jobs: JobsService,
+    private readonly analytics?: AnalyticsService,
   ) {}
 
   /** Dashboard step: binds a one-time code to the signed-in user and the app's PKCE challenge. */
@@ -54,6 +56,7 @@ export class DevicesService {
     const { token, tokenHash } = this.tokens.issue();
     const device = await this.repo.insertDevice({ userId: user.id, name: code.deviceName, tokenHash });
     await this.jobs.email({ type: 'device-connected', userId: user.id, deviceId: device.id });
+    this.analytics?.capture(user.id, 'device_connected');
     return { token, deviceId: device.id, user: { email: user.email, name: user.name } };
   }
 

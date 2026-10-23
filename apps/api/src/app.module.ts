@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import type { Redis } from 'ioredis';
 import { AdminModule } from './admin/admin.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { UserThrottlerGuard } from './auth/throttler.guard';
@@ -32,6 +33,7 @@ import { UsersModule } from './users/users.module';
     RedisModule,
     StorageModule,
     QueuesModule,
+    AnalyticsModule,
     ThrottlerModule.forRootAsync({
       inject: [AppConfig, REDIS],
       useFactory: (config: AppConfig, redis: Redis) => ({

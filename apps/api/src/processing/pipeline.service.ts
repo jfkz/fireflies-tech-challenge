@@ -1,3 +1,4 @@
+import { AnalyticsService } from '../analytics/analytics.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { speakerName, speakersOf } from '@boringtalks/shared';
 import { UnrecoverableError } from 'bullmq';
@@ -35,6 +36,7 @@ export class PipelineService {
     private readonly summarizer: Summarizer,
     private readonly diarizer: Diarizer,
     private readonly chains: ChainLinker,
+    private readonly analytics?: AnalyticsService,
   ) {}
 
   async transcribe(job: MeetingJob): Promise<'done' | 'stale'> {
@@ -116,6 +118,14 @@ export class PipelineService {
       },
     );
     this.logger.log({ meetingId: meeting.id, model, inputTokens, outputTokens, named: Object.keys(speakerNames).length }, 'meeting summarized');
+    this.analytics?.capture(meeting.userId, 'meeting_ready', {
+      source: meeting.source,
+      durationSec: meeting.durationSec,
+      attempts: meeting.attempts,
+      model,
+      inputTokens,
+      outputTokens,
+    });
     await this.linkChain(saved, result.summary);
 
     if (user?.emailOnReady) {
@@ -142,6 +152,7 @@ export class PipelineService {
     const meeting = await this.current(job, stage);
     if (!meeting) return;
     await this.meetings.transition(meeting.id, stage, { status: 'failed', error: error.message.slice(0, 500) });
+    this.analytics?.capture(meeting.userId, 'meeting_failed', { source: meeting.source, stage });
     this.logger.warn({ meetingId: meeting.id, stage, err: error.message }, 'meeting processing failed');
   }
 

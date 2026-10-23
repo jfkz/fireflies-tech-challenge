@@ -102,10 +102,14 @@ the public domain can only ever reach the `downloads/` folder, never meeting aud
 `REDIS_URL` (references to the Postgres/Redis services), `NODE_ENV`, `WEB_URL`, `WEB_ORIGINS`,
 `FIREBASE_PROJECT_ID`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_KEY_PREFIX` (`prod/` / `dev/`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
 `DOWNLOADS_BASE_URL`, `AI_GATEWAY_API_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`, optional `EMAIL_REPLY_TO`, `EMAIL_ALLOWLIST` (dev),
-`SUMMARIZE_CONCURRENCY`, optional `REPORTS_NOTIFY_EMAIL` (where Mac problem reports are announced; unset today), `ADMIN_EMAILS` (owners: dashboard accounts that are always admins; more admins are added on the dashboard). CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
+`SUMMARIZE_CONCURRENCY`, optional `REPORTS_NOTIFY_EMAIL` (where Mac problem reports are announced; unset today), `ADMIN_EMAILS` (owners: dashboard accounts that are always admins; more admins are added on the dashboard),
+optional `POSTHOG_KEY` (product analytics from the API and worker; none = off), `POSTHOG_HOST` (US cloud by default) and `POSTHOG_PROJECT_URL` (the admin overview links to it). CI sets `GIT_SHA` / `APP_VERSION` before each deploy. Full list:
 [apps/api/README.md](../apps/api/README.md#environment).
 
-**Vercel**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL` (per environment), `NEXT_PUBLIC_FIREBASE_*`.
+**Vercel**: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL` (per environment), `NEXT_PUBLIC_FIREBASE_*`,
+optional `NEXT_PUBLIC_POSTHOG_KEY` (product analytics in the browser; the same project key as `POSTHOG_KEY`),
+`NEXT_PUBLIC_POSTHOG_UI_HOST` and `POSTHOG_INGEST_HOST` (only for a PostHog other than the US cloud).
+`NEXT_PUBLIC_*` values are built in, so changing one needs a redeploy.
 
 **GitHub** environments `production` and `dev`:
 

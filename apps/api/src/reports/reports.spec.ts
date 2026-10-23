@@ -72,7 +72,8 @@ describe('ReportsService', () => {
   function setup(env: Record<string, string> = {}) {
     const reports = { insert: vi.fn().mockResolvedValue(stored) };
     const jobs = { email: vi.fn() };
-    return { reports, jobs, service: new ReportsService(testConfig(env), reports as never, jobs as never) };
+    const analytics = { capture: vi.fn() };
+    return { reports, jobs, analytics, service: new ReportsService(testConfig(env), reports as never, jobs as never, analytics as never) };
   }
 
   it('keeps the report and answers with its id', async () => {
@@ -92,6 +93,7 @@ describe('ReportsService', () => {
       log: 'line 1\nline 2',
     });
     expect(t.jobs.email).not.toHaveBeenCalled();
+    expect(t.analytics.capture).toHaveBeenCalledWith(user().id, 'problem_report_sent', { kind: 'user', flavor: 'release', appVersion: '0.4.0' });
   });
 
   it('tells the operator only when REPORTS_NOTIFY_EMAIL is set', async () => {
